@@ -8,7 +8,8 @@ Features:
 - Multi-source market data loading with robust error handling
 - Comprehensive data preprocessing and validation
 - Advanced outlier detection and data quality assessment
-- Extensible architecture for HMM regime detection (coming soon)
+- Production-ready Hidden Markov Models for regime detection
+- Real-time regime inference and analysis
 
 For documentation and examples, visit: https://hiddenregime.com
 """
@@ -27,12 +28,19 @@ from .utils.exceptions import (
     ValidationError
 )
 
+# Import HMM classes
+from .models import HiddenMarkovModel, HMMConfig
+
 # Main API exports
 __all__ = [
     # Data pipeline
     'DataLoader',
     'DataPreprocessor', 
     'DataValidator',
+    
+    # HMM regime detection
+    'HiddenMarkovModel',
+    'HMMConfig',
     
     # Configuration
     'DataConfig',
@@ -48,6 +56,8 @@ __all__ = [
     # Convenience functions
     'load_stock_data',
     'validate_data',
+    'detect_regimes',
+    'analyze_regime_transitions',
 ]
 
 # Convenience functions for common operations
@@ -92,3 +102,73 @@ def validate_data(data, ticker=None, **kwargs):
     """
     validator = DataValidator(**kwargs)
     return validator.validate_data(data, ticker)
+
+
+def detect_regimes(
+    returns, 
+    n_states=3, 
+    config=None, 
+    return_model=False, 
+    **kwargs
+):
+    """
+    Convenience function to detect market regimes using HMM.
+    
+    Args:
+        returns: Log returns time series (array-like)
+        n_states: Number of regimes to detect (default: 3)
+        config: HMMConfig object (optional)
+        return_model: If True, return (states, model), else just states
+        **kwargs: Additional arguments passed to HMM.fit()
+        
+    Returns:
+        Most likely state sequence, or (states, model) if return_model=True
+        
+    Example:
+        >>> import hidden_regime as hr
+        >>> data = hr.load_stock_data('AAPL', '2023-01-01', '2023-12-31')
+        >>> states = hr.detect_regimes(data['log_return'])
+        >>> print(f"Detected {len(set(states))} distinct regimes")
+    """
+    hmm = HiddenMarkovModel(n_states=n_states, config=config)
+    hmm.fit(returns, **kwargs)
+    states = hmm.predict(returns)
+    
+    if return_model:
+        return states, hmm
+    else:
+        return states
+
+
+def analyze_regime_transitions(
+    returns, 
+    dates=None, 
+    n_states=3, 
+    config=None, 
+    **kwargs
+):
+    """
+    Convenience function for comprehensive regime transition analysis.
+    
+    Args:
+        returns: Log returns time series 
+        dates: Optional dates corresponding to returns
+        n_states: Number of regimes to detect (default: 3)
+        config: HMMConfig object (optional)
+        **kwargs: Additional arguments passed to HMM.fit()
+        
+    Returns:
+        Dictionary with comprehensive regime analysis results
+        
+    Example:
+        >>> import hidden_regime as hr
+        >>> data = hr.load_stock_data('AAPL', '2023-01-01', '2023-12-31')
+        >>> analysis = hr.analyze_regime_transitions(
+        ...     data['log_return'], 
+        ...     data['date']
+        ... )
+        >>> print(f"Average bull regime duration: {analysis['regime_statistics']['regime_stats'][2]['avg_duration']:.1f} days")
+    """
+    hmm = HiddenMarkovModel(n_states=n_states, config=config)
+    hmm.fit(returns, **kwargs)
+    return hmm.analyze_regimes(returns, dates)

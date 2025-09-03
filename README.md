@@ -2,7 +2,7 @@
 
 **Market regime detection using Hidden Markov Models with Bayesian uncertainty quantification.**
 
-🚀 **Production-ready data pipeline with comprehensive validation and preprocessing** 🚀
+🚀 **Production-ready data pipeline and HMM implementation** 🚀
 
 ## Features
 
@@ -14,11 +14,13 @@
 - **Quality scoring system** providing quantitative data quality assessment (0.0-1.0 scale)
 - **Multi-asset support** with timestamp alignment and batch processing
 
-### 🔄 Regime Detection (Coming Soon)
-- **Real-time regime detection** using Online Hidden Markov Models
-- **Bayesian uncertainty quantification** for parameter estimates  
-- **Multi-asset regime analysis** and correlation detection
-- **Model Context Protocol integration** for AI systems
+### ✅ Hidden Markov Models (Complete)
+- **3-state regime detection** optimized for Bear, Sideways, Bull market identification
+- **Baum-Welch EM training** with numerical stability enhancements
+- **Viterbi state inference** for most likely regime sequences
+- **Real-time regime tracking** with online state probability updates
+- **Model persistence** with save/load functionality (JSON/Pickle formats)
+- **Comprehensive regime analysis** with duration statistics and interpretations
 
 ### 📋 Planned Advanced Features
 - Online HMM learning with streaming market data
@@ -51,7 +53,57 @@ print(f"Loaded {len(data)} days of data")
 print(f"Columns: {list(data.columns)}")
 ```
 
-### Advanced Usage
+### HMM Regime Detection
+
+```python
+import hidden_regime as hr
+
+# Load market data
+data = hr.load_stock_data('AAPL', '2023-01-01', '2024-01-01')
+
+# Quick regime detection
+states = hr.detect_regimes(data['log_return'], n_states=3)
+print(f"Detected {len(set(states))} distinct regimes")
+
+# Comprehensive regime analysis
+analysis = hr.analyze_regime_transitions(
+    data['log_return'], 
+    data['date'], 
+    n_states=3
+)
+
+# Display regime characteristics
+for state in range(3):
+    stats = analysis['regime_statistics']['regime_stats'][state]
+    interpretation = analysis['regime_interpretations'][str(state)]
+    print(f"{interpretation}: {stats['frequency']:.1%} frequency, "
+          f"{stats['avg_duration']:.1f} day duration")
+```
+
+### Advanced HMM Usage
+
+```python
+from hidden_regime import HiddenMarkovModel, HMMConfig
+
+# Configure HMM for conservative market analysis
+config = HMMConfig.for_market_data(conservative=True)
+
+# Train model
+hmm = HiddenMarkovModel(n_states=3, config=config)
+hmm.fit(data['log_return'], verbose=True)
+
+# Real-time regime tracking
+for new_return in recent_returns:
+    regime_info = hmm.update_with_observation(new_return)
+    print(f"Current regime: {regime_info['regime_interpretation']} "
+          f"(confidence: {regime_info['confidence']:.2%})")
+
+# Save/load model
+hmm.save('aapl_regime_model.pkl')
+loaded_hmm = HiddenMarkovModel.load('aapl_regime_model.pkl')
+```
+
+### Advanced Data Processing
 
 ```python
 from hidden_regime import DataLoader, DataValidator, DataPreprocessor
@@ -275,9 +327,26 @@ config = PreprocessingConfig(
 
 ## Examples
 
-Run the comprehensive demo:
+Run the comprehensive demos:
+
+**Data Pipeline Demo:**
 ```bash
 python examples/data_pipeline_demo.py
+```
+
+**Basic HMM Demo:**
+```bash
+python examples/basic_hmm_demo.py
+```
+
+**HMM Trading Strategy:**
+```bash
+python examples/hmm_trading_strategy.py
+```
+
+**Portfolio Analysis:**
+```bash
+python examples/portfolio_analysis_example.py
 ```
 
 ## Documentation
@@ -324,22 +393,26 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Advanced preprocessing capabilities
 - Quality scoring and reporting
 
-### Phase 2: Basic Regime Detection 🔄 (In Progress)
-- Simple threshold-based regime classification
+### Phase 2: Hidden Markov Models ✅ (Complete)
 - 3-state Hidden Markov Model implementation
-- Baum-Welch parameter estimation
-- Viterbi algorithm for state inference
+- Baum-Welch EM parameter estimation with numerical stability
+- Viterbi algorithm for optimal state inference
+- Forward-Backward algorithm for state probabilities
+- Real-time regime detection and tracking
+- Model persistence and serialization
+- Comprehensive regime analysis and interpretation
 
-### Phase 3: Advanced Regime Detection 📋 (Planned)
+### Phase 3: Advanced Features 📋 (Planned)
 - Online learning with streaming data updates
-- Bayesian uncertainty quantification
-- Model selection and complexity optimization
+- Bayesian uncertainty quantification with MCMC sampling
+- Automatic model selection (2-6 states)
+- Fat-tailed emission models for crisis detection
 - Multi-asset regime correlation analysis
 
 ### Phase 4: AI Integration 🎯 (Future)
 - Model Context Protocol (MCP) server implementation
 - Integration with LLM-based financial analysis
-- Real-time trading signal generation
+- Advanced trading signal generation
 - Risk management and portfolio optimization
 
 ## Support

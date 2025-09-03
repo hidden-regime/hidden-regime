@@ -104,31 +104,35 @@ class TestDataLoadingPerformance:
         """Test efficiency of multi-stock vs individual loading."""
         tickers = ['AAPL', 'GOOGL', 'MSFT']
         
+        # Create loader with high rate limit to avoid sleep delays in testing
+        fast_config = DataConfig(requests_per_minute=10000)  # Very high rate limit
+        fast_loader = DataLoader(fast_config)
+        
         with patch('hidden_regime.data.loader.yf.Ticker') as mock_ticker_class:
             def ticker_side_effect(ticker):
                 return MockYFinanceTicker(ticker)
             mock_ticker_class.side_effect = ticker_side_effect
             
             # Clear cache
-            self.loader.clear_cache()
+            fast_loader.clear_cache()
             
             # Time individual loading
             start_time = time.time()
             individual_results = {}
             for ticker in tickers:
-                individual_results[ticker] = self.loader.load_stock_data(
+                individual_results[ticker] = fast_loader.load_stock_data(
                     ticker, "2024-01-01", "2024-06-30"
                 )
             individual_time = time.time() - start_time
             
             # Clear cache again
-            self.loader.clear_cache()
+            fast_loader.clear_cache()
             mock_ticker_class.reset_mock()
             mock_ticker_class.side_effect = ticker_side_effect
             
             # Time batch loading
             start_time = time.time()
-            batch_results = self.loader.load_multiple_stocks(
+            batch_results = fast_loader.load_multiple_stocks(
                 tickers, "2024-01-01", "2024-06-30"
             )
             batch_time = time.time() - start_time
