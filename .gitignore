@@ -101,6 +101,5 @@ data/
 *.h5
 
 # Model outputs
-models/
 checkpoints/
 results/
