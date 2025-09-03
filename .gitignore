@@ -34,9 +34,19 @@ htmlcov/
 .cache
 nosetests.xml
 coverage.xml
+coverage.json
 *.cover
 .hypothesis/
 .pytest_cache/
+tests/pytest.log
+
+# CI/CD artifacts
+benchmark_*.json
+baseline_benchmark.json
+performance_report.json
+performance_summary.md
+bandit-report.json
+.benchmarks/
 
 # Virtual environments
 .env

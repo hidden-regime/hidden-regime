@@ -1,0 +1,368 @@
+name: Performance Tests
+
+on:
+  schedule:
+    # Run performance tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      benchmark_type:
+        description: 'Type of benchmark to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - data_loading
+          - hmm_training
+          - inference
+      comparison_branch:
+        description: 'Branch to compare performance against'
+        required: false
+        default: 'main'
+        type: string
+
+jobs:
+  performance-tests:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Need full history for comparison
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: performance-${{ hashFiles('setup.py') }}
+        restore-keys: |
+          performance-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .[dev,ml]
+        pip install pytest-benchmark memory-profiler
+
+    - name: Run data loading performance tests
+      if: github.event.inputs.benchmark_type == 'all' || github.event.inputs.benchmark_type == 'data_loading'
+      run: |
+        pytest tests/test_performance.py::TestDataLoadingPerformance -v \
+          --benchmark-only \
+          --benchmark-json=benchmark_data_loading.json \
+          --benchmark-sort=mean \
+          --benchmark-min-rounds=3 \
+          --benchmark-warmup=off
+      continue-on-error: true
+
+    - name: Run HMM training performance tests
+      if: github.event.inputs.benchmark_type == 'all' || github.event.inputs.benchmark_type == 'hmm_training'
+      run: |
+        pytest tests/test_models/ -k "performance" -v \
+          --benchmark-only \
+          --benchmark-json=benchmark_hmm_training.json \
+          --benchmark-sort=mean \
+          --benchmark-min-rounds=3 \
+          --benchmark-warmup=off
+      continue-on-error: true
+
+    - name: Run inference performance tests
+      if: github.event.inputs.benchmark_type == 'all' || github.event.inputs.benchmark_type == 'inference'
+      run: |
+        pytest tests/test_models/ -k "inference and performance" -v \
+          --benchmark-only \
+          --benchmark-json=benchmark_inference.json \
+          --benchmark-sort=mean \
+          --benchmark-min-rounds=3 \
+          --benchmark-warmup=off
+      continue-on-error: true
+
+    - name: Memory profiling
+      run: |
+        python -m pytest tests/test_performance.py -v \
+          --tb=short \
+          --strict-markers \
+          --disable-warnings
+      continue-on-error: true
+
+    - name: Compare with baseline (if available)
+      if: github.event.inputs.comparison_branch != ''
+      run: |
+        # Check out comparison branch
+        git fetch origin ${{ github.event.inputs.comparison_branch || 'main' }}
+        
+        # Install dependencies for baseline
+        git checkout origin/${{ github.event.inputs.comparison_branch || 'main' }}
+        pip install -e .[dev,ml]
+        
+        # Run baseline benchmarks
+        pytest tests/test_performance.py::TestDataLoadingPerformance -v \
+          --benchmark-only \
+          --benchmark-json=baseline_benchmark.json \
+          --benchmark-min-rounds=3 \
+          --benchmark-warmup=off || true
+        
+        # Switch back to current branch
+        git checkout -
+        pip install -e .[dev,ml]
+        
+        # Generate comparison report
+        python -c "
+        import json
+        import sys
+        
+        try:
+            with open('benchmark_data_loading.json', 'r') as f:
+                current = json.load(f)
+            with open('baseline_benchmark.json', 'r') as f:
+                baseline = json.load(f)
+            
+            print('=== Performance Comparison ===')
+            # Add comparison logic here
+            print('Current vs Baseline performance comparison would go here')
+            
+        except FileNotFoundError:
+            print('Benchmark files not found - skipping comparison')
+        except Exception as e:
+            print(f'Error comparing benchmarks: {e}')
+        "
+      continue-on-error: true
+
+    - name: Generate performance report
+      if: always()
+      run: |
+        python -c "
+        import json
+        import os
+        from datetime import datetime
+        
+        report = {
+            'timestamp': datetime.now().isoformat(),
+            'commit': os.environ.get('GITHUB_SHA', 'unknown'),
+            'branch': os.environ.get('GITHUB_REF_NAME', 'unknown'),
+            'benchmarks': {}
+        }
+        
+        # Collect benchmark results
+        benchmark_files = [
+            'benchmark_data_loading.json',
+            'benchmark_hmm_training.json', 
+            'benchmark_inference.json'
+        ]
+        
+        for file in benchmark_files:
+            if os.path.exists(file):
+                try:
+                    with open(file, 'r') as f:
+                        data = json.load(f)
+                    report['benchmarks'][file] = {
+                        'machine_info': data.get('machine_info', {}),
+                        'benchmarks': [
+                            {
+                                'name': b['name'],
+                                'mean': b['stats']['mean'],
+                                'min': b['stats']['min'],
+                                'max': b['stats']['max'],
+                                'stddev': b['stats']['stddev']
+                            } for b in data.get('benchmarks', [])
+                        ]
+                    }
+                except Exception as e:
+                    report['benchmarks'][file] = {'error': str(e)}
+        
+        with open('performance_report.json', 'w') as f:
+            json.dump(report, f, indent=2)
+        
+        # Generate markdown summary
+        with open('performance_summary.md', 'w') as f:
+            f.write('# Performance Test Results\n\n')
+            f.write(f'**Commit:** {report[\"commit\"][:8]}  \n')
+            f.write(f'**Branch:** {report[\"branch\"]}  \n')
+            f.write(f'**Timestamp:** {report[\"timestamp\"]}  \n\n')
+            
+            for benchmark_file, data in report['benchmarks'].items():
+                if 'error' in data:
+                    f.write(f'## {benchmark_file}\n\n❌ Error: {data[\"error\"]}\n\n')
+                else:
+                    f.write(f'## {benchmark_file}\n\n')
+                    f.write('| Test | Mean (s) | Min (s) | Max (s) | StdDev |\n')
+                    f.write('|------|----------|---------|---------|--------|\n')
+                    for bench in data.get('benchmarks', []):
+                        f.write(f\"| {bench['name']} | {bench['mean']:.6f} | {bench['min']:.6f} | {bench['max']:.6f} | {bench['stddev']:.6f} |\n\")
+                    f.write('\n')
+        
+        print('Performance report generated')
+        "
+
+    - name: Upload performance artifacts
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-results-${{ github.run_number }}
+        path: |
+          benchmark_*.json
+          baseline_benchmark.json
+          performance_report.json
+          performance_summary.md
+        retention-days: 90
+
+    - name: Comment performance results on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const fs = require('fs');
+          
+          try {
+            const summary = fs.readFileSync('performance_summary.md', 'utf8');
+            
+            const comment = `## 🚀 Performance Test Results
+            
+            ${summary}
+            
+            <details>
+            <summary>View detailed results</summary>
+            
+            Performance artifacts are available in the workflow run.
+            
+            </details>`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          } catch (error) {
+            console.log('Could not post performance results:', error.message);
+          }
+
+    - name: Performance regression check
+      if: github.event_name == 'pull_request'
+      run: |
+        python -c "
+        import json
+        import os
+        import sys
+        
+        # Simple regression check
+        try:
+            with open('performance_report.json', 'r') as f:
+                report = json.load(f)
+            
+            # Check for any benchmarks that took longer than thresholds
+            slow_tests = []
+            thresholds = {
+                'test_loading_time_scales_linearly': 10.0,  # seconds
+                'test_multi_stock_loading_efficiency': 5.0,  # seconds
+                'test_hmm_training': 30.0,  # seconds
+                'test_hmm_prediction': 1.0,  # seconds
+            }
+            
+            for benchmark_file, data in report.get('benchmarks', {}).items():
+                for bench in data.get('benchmarks', []):
+                    name = bench['name']
+                    mean_time = bench['mean']
+                    
+                    for test_name, threshold in thresholds.items():
+                        if test_name in name and mean_time > threshold:
+                            slow_tests.append(f'{name}: {mean_time:.2f}s (threshold: {threshold}s)')
+            
+            if slow_tests:
+                print('⚠️  Performance regression detected:')
+                for test in slow_tests:
+                    print(f'  - {test}')
+                # Don't fail the build, just warn
+                # sys.exit(1)
+            else:
+                print('✅ No performance regressions detected')
+                
+        except Exception as e:
+            print(f'Could not check for regressions: {e}')
+        "
+
+  stress-test:
+    name: Stress Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .[dev,ml]
+        pip install pytest-xdist
+
+    - name: Run stress tests
+      run: |
+        # Run a subset of tests under high load conditions
+        pytest tests/test_models/ -v \
+          --tb=short \
+          --strict-markers \
+          --disable-warnings \
+          -n auto \
+          --maxfail=3
+      continue-on-error: true
+
+    - name: Memory stress test
+      run: |
+        python -c "
+        import numpy as np
+        from hidden_regime.models import HiddenMarkovModel
+        import gc
+        import psutil
+        import os
+        
+        print('Running memory stress test...')
+        
+        # Monitor memory usage
+        process = psutil.Process(os.getpid())
+        initial_memory = process.memory_info().rss / 1024 / 1024  # MB
+        
+        models = []
+        for i in range(10):
+            # Create large dataset
+            returns = np.random.normal(0.001, 0.02, 10000)
+            
+            # Train model
+            hmm = HiddenMarkovModel(n_states=3)
+            try:
+                hmm.fit(returns)
+                models.append(hmm)
+                
+                current_memory = process.memory_info().rss / 1024 / 1024
+                print(f'Model {i+1}: {current_memory:.1f} MB (+{current_memory - initial_memory:.1f} MB)')
+                
+                # Check for memory leaks
+                if current_memory > initial_memory + 500:  # 500MB threshold
+                    print(f'⚠️  Potential memory leak detected at model {i+1}')
+                    break
+                    
+            except Exception as e:
+                print(f'Error training model {i+1}: {e}')
+        
+        # Cleanup
+        models.clear()
+        gc.collect()
+        
+        final_memory = process.memory_info().rss / 1024 / 1024
+        print(f'Final memory: {final_memory:.1f} MB (initial: {initial_memory:.1f} MB)')
+        "
+      continue-on-error: true

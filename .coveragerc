@@ -1,0 +1,136 @@
+[run]
+# Source code to analyze
+source = hidden_regime
+
+# Files to include in coverage analysis
+include = 
+    hidden_regime/*
+    hidden_regime/**/*
+
+# Files and directories to exclude from coverage analysis
+omit = 
+    # Test files
+    tests/*
+    */tests/*
+    **/test_*
+    # Build and distribution files
+    setup.py
+    build/*
+    dist/*
+    .eggs/*
+    *.egg-info/*
+    # Development and configuration files
+    .tox/*
+    .pytest_cache/*
+    __pycache__/*
+    */__pycache__/*
+    .coverage
+    htmlcov/*
+    # Version control
+    .git/*
+    # Virtual environments
+    venv/*
+    env/*
+    .venv/*
+    # IDE and editor files
+    .vscode/*
+    .idea/*
+    *.pyc
+    *.pyo
+    *.pyd
+    # Temporary files
+    .tmp/*
+    *.tmp
+    # Documentation
+    docs/*
+    # Scripts and utilities (if any)
+    scripts/*
+    # Examples and demos (if any)
+    examples/*
+    demos/*
+
+# Branch coverage
+branch = True
+
+# Parallel processing
+parallel = True
+
+# Coverage data file location
+data_file = .coverage
+
+[report]
+# Reporting options
+show_missing = True
+skip_covered = False
+skip_empty = True
+sort = Cover
+
+# Precision for coverage percentages
+precision = 2
+
+# Exclude lines from coverage analysis using regex patterns
+exclude_lines = 
+    # Have to re-enable the standard pragma
+    pragma: no cover
+    
+    # Don't complain about missing debug-only code
+    def __repr__
+    if self\.debug
+    
+    # Don't complain if tests don't hit defensive assertion code
+    raise AssertionError
+    raise NotImplementedError
+    
+    # Don't complain if non-runnable code isn't run
+    if 0:
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    
+    # Don't complain about abstract methods
+    @(abc\.)?abstractmethod
+    
+    # Don't complain about platform-specific code
+    def __platform_specific
+    
+    # Don't complain about import fallbacks
+    except ImportError:
+    except ModuleNotFoundError:
+    
+    # Don't complain about logging statements
+    logger\.debug
+    logger\.info
+    log\.debug
+    log\.info
+    
+    # Don't complain about warnings
+    warnings\.warn
+    warn\(
+
+# Ignore certain errors/exceptions in coverage
+ignore_errors = True
+
+# Coverage failure threshold (matches pytest.ini setting)
+fail_under = 80
+
+[html]
+# HTML report configuration
+directory = htmlcov
+title = Hidden Regime Coverage Report
+show_contexts = True
+
+[xml]
+# XML report configuration (for CI/CD and external tools)
+output = coverage.xml
+
+[json]
+# JSON report configuration (for programmatic analysis)
+output = coverage.json
+show_contexts = True
+
+[paths]
+# Path mapping for different environments (useful for CI/CD)
+source = 
+    hidden_regime/
+    */site-packages/hidden_regime/
+    */lib/python*/site-packages/hidden_regime/
+    */Lib/site-packages/hidden_regime/
