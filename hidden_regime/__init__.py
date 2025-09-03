@@ -14,9 +14,17 @@ Features:
 For documentation and examples, visit: https://hiddenregime.com
 """
 
-__version__ = "0.1.0"
-__author__ = "aoaustin"
-__email__ = "contact@hiddenregime.com"
+# Import version information from centralized location
+from ._version import (
+    __version__, 
+    __author__, 
+    __author_email__ as __email__,
+    __title__,
+    __description__,
+    __url__,
+    __license__,
+    __copyright__
+)
 
 # Import main data pipeline classes
 from .data import DataLoader, DataPreprocessor, DataValidator
