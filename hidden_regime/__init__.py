@@ -33,11 +33,17 @@ from .utils.exceptions import (
     HiddenRegimeError,
     DataLoadError, 
     DataQualityError,
-    ValidationError
+    ValidationError,
+    HMMTrainingError,
+    HMMInferenceError
 )
 
 # Import HMM classes
-from .models import HiddenMarkovModel, HMMConfig
+from .models import (
+    HiddenMarkovModel, HMMConfig,
+    OnlineHMM, OnlineHMMConfig,
+    StreamingProcessor, StreamingConfig
+)
 
 # Main API exports
 __all__ = [
@@ -49,6 +55,10 @@ __all__ = [
     # HMM regime detection
     'HiddenMarkovModel',
     'HMMConfig',
+    'OnlineHMM',
+    'OnlineHMMConfig',
+    'StreamingProcessor',
+    'StreamingConfig',
     
     # Configuration
     'DataConfig',
@@ -60,6 +70,8 @@ __all__ = [
     'DataLoadError',
     'DataQualityError', 
     'ValidationError',
+    'HMMTrainingError',
+    'HMMInferenceError',
     
     # Convenience functions
     'load_stock_data',

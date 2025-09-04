@@ -49,3 +49,23 @@ class ConfigurationError(HiddenRegimeError):
     or incompatible configuration combinations.
     """
     pass
+
+
+class HMMTrainingError(HiddenRegimeError):
+    """
+    Raised when HMM training fails.
+    
+    This includes convergence failures, numerical instabilities,
+    or insufficient data for model training.
+    """
+    pass
+
+
+class HMMInferenceError(HiddenRegimeError):
+    """
+    Raised when HMM inference fails.
+    
+    This includes prediction failures, invalid observations,
+    or model state errors during inference.
+    """
+    pass
