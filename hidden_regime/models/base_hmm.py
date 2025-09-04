@@ -60,7 +60,9 @@ class HiddenMarkovModel:
         training_history_: Training convergence history
     """
     
-    def __init__(self, n_states: int = 3, config: Optional[HMMConfig] = None):
+    def __init__(self, 
+                 n_states: Optional[int] = None, 
+                 config: Optional[HMMConfig] = None):
         """
         Initialize Hidden Markov Model.
         
@@ -69,20 +71,27 @@ class HiddenMarkovModel:
             config: HMMConfig object, uses defaults if None
         """
         # Validate configuration
-        if config.n_states != n_states:
-            warnings.warn(
-                f"Config n_states ({config.n_states}) doesn't match "
-                f"constructor n_states ({n_states}). Using constructor value."
-            )
-            raise ValueError(f'Number of states do not match - config is {config.n_states} and n_states is {n_states}')
-
-        if config is None:
-            self.n_states = n_states
-            self.config = HMMConfig(n_states=n_states)
+        if n_states is None:
+            if config is None:
+                raise RuntimeError('Must specify one of: n_states, config')
+            else:
+                self.n_states = config.n_states
+                self.config = config
         else:
-            self.n_states = config.n_states
-            self.config = config
-                
+            if config is None:
+                self.n_states = n_states
+                self.config = HMMConfig(n_states=n_states)
+            else:
+                if config.n_states == n_states:
+                    self.n_states = n_states
+                    self.config = config
+                else:
+                    warnings.warn(
+                        f"Config n_states ({config.n_states}) doesn't match "
+                        f"constructor n_states ({n_states}). Using constructor value."
+                    )
+                    raise ValueError(f'Number of states do not match - config is {config.n_states} and n_states is {n_states}')
+
         # Model parameters (set after training)
         self.initial_probs_: Optional[np.ndarray] = None
         self.transition_matrix_: Optional[np.ndarray] = None
