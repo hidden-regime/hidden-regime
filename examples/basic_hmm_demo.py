@@ -2,7 +2,9 @@
 Basic Hidden Markov Model Demo for hidden-regime package.
 
 Demonstrates core HMM functionality for market regime detection including
-training, inference, and real-time regime tracking.
+training, inference, real-time regime tracking, and comprehensive visualizations.
+
+This example shows how to integrate plotting capabilities into HMM workflows.
 """
 
 import numpy as np
@@ -360,14 +362,110 @@ def convenience_functions_demo():
 
 
 def plotting_demo(hmm, returns, predicted_states, true_states, dates):
-    """Create visualizations of regime detection results."""
+    """Demonstrate comprehensive visualization capabilities."""
     print("\n" + "=" * 60)
     print("VISUALIZATION DEMO")
     print("=" * 60)
+    print("Demonstrating integrated plotting capabilities...")
     
     try:
-        # Create plots
-        fig, axes = plt.subplots(3, 1, figsize=(12, 10))
+        import matplotlib.pyplot as plt
+        
+        print("\n📊 1. Comprehensive HMM Analysis Plot")
+        print("   Creating full regime analysis visualization...")
+        
+        # Create comprehensive HMM visualization
+        fig = hmm.plot(returns, dates=dates, plot_type='all', figsize=(16, 12))
+        plt.suptitle('HMM Regime Analysis - Comprehensive View', fontsize=16, fontweight='bold', y=0.96)
+        plt.show()
+        print("   ✅ Complete HMM analysis visualization displayed")
+        
+        print("\n🎯 2. Individual Plot Types")
+        
+        # Regime timeline
+        print("   2.1 Regime Classification Timeline")
+        fig = hmm.plot(returns, dates=dates, plot_type='regimes', figsize=(12, 6))
+        plt.show()
+        
+        # Transition matrix heatmap  
+        print("   2.2 Regime Transition Matrix")
+        fig = hmm.plot(returns, dates=dates, plot_type='transitions', figsize=(8, 6))
+        plt.show()
+        
+        # State probabilities over time
+        print("   2.3 State Probabilities Heatmap")
+        fig = hmm.plot(returns, dates=dates, plot_type='probabilities', figsize=(12, 6))
+        plt.show()
+        
+        print("\n🔬 3. State Standardization Analysis")
+        from hidden_regime.models.state_standardizer import StateStandardizer
+        
+        standardizer = StateStandardizer(regime_type='3_state')
+        emission_params = hmm.emission_params_
+        
+        # Regime characteristics
+        print("   3.1 Regime Characteristics Matrix")
+        fig = standardizer.plot(emission_params, plot_type='characteristics', figsize=(10, 6))
+        plt.show()
+        
+        # Validation confidence
+        print("   3.2 Regime Validation Analysis")
+        fig = standardizer.plot(emission_params, plot_type='validation', figsize=(10, 6))
+        plt.show()
+        
+        print("\n📈 4. Performance Comparison")
+        
+        # Show regime mapping
+        state_mapping = standardizer.standardize_states(emission_params)
+        print("   Detected regime characteristics:")
+        for state_idx, regime_name in state_mapping.items():
+            mean_ret = emission_params[state_idx, 0] * 252 * 100  # Annualized %
+            volatility = emission_params[state_idx, 1] * np.sqrt(252) * 100  # Annualized %
+            print(f"     {regime_name}: {mean_ret:+.1f}% return, {volatility:.1f}% volatility")
+        
+        # Calculate accuracy against true states if available
+        if true_states is not None and len(true_states) == len(predicted_states):
+            accuracy = np.mean(predicted_states == true_states)
+            print(f"\n   🎯 Regime Detection Accuracy: {accuracy:.1%}")
+            
+            # Create accuracy comparison plot
+            fig, ax = plt.subplots(1, 1, figsize=(12, 4))
+            
+            time_idx = np.arange(len(true_states))
+            ax.plot(time_idx, true_states, 'o-', label='True Regimes', alpha=0.7, markersize=3)
+            ax.plot(time_idx, predicted_states, 's-', label='Predicted Regimes', alpha=0.7, markersize=3)
+            
+            ax.set_title(f'Regime Detection Accuracy: {accuracy:.1%}', fontweight='bold')
+            ax.set_xlabel('Time Period')
+            ax.set_ylabel('Regime State')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            plt.show()
+        
+        print("\n✨ Key Visualization Features Demonstrated:")
+        print("   ✅ Comprehensive multi-panel analysis")
+        print("   ✅ Individual focused plot types")
+        print("   ✅ Consistent regime color coding")
+        print("   ✅ Professional financial styling")
+        print("   ✅ Date-aware time series plotting")
+        print("   ✅ Statistical validation visualizations")
+        print("   ✅ Performance accuracy metrics")
+        
+        print("\n💡 Visualization Tips:")
+        print("   • Use plot_type='all' for comprehensive analysis")
+        print("   • Individual plot types: 'regimes', 'transitions', 'probabilities', etc.")
+        print("   • Add save_path parameter to save plots: hmm.plot(..., save_path='my_plot.png')")
+        print("   • Adjust figsize for different output needs: figsize=(width, height)")
+        print("   • Combine with StateStandardizer for regime interpretation")
+        
+    except ImportError:
+        print("❌ Matplotlib not available. Install with: pip install matplotlib seaborn")
+        print("   Visualization demo requires matplotlib and seaborn for plotting")
+    except Exception as e:
+        print(f"⚠️ Visualization demo encountered error: {e}")
+        print("   Continuing with rest of demo...")
         fig.suptitle('Hidden Markov Model Regime Detection Results', fontsize=16)
         
         # Plot 1: Returns with true regimes

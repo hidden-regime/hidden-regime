@@ -692,6 +692,362 @@ class HiddenMarkovModel:
         if not self.is_fitted:
             raise HMMTrainingError("Model must be fitted before use")
     
+    def plot(self, 
+             returns: Union[np.ndarray, pd.Series],
+             dates: Optional[Union[np.ndarray, pd.Series]] = None,
+             plot_type: str = 'all',
+             figsize: Tuple[int, int] = (16, 12),
+             save_path: Optional[str] = None) -> 'matplotlib.Figure':
+        """
+        Create comprehensive visualizations of HMM regime detection results.
+        
+        Args:
+            returns: Returns time series used for regime detection
+            dates: Optional dates corresponding to returns
+            plot_type: Type of plot ('all', 'regimes', 'probabilities', 'transitions', 
+                      'statistics', 'convergence', 'duration')
+            figsize: Figure size as (width, height)
+            save_path: Optional path to save the plot
+            
+        Returns:
+            matplotlib Figure object
+            
+        Raises:
+            ImportError: If matplotlib/seaborn not available
+            HMMTrainingError: If model not fitted
+        """
+        self._check_fitted()
+        
+        try:
+            import matplotlib.pyplot as plt
+            import seaborn as sns
+            from ..visualization.plotting import (
+                setup_financial_plot_style, format_financial_axis, save_plot,
+                plot_returns_with_regimes, plot_regime_heatmap, get_regime_colors
+            )
+        except ImportError:
+            raise ImportError(
+                "Plotting requires matplotlib and seaborn. Install with: pip install matplotlib seaborn"
+            )
+        
+        # Setup styling
+        setup_financial_plot_style()
+        
+        # Validate and prepare data
+        returns_array = validate_returns_data(returns)
+        
+        if dates is not None:
+            dates_array = np.array(dates)
+            if len(dates_array) != len(returns_array):
+                raise ValueError("Length of dates must match length of returns")
+            dates_array = pd.to_datetime(dates_array)
+        else:
+            dates_array = None
+        
+        # Get model predictions
+        predicted_states = self.predict(returns_array)
+        state_probabilities = self.predict_proba(returns_array)
+        
+        # Get regime names and colors
+        regime_names = self._get_regime_names()
+        colors = get_regime_colors(list(regime_names.values()))
+        
+        # Determine subplot configuration
+        if plot_type == 'all':
+            subplot_configs = [
+                ('Regime Classification', 'regimes'),
+                ('State Probabilities', 'probabilities'),
+                ('Transition Matrix', 'transitions'),
+                ('Regime Statistics', 'statistics'),
+                ('Training Convergence', 'convergence')
+            ]
+            if self._has_duration_analysis():
+                subplot_configs.append(('Regime Durations', 'duration'))
+        elif plot_type in ['regimes', 'probabilities', 'transitions', 'statistics', 'convergence', 'duration']:
+            subplot_configs = [(plot_type.title(), plot_type)]
+        else:
+            raise ValueError(f"Invalid plot_type: {plot_type}")
+        
+        # Create subplots with custom layout for 'all'
+        if plot_type == 'all':
+            fig = plt.figure(figsize=figsize)
+            gs = fig.add_gridspec(3, 2, height_ratios=[2, 2, 1], width_ratios=[2, 1])
+            axes = [
+                fig.add_subplot(gs[0, :]),  # regimes (full width)
+                fig.add_subplot(gs[1, :]),  # probabilities (full width) 
+                fig.add_subplot(gs[2, 0]),  # transitions
+                fig.add_subplot(gs[2, 1])   # statistics/convergence
+            ]
+        else:
+            fig, axes = plt.subplots(1, 1, figsize=figsize)
+            axes = [axes] if not isinstance(axes, list) else axes
+        
+        # Create each subplot
+        for i, (title, plot_subtype) in enumerate(subplot_configs):
+            if i >= len(axes):
+                break
+                
+            ax = axes[i]
+            
+            if plot_subtype == 'regimes':
+                # Returns colored by predicted regime
+                plot_returns_with_regimes(
+                    returns_array, predicted_states, dates_array, 
+                    regime_names, ax, title="Returns Colored by Detected Regime"
+                )
+                
+                # Add regime change markers
+                regime_changes = np.where(np.diff(predicted_states) != 0)[0] + 1
+                if len(regime_changes) > 0 and dates_array is not None:
+                    for change_idx in regime_changes:
+                        ax.axvline(x=dates_array[change_idx], color='black', 
+                                  linestyle=':', alpha=0.5, linewidth=1)
+                
+            elif plot_subtype == 'probabilities':
+                # State probabilities heatmap over time
+                if dates_array is not None:
+                    x_data = dates_array
+                    ax.set_xlabel('Date')
+                else:
+                    x_data = np.arange(len(returns_array))
+                    ax.set_xlabel('Time')
+                
+                # Create probability heatmap
+                im = ax.imshow(state_probabilities.T, cmap='viridis', aspect='auto', 
+                              extent=[0, len(returns_array), -0.5, self.n_states-0.5])
+                
+                # Format axes
+                ax.set_title('State Probabilities Over Time', fontweight='bold')
+                ax.set_ylabel('State')
+                ax.set_yticks(range(self.n_states))
+                ax.set_yticklabels([regime_names.get(i, f"State {i}") for i in range(self.n_states)])
+                
+                # Add colorbar
+                cbar = plt.colorbar(im, ax=ax)
+                cbar.set_label('Probability')
+                
+                if dates_array is not None:
+                    format_financial_axis(ax, dates_array)
+                
+            elif plot_subtype == 'transitions':
+                # Transition matrix heatmap
+                transition_df = pd.DataFrame(
+                    self.transition_matrix_,
+                    index=[regime_names.get(i, f"State {i}") for i in range(self.n_states)],
+                    columns=[regime_names.get(i, f"State {i}") for i in range(self.n_states)]
+                )
+                
+                sns.heatmap(transition_df, ax=ax, annot=True, fmt='.3f', 
+                           cmap='Blues', cbar_kws={'label': 'Probability'})
+                ax.set_title('Regime Transition Matrix', fontweight='bold')
+                
+            elif plot_subtype == 'statistics':
+                # Regime statistics comparison
+                regime_stats = self._calculate_regime_stats(returns_array, predicted_states)
+                
+                # Create bar plot of key metrics
+                metrics = ['mean_return', 'std_return', 'frequency']
+                x = np.arange(self.n_states)
+                width = 0.25
+                
+                for j, metric in enumerate(metrics):
+                    values = [regime_stats[i][metric] for i in range(self.n_states)]
+                    bars = ax.bar(x + j*width, values, width, 
+                                 label=metric.replace('_', ' ').title(), alpha=0.8)
+                    
+                    # Color bars by regime
+                    for bar, state in zip(bars, range(self.n_states)):
+                        regime_name = regime_names.get(state, f"State {state}")
+                        bar.set_color(colors.get(regime_name, '#7f7f7f'))
+                
+                ax.set_xlabel('Regime')
+                ax.set_ylabel('Value')
+                ax.set_title('Regime Characteristics', fontweight='bold')
+                ax.set_xticks(x + width)
+                ax.set_xticklabels([regime_names.get(i, f"State {i}") for i in range(self.n_states)])
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                
+            elif plot_subtype == 'convergence':
+                # Training convergence plot
+                if 'log_likelihood_history' in self.training_history_:
+                    ll_history = self.training_history_['log_likelihood_history']
+                    ax.plot(ll_history, color='blue', linewidth=2)
+                    ax.set_title('Training Convergence', fontweight='bold')
+                    ax.set_xlabel('Iteration')
+                    ax.set_ylabel('Log-Likelihood')
+                    ax.grid(True, alpha=0.3)
+                    
+                    # Mark convergence point if available
+                    if self.training_history_['converged']:
+                        final_iter = len(ll_history) - 1
+                        ax.axvline(x=final_iter, color='green', linestyle='--', 
+                                  alpha=0.7, label=f'Converged at iter {final_iter}')
+                        ax.legend()
+                else:
+                    ax.text(0.5, 0.5, 'Convergence history not available', 
+                           transform=ax.transAxes, ha='center', va='center',
+                           fontsize=12, bbox=dict(boxstyle='round', facecolor='lightgray'))
+                    ax.set_title('Training Convergence', fontweight='bold')
+                
+            elif plot_subtype == 'duration':
+                # Regime duration analysis
+                durations = self._calculate_regime_durations(predicted_states)
+                
+                if durations:
+                    # Create duration histogram by regime
+                    for state in range(self.n_states):
+                        state_durations = [d for d in durations if d['regime'] == state]
+                        if state_durations:
+                            regime_name = regime_names.get(state, f"State {state}")
+                            duration_values = [d['duration'] for d in state_durations]
+                            color = colors.get(regime_name, '#7f7f7f')
+                            
+                            ax.hist(duration_values, bins=20, alpha=0.6, 
+                                   label=regime_name, color=color)
+                    
+                    ax.set_title('Regime Duration Distribution', fontweight='bold')
+                    ax.set_xlabel('Duration (periods)')
+                    ax.set_ylabel('Frequency')
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+                else:
+                    ax.text(0.5, 0.5, 'Duration analysis not available', 
+                           transform=ax.transAxes, ha='center', va='center',
+                           fontsize=12, bbox=dict(boxstyle='round', facecolor='lightgray'))
+        
+        # Add model summary text for 'all' plot
+        if plot_type == 'all':
+            summary_text = self._create_model_summary_text(returns_array, predicted_states)
+            fig.text(0.02, 0.02, summary_text, fontsize=9, verticalalignment='bottom',
+                    bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
+        
+        plt.tight_layout()
+        
+        # Save if requested
+        if save_path:
+            save_plot(fig, save_path)
+        
+        return fig
+    
+    def _get_regime_names(self) -> Dict[int, str]:
+        """Get regime names from standardizer or use defaults."""
+        regime_names = {}
+        
+        # Try to get standardized names
+        if hasattr(self, '_state_standardizer') and self._state_standardizer is not None:
+            config_obj = self._state_standardizer.current_config
+            if config_obj and hasattr(self, '_state_mapping') and self._state_mapping:
+                for i in range(self.n_states):
+                    mapped_value = self._state_mapping.get(i, self._state_mapping.get(np.int64(i), i))
+                    if isinstance(mapped_value, str):
+                        regime_names[i] = mapped_value
+                    elif isinstance(mapped_value, (int, np.integer)) and int(mapped_value) < len(config_obj.state_names):
+                        regime_names[i] = config_obj.state_names[int(mapped_value)]
+                    else:
+                        regime_names[i] = get_regime_interpretation(i, self.emission_params_)
+        
+        # Fallback to interpretation or simple names
+        for i in range(self.n_states):
+            if i not in regime_names:
+                if hasattr(self, 'emission_params_'):
+                    regime_names[i] = get_regime_interpretation(i, self.emission_params_)
+                else:
+                    regime_names[i] = f"State {i}"
+        
+        return regime_names
+    
+    def _calculate_regime_stats(self, returns: np.ndarray, states: np.ndarray) -> Dict[int, Dict[str, float]]:
+        """Calculate statistics for each regime."""
+        stats = {}
+        
+        for state in range(self.n_states):
+            state_mask = states == state
+            state_returns = returns[state_mask]
+            
+            if len(state_returns) > 0:
+                stats[state] = {
+                    'mean_return': np.mean(state_returns),
+                    'std_return': np.std(state_returns),
+                    'frequency': np.sum(state_mask) / len(states),
+                    'min_return': np.min(state_returns),
+                    'max_return': np.max(state_returns),
+                    'total_periods': np.sum(state_mask)
+                }
+            else:
+                stats[state] = {
+                    'mean_return': 0.0,
+                    'std_return': 0.0, 
+                    'frequency': 0.0,
+                    'min_return': 0.0,
+                    'max_return': 0.0,
+                    'total_periods': 0
+                }
+        
+        return stats
+    
+    def _calculate_regime_durations(self, states: np.ndarray) -> List[Dict[str, Any]]:
+        """Calculate regime duration statistics."""
+        durations = []
+        current_regime = states[0]
+        duration = 1
+        start_idx = 0
+        
+        for i in range(1, len(states)):
+            if states[i] == current_regime:
+                duration += 1
+            else:
+                durations.append({
+                    'regime': current_regime,
+                    'duration': duration,
+                    'start_idx': start_idx,
+                    'end_idx': i - 1
+                })
+                current_regime = states[i]
+                duration = 1
+                start_idx = i
+        
+        # Don't forget the last duration
+        durations.append({
+            'regime': current_regime,
+            'duration': duration,
+            'start_idx': start_idx,
+            'end_idx': len(states) - 1
+        })
+        
+        return durations
+    
+    def _has_duration_analysis(self) -> bool:
+        """Check if duration analysis is meaningful."""
+        return self.is_fitted and self.n_states >= 2
+    
+    def _create_model_summary_text(self, returns: np.ndarray, states: np.ndarray) -> str:
+        """Create model summary text."""
+        regime_stats = self._calculate_regime_stats(returns, states)
+        regime_names = self._get_regime_names()
+        
+        summary = [
+            f"HMM Model Summary",
+            f"States: {self.n_states} ({', '.join(regime_names.values())})",
+            f"Observations: {len(returns)}",
+            f"Log-likelihood: {self.training_history_['final_log_likelihood']:.2f}",
+            f"Converged: {'Yes' if self.training_history_['converged'] else 'No'}",
+            f"Iterations: {self.training_history_['iterations']}"
+        ]
+        
+        if hasattr(self, '_standardization_confidence') and self._standardization_confidence:
+            summary.append(f"Standardization confidence: {self._standardization_confidence:.3f}")
+        
+        # Add regime frequencies
+        summary.append("")
+        summary.append("Regime Frequencies:")
+        for state in range(self.n_states):
+            name = regime_names.get(state, f"State {state}")
+            freq = regime_stats[state]['frequency']
+            summary.append(f"  {name}: {freq:.1%}")
+        
+        return '\n'.join(summary)
+    
     def __repr__(self) -> str:
         """String representation of the model."""
         if self.is_fitted:

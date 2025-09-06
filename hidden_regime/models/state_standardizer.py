@@ -11,6 +11,7 @@ from typing import Dict, List, Tuple, Optional, Literal, Any
 from dataclasses import dataclass
 import warnings
 from scipy import stats
+import matplotlib.pyplot as plt
 
 try:
     from sklearn.cluster import KMeans
@@ -460,4 +461,333 @@ class StateStandardizer:
         return {
             regime_type: config.description 
             for regime_type, config in self.standard_configs.items()
+        }
+    
+    def _standardize_states_with_config(self, emission_params: np.ndarray, regime_type: str) -> Dict[int, str]:
+        """
+        Map HMM states to standardized regime names using a specific configuration.
+        
+        Args:
+            emission_params: HMM emission parameters [n_states, 2] with [mean, std]
+            regime_type: Configuration type to use
+            
+        Returns:
+            Dictionary mapping state indices to regime names
+        """
+        config = self.standard_configs[regime_type]
+        n_states = len(emission_params)
+        
+        if n_states != config.n_states:
+            raise ValueError(f"Emission parameters have {n_states} states but config expects {config.n_states}")
+        
+        # Sort states by mean return (ascending)
+        state_order = np.argsort(emission_params[:, 0])
+        
+        # Map to standardized names
+        state_mapping = {}
+        for i, state_idx in enumerate(state_order):
+            state_mapping[state_idx] = config.state_names[i]
+        
+        return state_mapping
+    
+    def plot(self, 
+             emission_params: np.ndarray,
+             regime_type: Optional[str] = None,
+             plot_type: str = 'all',
+             figsize: Tuple[int, int] = (16, 12),
+             save_path: Optional[str] = None) -> None:
+        """
+        Create comprehensive visualizations of regime characteristics and validation.
+        
+        Args:
+            emission_params: Model emission parameters [n_states, n_features]
+            regime_type: Regime configuration type (overrides current if provided)
+            plot_type: Type of plot ('all', 'characteristics', 'validation', 'comparison', 'economic')
+            figsize: Figure size as (width, height)
+            save_path: Optional path to save the figure
+        """
+        try:
+            from ..visualization.plotting import (
+                check_plotting_available, setup_financial_plot_style,
+                get_regime_colors, create_subplot_grid, save_plot
+            )
+        except ImportError:
+            raise ImportError(
+                "Visualization dependencies not available. "
+                "Install with: pip install matplotlib seaborn"
+            )
+        
+        check_plotting_available()
+        setup_financial_plot_style()
+        
+        # Use provided regime_type or current config
+        if regime_type is not None:
+            state_mapping = self._standardize_states_with_config(emission_params, regime_type)
+            config = self.standard_configs[regime_type]
+        elif self.current_config is not None:
+            state_mapping = self.standardize_states(emission_params)
+            config = self.current_config
+        else:
+            raise ValueError("Must provide regime_type or have current configuration set")
+        
+        # Get regime names and characteristics
+        regime_names = [state_mapping[i] for i in range(len(emission_params))]
+        regime_colors = get_regime_colors(regime_names)
+        
+        # Create plots based on type
+        if plot_type == 'all':
+            fig, axes = create_subplot_grid(4, max_cols=2)
+            self._plot_regime_characteristics(axes[0], emission_params, regime_names, regime_colors, config)
+            self._plot_validation_confidence(axes[1], emission_params, regime_names, regime_colors, config)
+            self._plot_regime_comparison(axes[2], emission_params, regime_names, regime_colors, config)
+            self._plot_economic_validation(axes[3], emission_params, regime_names, regime_colors, config)
+            
+            fig.suptitle(f'Regime State Analysis - {config.description}', 
+                        fontsize=16, fontweight='bold', y=0.95)
+            
+        elif plot_type == 'characteristics':
+            
+            fig, ax = plt.subplots(figsize=(10, 8))
+            self._plot_regime_characteristics(ax, emission_params, regime_names, regime_colors, config)
+            
+        elif plot_type == 'validation':
+            fig, ax = plt.subplots(figsize=(10, 8))
+            self._plot_validation_confidence(ax, emission_params, regime_names, regime_colors, config)
+            
+        elif plot_type == 'comparison':
+            fig, ax = plt.subplots(figsize=(10, 8))
+            self._plot_regime_comparison(ax, emission_params, regime_names, regime_colors, config)
+            
+        elif plot_type == 'economic':
+            fig, ax = plt.subplots(figsize=(10, 8))
+            self._plot_economic_validation(ax, emission_params, regime_names, regime_colors, config)
+            
+        else:
+            raise ValueError(f"Unknown plot_type: {plot_type}")
+        
+        plt.tight_layout()
+        
+        if save_path:
+            save_plot(fig, save_path)
+        
+        plt.show()
+    
+    def _plot_regime_characteristics(self, ax, emission_params, regime_names, regime_colors, config):
+        """Plot regime characteristics heatmap."""
+        import pandas as pd
+        import seaborn as sns
+        
+        # Prepare data matrix
+        characteristics = []
+        for i, regime_name in enumerate(regime_names):
+            mean_return = emission_params[i, 0]
+            volatility = emission_params[i, 1]
+            expected_duration = config.typical_durations[regime_name]
+            
+            characteristics.append({
+                'Regime': regime_name,
+                'Daily Return': mean_return,
+                'Daily Volatility': volatility,
+                'Annualized Return': mean_return * 252,
+                'Annualized Volatility': volatility * np.sqrt(252),
+                'Expected Duration (Days)': expected_duration,
+                'Risk-Return Ratio': mean_return / volatility if volatility > 0 else 0,
+                'Volatility-Adjusted Return': mean_return / (volatility ** 0.5) if volatility > 0 else 0
+            })
+        
+        df = pd.DataFrame(characteristics).set_index('Regime')
+        
+        # Create heatmap with regime colors for y-axis
+        sns.heatmap(df.T, annot=True, fmt='.4f', cmap='RdYlBu_r', 
+                   center=0, ax=ax, cbar_kws={'label': 'Value'})
+        
+        ax.set_title('Regime Characteristics Matrix', fontsize=12, fontweight='bold')
+        ax.set_xlabel('Market Regimes', fontsize=10)
+        ax.set_ylabel('Characteristics', fontsize=10)
+        
+        # Color regime names on x-axis
+        x_labels = ax.get_xticklabels()
+        for i, label in enumerate(x_labels):
+            regime_name = label.get_text()
+            if regime_name in regime_colors:
+                label.set_color(regime_colors[regime_name])
+                label.set_fontweight('bold')
+    
+    def _plot_validation_confidence(self, ax, emission_params, regime_names, regime_colors, config):
+        """Plot validation confidence matrix."""
+        import pandas as pd
+        import seaborn as sns
+        
+        # Calculate validation scores
+        validation_matrix = []
+        for i, regime_name in enumerate(regime_names):
+            interpretation = self.get_regime_interpretation_enhanced(i, emission_params)
+            validation_scores = self._calculate_validation_scores(interpretation, config)
+            validation_matrix.append([
+                validation_scores['return_match'],
+                validation_scores['volatility_match'], 
+                validation_scores['duration_confidence'],
+                validation_scores['overall_confidence']
+            ])
+        
+        validation_df = pd.DataFrame(
+            validation_matrix,
+            index=regime_names,
+            columns=['Return Match', 'Volatility Match', 'Duration Confidence', 'Overall Confidence']
+        )
+        
+        # Create heatmap
+        sns.heatmap(validation_df, annot=True, fmt='.3f', cmap='RdYlGn', 
+                   vmin=0, vmax=1, ax=ax, cbar_kws={'label': 'Confidence Score'})
+        
+        ax.set_title('Regime Validation Confidence Matrix', fontsize=12, fontweight='bold')
+        ax.set_xlabel('Validation Metrics', fontsize=10)
+        ax.set_ylabel('Market Regimes', fontsize=10)
+        
+        # Color regime names on y-axis
+        y_labels = ax.get_yticklabels()
+        for i, label in enumerate(y_labels):
+            regime_name = label.get_text()
+            if regime_name in regime_colors:
+                label.set_color(regime_colors[regime_name])
+                label.set_fontweight('bold')
+    
+    def _plot_regime_comparison(self, ax, emission_params, regime_names, regime_colors, config):
+        """Plot regime comparison scatter plot."""
+        
+        # Extract characteristics for plotting
+        returns = [emission_params[i, 0] * 252 for i in range(len(regime_names))]  # Annualized
+        volatilities = [emission_params[i, 1] * np.sqrt(252) for i in range(len(regime_names))]  # Annualized
+        durations = [config.typical_durations[name] for name in regime_names]
+        
+        # Create scatter plot sized by duration
+        scatter = ax.scatter(volatilities, returns, 
+                           s=[d * 10 for d in durations],  # Size by duration
+                           c=[regime_colors.get(name, '#7f7f7f') for name in regime_names],
+                           alpha=0.7, edgecolors='black', linewidths=1)
+        
+        # Add regime labels
+        for i, regime_name in enumerate(regime_names):
+            ax.annotate(regime_name, (volatilities[i], returns[i]),
+                       xytext=(5, 5), textcoords='offset points',
+                       fontsize=9, fontweight='bold',
+                       color=regime_colors.get(regime_name, '#000000'))
+        
+        # Add quadrant lines
+        ax.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
+        ax.axvline(x=np.mean(volatilities), color='gray', linestyle='--', alpha=0.5)
+        
+        ax.set_xlabel('Annualized Volatility', fontsize=10)
+        ax.set_ylabel('Annualized Return', fontsize=10)
+        ax.set_title('Regime Risk-Return Profile\n(Size = Expected Duration)', fontsize=12, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        
+        # Add legend for duration
+        legend_text = f"Bubble size represents expected duration\nRange: {min(durations):.0f} - {max(durations):.0f} days"
+        ax.text(0.02, 0.98, legend_text, transform=ax.transAxes,
+                verticalalignment='top', fontsize=8,
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    def _plot_economic_validation(self, ax, emission_params, regime_names, regime_colors, config):
+        """Plot economic validation dashboard."""
+        
+        # Calculate economic metrics for each regime
+        economic_data = []
+        for i, regime_name in enumerate(regime_names):
+            mean_return = emission_params[i, 0]
+            volatility = emission_params[i, 1]
+            duration = config.typical_durations[regime_name]
+            
+            # Economic interpretation metrics
+            sharpe_approx = mean_return / volatility if volatility > 0 else 0
+            drawdown_risk = -mean_return * np.sqrt(duration) if mean_return < 0 else 0
+            opportunity_score = mean_return * duration if mean_return > 0 else 0
+            
+            economic_data.append({
+                'regime': regime_name,
+                'sharpe_approx': sharpe_approx,
+                'drawdown_risk': drawdown_risk,
+                'opportunity_score': opportunity_score,
+                'vol_adjusted_duration': duration / volatility if volatility > 0 else duration
+            })
+        
+        # Create multi-metric bar plot
+        regimes = [d['regime'] for d in economic_data]
+        x_pos = np.arange(len(regimes))
+        width = 0.2
+        
+        # Plot multiple metrics
+        metrics = ['sharpe_approx', 'drawdown_risk', 'opportunity_score']
+        metric_names = ['Sharpe Approx', 'Drawdown Risk', 'Opportunity Score']
+        
+        for i, (metric, name) in enumerate(zip(metrics, metric_names)):
+            values = [d[metric] for d in economic_data]
+            bars = ax.bar(x_pos + i * width, values, width, label=name, alpha=0.7)
+            
+            # Color bars by regime
+            for bar, regime in zip(bars, regimes):
+                bar.set_color(regime_colors.get(regime, '#7f7f7f'))
+        
+        ax.set_xlabel('Market Regimes', fontsize=10)
+        ax.set_ylabel('Economic Score', fontsize=10)
+        ax.set_title('Economic Validation Dashboard', fontsize=12, fontweight='bold')
+        ax.set_xticks(x_pos + width)
+        ax.set_xticklabels(regimes, rotation=45, ha='right')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        # Color x-axis labels
+        x_labels = ax.get_xticklabels()
+        for label in x_labels:
+            regime_name = label.get_text()
+            if regime_name in regime_colors:
+                label.set_color(regime_colors[regime_name])
+                label.set_fontweight('bold')
+    
+    def _calculate_validation_scores(self, interpretation: Dict[str, Any], config) -> Dict[str, float]:
+        """Calculate validation confidence scores for regime interpretation."""
+        regime_name = interpretation['regime_name']
+        expected_thresholds = config.state_thresholds[regime_name]
+        
+        # Return validation (how well does it match expected range)
+        mean_return = interpretation['mean_return']
+        
+        # Check return match based on available thresholds
+        return_match = 0.8  # Default moderate confidence
+        if 'min_return' in expected_thresholds and 'max_return' in expected_thresholds:
+            return_match = 1.0 if (expected_thresholds['min_return'] <= mean_return <= expected_thresholds['max_return']) else 0.5
+        elif 'mean_return' in expected_thresholds:
+            expected_mean = expected_thresholds['mean_return']
+            if regime_name == 'Sideways':
+                return_match = 1.0 - min(1.0, abs(mean_return) / 0.01)
+            elif expected_mean > 0:
+                return_match = 1.0 if mean_return >= expected_mean else max(0.0, mean_return / expected_mean)
+            else:
+                return_match = 1.0 if mean_return <= expected_mean else max(0.0, -mean_return / -expected_mean)
+        elif 'max_abs_return' in expected_thresholds:
+            abs_mean = abs(mean_return)
+            return_match = 1.0 if abs_mean <= expected_thresholds['max_abs_return'] else expected_thresholds['max_abs_return'] / abs_mean
+        
+        # Volatility validation 
+        volatility = interpretation['volatility']
+        vol_match = 0.8  # Default moderate confidence
+        
+        if 'min_volatility' in expected_thresholds and 'max_volatility' in expected_thresholds:
+            vol_match = 1.0 if (expected_thresholds['min_volatility'] <= volatility <= expected_thresholds['max_volatility']) else 0.5
+        elif 'min_volatility' in expected_thresholds:
+            vol_match = 1.0 if volatility >= expected_thresholds['min_volatility'] else volatility / expected_thresholds['min_volatility']
+        elif 'max_volatility' in expected_thresholds:
+            vol_match = 1.0 if volatility <= expected_thresholds['max_volatility'] else expected_thresholds['max_volatility'] / volatility
+        
+        # Duration confidence (assumed high for now - could be enhanced with actual duration data)
+        duration_confidence = 0.8
+        
+        # Overall confidence
+        overall_confidence = (return_match + vol_match + duration_confidence) / 3.0
+        
+        return {
+            'return_match': return_match,
+            'volatility_match': vol_match,
+            'duration_confidence': duration_confidence,
+            'overall_confidence': overall_confidence
         }
