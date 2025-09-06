@@ -310,23 +310,245 @@ def get_regime_interpretation(state_idx: int, emission_params: np.ndarray) -> st
     mean_return = emission_params[state_idx, 0]
     volatility = emission_params[state_idx, 1]
     
-    # Classify based on mean return
-    if mean_return < -0.005:  # Less than -0.5% daily
+    # Enhanced regime classification with more nuanced thresholds
+    if mean_return < -0.015:  # Less than -1.5% daily (severe bear)
+        if volatility >= 0.04:  # >=4% daily volatility
+            regime_type = "Crisis"
+        else:
+            regime_type = "Bear"
+    elif mean_return < -0.002:  # -0.2% to -1.5% daily (mild bear)
         regime_type = "Bear"
-    elif mean_return > 0.005:  # Greater than 0.5% daily
+    elif mean_return > 0.015:  # Greater than 1.5% daily (strong bull)
+        if volatility >= 0.04:  # High volatility bull (euphoric)
+            regime_type = "Euphoric Bull"
+        else:
+            regime_type = "Bull"
+    elif mean_return > 0.002:  # 0.2% to 1.5% daily (mild bull)
         regime_type = "Bull"
-    else:
+    else:  # -0.2% to 0.2% daily
         regime_type = "Sideways"
     
-    # Add volatility characterization
-    if volatility >= 0.03:  # >=3% daily volatility
+    # Add volatility characterization for context
+    if volatility >= 0.035:  # >=3.5% daily volatility
         vol_desc = "High Vol"
-    elif volatility <= 0.02:  # <=2% daily volatility
+    elif volatility <= 0.015:  # <=1.5% daily volatility
         vol_desc = "Low Vol"
     else:
         vol_desc = "Moderate Vol"
     
     return f"{regime_type} ({vol_desc})"
+
+
+def get_standardized_regime_name(
+    state_idx: int, 
+    emission_params: np.ndarray, 
+    regime_type: str = '3_state'
+) -> str:
+    """
+    Get standardized regime name based on configuration type.
+    
+    Args:
+        state_idx: State index
+        emission_params: Emission parameters [means, stds]
+        regime_type: Type of regime configuration ('3_state', '4_state', '5_state')
+        
+    Returns:
+        Standardized regime name
+    """
+    from .state_standardizer import StateStandardizer
+    
+    standardizer = StateStandardizer()
+    config = standardizer.get_config(regime_type)
+    
+    if config is None:
+        return get_regime_interpretation(state_idx, emission_params)
+    
+    mean_return = emission_params[state_idx, 0]
+    volatility = emission_params[state_idx, 1]
+    
+    # Find best matching regime based on thresholds
+    best_match = None
+    best_score = float('inf')
+    
+    for i, state_name in enumerate(config.state_names):
+        if state_name in config.state_thresholds:
+            thresholds = config.state_thresholds[state_name]
+            score = 0
+            
+            # Score based on mean return criteria
+            if 'mean_return' in thresholds:
+                score += abs(mean_return - thresholds['mean_return'])
+            if 'min_return' in thresholds:
+                if mean_return < thresholds['min_return']:
+                    score += (thresholds['min_return'] - mean_return) * 2  # Penalty for violation
+            if 'max_return' in thresholds:
+                if mean_return > thresholds['max_return']:
+                    score += (mean_return - thresholds['max_return']) * 2  # Penalty for violation
+            
+            # Score based on volatility criteria
+            if 'min_volatility' in thresholds:
+                if volatility < thresholds['min_volatility']:
+                    score += (thresholds['min_volatility'] - volatility) * 0.5
+            if 'max_volatility' in thresholds:
+                if volatility > thresholds['max_volatility']:
+                    score += (volatility - thresholds['max_volatility']) * 0.5
+            
+            if score < best_score:
+                best_score = score
+                best_match = state_name
+    
+    return best_match if best_match else get_regime_interpretation(state_idx, emission_params)
+
+
+def validate_regime_economics(
+    emission_params: np.ndarray, 
+    regime_type: str = '3_state'
+) -> Tuple[bool, Dict[str, Any]]:
+    """
+    Validate that detected regimes make economic sense.
+    
+    Args:
+        emission_params: Emission parameters [means, stds]
+        regime_type: Type of regime configuration
+        
+    Returns:
+        Tuple of (is_valid, validation_details)
+    """
+    n_states = len(emission_params)
+    means = emission_params[:, 0]
+    stds = emission_params[:, 1]
+    
+    validation_results = {
+        'is_economically_valid': True,
+        'violations': [],
+        'regime_separation': {},
+        'mean_ordering_correct': False,
+        'volatility_reasonable': True
+    }
+    
+    # Check if means are properly ordered (should generally increase)
+    sorted_indices = np.argsort(means)
+    expected_order = list(range(n_states))
+    validation_results['mean_ordering_correct'] = list(sorted_indices) == expected_order
+    
+    if not validation_results['mean_ordering_correct']:
+        validation_results['violations'].append('Mean returns not properly ordered')
+        validation_results['is_economically_valid'] = False
+    
+    # Check regime separation (Cohen's d between adjacent regimes)
+    for i in range(n_states - 1):
+        idx1, idx2 = sorted_indices[i], sorted_indices[i + 1]
+        mean1, std1 = means[idx1], stds[idx1]
+        mean2, std2 = means[idx2], stds[idx2]
+        
+        # Calculate Cohen's d for separation
+        pooled_std = np.sqrt((std1**2 + std2**2) / 2)
+        cohens_d = abs(mean2 - mean1) / pooled_std if pooled_std > 0 else 0
+        
+        validation_results['regime_separation'][f'regime_{idx1}_vs_{idx2}'] = {
+            'cohens_d': cohens_d,
+            'well_separated': cohens_d >= 0.5  # Cohen's d >= 0.5 indicates medium effect
+        }
+        
+        if cohens_d < 0.3:  # Small effect size threshold
+            validation_results['violations'].append(
+                f'Poor separation between regime {idx1} and {idx2} (Cohen\'s d = {cohens_d:.3f})'
+            )
+            validation_results['is_economically_valid'] = False
+    
+    # Check volatility reasonableness
+    min_vol, max_vol = np.min(stds), np.max(stds)
+    if min_vol <= 0.005:  # Less than 0.5% daily
+        validation_results['violations'].append('Unrealistically low volatility detected')
+        validation_results['volatility_reasonable'] = False
+        validation_results['is_economically_valid'] = False
+    
+    if max_vol >= 0.08:  # Greater than 8% daily
+        validation_results['violations'].append('Extremely high volatility detected')
+        validation_results['volatility_reasonable'] = False
+    
+    # Specific checks based on regime type
+    if regime_type in ['3_state', '4_state', '5_state']:
+        bear_indices = [i for i in range(n_states) if means[i] < -0.001]
+        bull_indices = [i for i in range(n_states) if means[i] > 0.001]
+        
+        if not bear_indices:
+            validation_results['violations'].append('No clear bear regime detected')
+            validation_results['is_economically_valid'] = False
+            
+        if not bull_indices:
+            validation_results['violations'].append('No clear bull regime detected')
+            validation_results['is_economically_valid'] = False
+    
+    return validation_results['is_economically_valid'], validation_results
+
+
+def analyze_regime_transitions(
+    states: np.ndarray,
+    transition_matrix: np.ndarray,
+    regime_names: Optional[Dict[int, str]] = None
+) -> Dict[str, Any]:
+    """
+    Analyze regime transition patterns and persistence.
+    
+    Args:
+        states: State sequence
+        transition_matrix: Transition probability matrix
+        regime_names: Optional mapping of state indices to regime names
+        
+    Returns:
+        Dictionary with transition analysis results
+    """
+    n_states = len(np.unique(states))
+    
+    if regime_names is None:
+        regime_names = {i: f"Regime {i}" for i in range(n_states)}
+    
+    # Calculate empirical transition frequencies
+    empirical_transitions = np.zeros((n_states, n_states))
+    for i in range(len(states) - 1):
+        empirical_transitions[states[i], states[i + 1]] += 1
+    
+    # Normalize to probabilities
+    empirical_transition_probs = empirical_transitions / (empirical_transitions.sum(axis=1, keepdims=True) + 1e-10)
+    
+    # Calculate persistence (diagonal elements)
+    persistence = {
+        regime_names[i]: {
+            'theoretical_persistence': transition_matrix[i, i],
+            'empirical_persistence': empirical_transition_probs[i, i],
+            'expected_duration': 1 / (1 - transition_matrix[i, i]) if transition_matrix[i, i] < 1 else float('inf')
+        }
+        for i in range(n_states)
+    }
+    
+    # Find most likely transitions
+    transition_patterns = {}
+    for i in range(n_states):
+        for j in range(n_states):
+            if i != j and transition_matrix[i, j] > 0.1:  # Only significant transitions
+                pattern_name = f"{regime_names[i]} → {regime_names[j]}"
+                transition_patterns[pattern_name] = {
+                    'probability': transition_matrix[i, j],
+                    'empirical_frequency': empirical_transition_probs[i, j],
+                    'count': int(empirical_transitions[i, j])
+                }
+    
+    # Calculate overall stability metrics
+    stability_metrics = {
+        'average_persistence': np.mean(np.diag(transition_matrix)),
+        'regime_switching_rate': 1 - np.mean(np.diag(transition_matrix)),
+        'most_stable_regime': regime_names[np.argmax(np.diag(transition_matrix))],
+        'least_stable_regime': regime_names[np.argmin(np.diag(transition_matrix))]
+    }
+    
+    return {
+        'persistence_analysis': persistence,
+        'transition_patterns': transition_patterns,
+        'stability_metrics': stability_metrics,
+        'empirical_transition_matrix': empirical_transition_probs.tolist(),
+        'theoretical_transition_matrix': transition_matrix.tolist()
+    }
 
 
 def calculate_regime_statistics(

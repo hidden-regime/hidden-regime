@@ -16,6 +16,7 @@ from datetime import datetime
 
 from .config import HMMConfig
 from .algorithms import HMMAlgorithms
+from .state_standardizer import StateStandardizer
 from .utils import (
     validate_returns_data,
     initialize_parameters_random,
@@ -75,8 +76,21 @@ class HiddenMarkovModel:
             if config is None:
                 raise RuntimeError('Must specify one of: n_states, config')
             else:
-                self.n_states = config.n_states
-                self.config = config
+                # Handle regime_type auto-adjustment for n_states
+                if config.regime_type != 'auto':
+                    expected_states = int(config.regime_type.split('_')[0])
+                    if config.n_states != expected_states:
+                        self.n_states = expected_states
+                        # Create updated config with correct n_states
+                        config_dict = config.__dict__.copy()
+                        config_dict['n_states'] = expected_states
+                        self.config = HMMConfig(**config_dict)
+                    else:
+                        self.n_states = config.n_states
+                        self.config = config
+                else:
+                    self.n_states = config.n_states  # Will be updated by auto-selection
+                    self.config = config
         else:
             if config is None:
                 self.n_states = n_states
@@ -109,6 +123,11 @@ class HiddenMarkovModel:
         # Real-time inference state
         self._current_state_probs: Optional[np.ndarray] = None
         self._last_observation: Optional[float] = None
+        
+        # State standardization
+        self._state_standardizer: Optional[StateStandardizer] = None
+        self._state_mapping: Optional[Dict[int, str]] = None
+        self._standardization_confidence: Optional[float] = None
     
     def fit(
         self, 
@@ -141,6 +160,33 @@ class HiddenMarkovModel:
             self.config.validate_for_data(len(returns_array))
         except Exception as e:
             raise HMMTrainingError(f"Data validation failed: {e}")
+        
+        # Handle automatic state selection
+        if self.config.auto_select_states:
+            try:
+                self._state_standardizer = StateStandardizer('auto')
+                best_regime_type, validation_score, selection_details = self._state_standardizer.select_optimal_configuration(
+                    returns_array, 
+                    validation_threshold=self.config.state_validation_threshold,
+                    max_iterations=max_iterations
+                )
+                
+                # Update configuration with selected regime type
+                self.n_states = int(best_regime_type.split('_')[0])
+                config_dict = self.config.__dict__.copy()
+                config_dict['n_states'] = self.n_states
+                config_dict['regime_type'] = best_regime_type
+                self.config = HMMConfig(**config_dict)
+                
+                if verbose:
+                    print(f"Auto-selected {best_regime_type} configuration (validation score: {validation_score:.3f})")
+                    
+            except Exception as e:
+                raise HMMTrainingError(f"Automatic state selection failed: {e}")
+        else:
+            # Initialize state standardizer with specified regime type
+            if self.config.regime_type != 'auto':
+                self._state_standardizer = StateStandardizer(self.config.regime_type)
         
         # Override config parameters if provided
         max_iter = max_iterations or self.config.max_iterations
@@ -223,11 +269,44 @@ class HiddenMarkovModel:
                         f"Final improvement: {final_improvement:.6f}"
                     )
         
+        # Apply state standardization if configured
+        if self.config.force_state_ordering and self._state_standardizer is not None:
+            try:
+                # Reorder states by mean return for consistency
+                emission_params, transition_matrix, initial_probs = self._state_standardizer.reorder_states_by_returns(
+                    emission_params, transition_matrix, initial_probs
+                )
+                
+                if verbose:
+                    print("Applied state standardization and ordering")
+                    
+            except Exception as e:
+                warnings.warn(f"State standardization failed: {e}")
+        
         # Store results
         self.initial_probs_ = initial_probs
         self.transition_matrix_ = transition_matrix
         self.emission_params_ = emission_params
         self.is_fitted = True
+        
+        # Create state mapping and validate if standardizer available
+        if self._state_standardizer is not None:
+            try:
+                self._state_mapping = self._state_standardizer.standardize_states(emission_params)
+                
+                if self.config.validate_regime_economics:
+                    states = self.predict(returns_array)
+                    self._standardization_confidence = self._state_standardizer.validate_interpretation(
+                        states, returns_array, emission_params
+                    )
+                    
+                    if verbose:
+                        print(f"Regime validation confidence: {self._standardization_confidence:.3f}")
+                        if self._standardization_confidence < self.config.state_validation_threshold:
+                            warnings.warn(f"Low regime validation confidence: {self._standardization_confidence:.3f}")
+                
+            except Exception as e:
+                warnings.warn(f"State mapping validation failed: {e}")
         
         # Store training history
         training_time = (datetime.now() - start_time).total_seconds()
@@ -381,15 +460,32 @@ class HiddenMarkovModel:
         most_likely_state = np.argmax(self._current_state_probs)
         confidence = self._current_state_probs[most_likely_state]
         
+        # Use standardized regime interpretation if available
+        if self._state_standardizer is not None and self._state_mapping is not None:
+            regime_details = self._state_standardizer.get_regime_interpretation_enhanced(
+                most_likely_state, self.emission_params_
+            )
+            regime_interpretation = regime_details['interpretation']
+            regime_name = regime_details['regime_name']
+        else:
+            regime_interpretation = get_regime_interpretation(most_likely_state, self.emission_params_)
+            regime_name = f"State_{most_likely_state}"
+        
         regime_info = {
             'most_likely_regime': int(most_likely_state),
+            'regime_name': regime_name,
             'regime_probabilities': self._current_state_probs.tolist(),
             'confidence': float(confidence),
-            'regime_interpretation': get_regime_interpretation(most_likely_state, self.emission_params_),
+            'regime_interpretation': regime_interpretation,
             'expected_return': float(self.emission_params_[most_likely_state, 0]),
             'expected_volatility': float(self.emission_params_[most_likely_state, 1]),
             'last_observation': self._last_observation
         }
+        
+        # Add standardization information if available
+        if self._standardization_confidence is not None:
+            regime_info['validation_confidence'] = float(self._standardization_confidence)
+            regime_info['regime_type'] = self.config.regime_type
         
         # Add transition predictions
         if self.transition_matrix_ is not None:
@@ -413,7 +509,7 @@ class HiddenMarkovModel:
             dates: Optional dates corresponding to returns
             
         Returns:
-            Comprehensive regime analysis results
+            Comprehensive regime analysis results with standardized regime names
         """
         self._check_fitted()
         
@@ -426,6 +522,31 @@ class HiddenMarkovModel:
         # Calculate regime statistics
         regime_stats = calculate_regime_statistics(states, returns_array, dates)
         
+        # Use standardized regime interpretations if available
+        if hasattr(self, '_state_standardizer') and self._state_standardizer is not None:
+            regime_interpretations = {}
+            for i in range(self.n_states):
+                if hasattr(self, '_state_mapping') and self._state_mapping is not None:
+                    # Use standardized names
+                    standardized_state = self._state_mapping.get(i, i)
+                    if isinstance(standardized_state, int):
+                        # Get standardized regime name
+                        config = self._state_standardizer.get_config(self.config.regime_type)
+                        if config and standardized_state < len(config.state_names):
+                            regime_interpretations[str(i)] = config.state_names[standardized_state]
+                        else:
+                            regime_interpretations[str(i)] = get_regime_interpretation(i, self.emission_params_)
+                    else:
+                        regime_interpretations[str(i)] = standardized_state
+                else:
+                    regime_interpretations[str(i)] = get_regime_interpretation(i, self.emission_params_)
+        else:
+            # Fallback to original interpretation method
+            regime_interpretations = {
+                str(i): get_regime_interpretation(i, self.emission_params_)
+                for i in range(self.n_states)
+            }
+        
         # Add model parameters and interpretations
         analysis = {
             'model_info': {
@@ -433,22 +554,25 @@ class HiddenMarkovModel:
                 'n_observations': len(returns_array),
                 'log_likelihood': self.score(returns_array),
                 'training_iterations': self.training_history_['iterations'],
-                'converged': self.training_history_['converged']
+                'converged': self.training_history_['converged'],
+                'regime_type': getattr(self.config, 'regime_type', 'custom'),
+                'standardization_applied': hasattr(self, '_state_standardizer') and self._state_standardizer is not None
             },
             'regime_parameters': {
                 'initial_probabilities': self.initial_probs_.tolist(),
                 'transition_matrix': self.transition_matrix_.tolist(),
                 'emission_parameters': self.emission_params_.tolist()
             },
-            'regime_interpretations': {
-                str(i): get_regime_interpretation(i, self.emission_params_)
-                for i in range(self.n_states)
-            },
+            'regime_interpretations': regime_interpretations,
             'regime_statistics': regime_stats,
             'state_sequence': states.tolist(),
             'state_probabilities': probabilities.tolist()
         }
         
+        # Add standardization confidence if available
+        if hasattr(self, '_standardization_confidence') and self._standardization_confidence is not None:
+            analysis['standardization_confidence'] = self._standardization_confidence
+            
         return analysis
     
     def save(self, filepath: Union[str, Path]) -> None:
@@ -481,6 +605,12 @@ class HiddenMarkovModel:
                 'save_timestamp': datetime.now().isoformat(),
                 'version': '1.0'
             }
+            
+            # Add standardization attributes if present
+            if hasattr(self, '_state_mapping') and self._state_mapping is not None:
+                model_data['state_mapping'] = self._state_mapping
+            if hasattr(self, '_standardization_confidence') and self._standardization_confidence is not None:
+                model_data['standardization_confidence'] = self._standardization_confidence
             
             if filepath.suffix.lower() == '.json':
                 with open(filepath, 'w') as f:
@@ -534,6 +664,18 @@ class HiddenMarkovModel:
             if model_data.get('current_state_probs') is not None:
                 model._current_state_probs = np.array(model_data['current_state_probs'])
             model._last_observation = model_data.get('last_observation')
+            
+            # Restore standardization attributes if available
+            if model_data.get('state_mapping') is not None:
+                model._state_mapping = model_data['state_mapping']
+            if model_data.get('standardization_confidence') is not None:
+                model._standardization_confidence = model_data['standardization_confidence']
+            
+            # Recreate state standardizer if needed
+            if (hasattr(model.config, 'regime_type') and 
+                getattr(model.config, 'regime_type', 'custom') != 'custom'):
+                from .state_standardizer import StateStandardizer
+                model._state_standardizer = StateStandardizer()
             
             return model
             

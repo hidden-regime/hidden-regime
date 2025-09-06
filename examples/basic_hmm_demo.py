@@ -73,15 +73,13 @@ def basic_hmm_training_demo():
     print(f"   Data period: {dates[0].date()} to {dates[-1].date()}")
     print(f"   Return statistics: mean={np.mean(returns):.4f}, std={np.std(returns):.4f}")
     
-    # Configure and train HMM
-    print("\n2. Training 3-state Hidden Markov Model...")
+    # Configure and train HMM with standardized regimes
+    print("\n2. Training 3-state Hidden Markov Model with standardized regimes...")
     
-    config = HMMConfig(
-        n_states=3,
-        max_iterations=100,
-        tolerance=1e-6,
-        initialization_method='kmeans',
-        random_seed=42
+    # Use standardized regime configuration
+    config = HMMConfig.for_standardized_regimes(
+        regime_type='3_state',
+        conservative=False
     )
     
     hmm = HiddenMarkovModel(config=config)
@@ -96,6 +94,11 @@ def basic_hmm_training_demo():
     print(f"   ✓ Iterations: {hmm.training_history_['iterations']}")
     print(f"   ✓ Final log-likelihood: {hmm.training_history_['final_log_likelihood']:.2f}")
     
+    # Check if standardization was applied
+    standardization_applied = hasattr(hmm, '_state_standardizer') and hmm._state_standardizer is not None
+    if standardization_applied:
+        print(f"   ✓ State standardization applied with confidence: {hmm._standardization_confidence:.2f}")
+    
     # Display learned parameters
     print("\n3. Learned HMM Parameters:")
     print(f"   Initial probabilities: {hmm.initial_probs_}")
@@ -103,10 +106,22 @@ def basic_hmm_training_demo():
     for i in range(3):
         print(f"     {hmm.transition_matrix_[i]}")
     
-    print(f"\n   Emission parameters (mean, std):")
+    print(f"\n   Standardized regime parameters (mean, std):")
     for i in range(3):
         mean, std = hmm.emission_params_[i]
-        print(f"     State {i}: mean={mean:.4f}, std={std:.4f}")
+        # Get standardized regime name
+        if standardization_applied and hasattr(hmm, '_state_mapping') and hmm._state_mapping:
+            config_obj = hmm._state_standardizer.standard_configs['3_state']
+            mapped_state = hmm._state_mapping.get(i, i)
+            if isinstance(mapped_state, int) and config_obj and mapped_state < len(config_obj.state_names):
+                regime_name = config_obj.state_names[mapped_state]
+            else:
+                regime_name = f"State {i}"
+        else:
+            from hidden_regime.models.utils import get_regime_interpretation
+            regime_name = get_regime_interpretation(i, hmm.emission_params_)
+            
+        print(f"     {regime_name}: mean={mean:.4f}, std={std:.4f}")
     
     # Perform inference
     print("\n4. Regime Inference:")
@@ -242,6 +257,66 @@ def model_persistence_demo(hmm, returns):
     return loaded_hmm
 
 
+def standardized_regime_configurations_demo():
+    """Demonstrate different standardized regime configurations."""
+    print("\n" + "=" * 60)
+    print("STANDARDIZED REGIME CONFIGURATIONS DEMO")
+    print("=" * 60)
+    
+    # Generate data with more volatile conditions for better demonstration
+    _, returns, _, _ = generate_sample_regime_data(150, random_seed=456)
+    
+    # Add some more extreme returns to demonstrate crisis detection
+    crisis_returns = np.concatenate([
+        returns[:50],
+        np.random.normal(-0.04, 0.05, 10),  # Crisis period
+        returns[50:100],
+        np.random.normal(0.03, 0.06, 15),   # Euphoric period
+        returns[100:]
+    ])
+    
+    configurations = ['3_state', '4_state', '5_state']
+    
+    for regime_type in configurations:
+        print(f"\n{regime_type.upper()} CONFIGURATION:")
+        print("-" * 30)
+        
+        # Create standardized configuration
+        config = HMMConfig.for_standardized_regimes(
+            regime_type=regime_type,
+            conservative=False
+        )
+        
+        hmm = HiddenMarkovModel(config=config)
+        hmm.fit(crisis_returns, verbose=False)
+        
+        # Check standardization results
+        standardization_applied = hasattr(hmm, '_state_standardizer') and hmm._state_standardizer is not None
+        if standardization_applied:
+            print(f"   ✓ Standardization confidence: {hmm._standardization_confidence:.3f}")
+            
+            # Show regime mapping
+            config_obj = hmm._state_standardizer.current_config
+            if config_obj and hasattr(hmm, '_state_mapping'):
+                print(f"   ✓ Expected regimes: {', '.join(config_obj.state_names)}")
+                
+                print("   ✓ Detected regime characteristics:")
+                for i in range(hmm.n_states):
+                    mean, std = hmm.emission_params_[i]
+                    mapped_state = hmm._state_mapping.get(i, i)
+                    if isinstance(mapped_state, int) and mapped_state < len(config_obj.state_names):
+                        regime_name = config_obj.state_names[mapped_state]
+                    else:
+                        regime_name = f"State {i}"
+                    print(f"     {regime_name}: μ={mean:.4f}, σ={std:.4f}")
+        else:
+            print(f"   ⚠ Standardization not applied - using detected regimes")
+            
+        # Show final model performance
+        print(f"   ✓ Model log-likelihood: {hmm.score(crisis_returns):.2f}")
+        print(f"   ✓ Training iterations: {hmm.training_history_['iterations']}")
+
+
 def convenience_functions_demo():
     """Demonstrate convenience functions."""
     print("\n" + "=" * 60)
@@ -367,6 +442,9 @@ def main():
         
         # Model persistence demo  
         model_persistence_demo(hmm, returns)
+        
+        # Standardized regime configurations demo
+        standardized_regime_configurations_demo()
         
         # Convenience functions demo
         convenience_functions_demo()
