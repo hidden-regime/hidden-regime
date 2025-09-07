@@ -3,6 +3,101 @@ State Standardization for Hidden Markov Models.
 
 Provides standardized state configurations and data-driven selection algorithms
 for economically meaningful regime detection in financial markets.
+
+## Overview
+
+The StateStandardizer is a **post-processing utility** that maps raw HMM state numbers 
+(0, 1, 2, 3, 4) to meaningful economic regime names (Bear, Bull, Sideways, Crisis, Euphoric).
+
+## How It Works
+
+1. **Sorts states by mean return**: Takes emission parameters [mean, std] for each state 
+   and ranks them from lowest to highest mean return
+2. **Maps to predefined regime names**: Assigns sorted states to economic labels:
+   - 3-state: ['Bear', 'Sideways', 'Bull']
+   - 4-state: ['Crisis', 'Bear', 'Sideways', 'Bull'] 
+   - 5-state: ['Crisis', 'Bear', 'Sideways', 'Bull', 'Euphoric']
+
+Example:
+    ```python
+    # If 5-state HMM has emission parameters:
+    # State 0: mean=-0.002, std=0.025
+    # State 1: mean=-0.008, std=0.035  <- Lowest mean (Crisis)
+    # State 2: mean=0.0001, std=0.015
+    # State 3: mean=0.001, std=0.018
+    # State 4: mean=0.005, std=0.022   <- Highest mean (Euphoric)
+    
+    # After sorting: [1, 0, 2, 3, 4]
+    # Mapping: {1: 'Crisis', 0: 'Bear', 2: 'Sideways', 3: 'Bull', 4: 'Euphoric'}
+    ```
+
+## Why StateStandardizer is Optional
+
+The StateStandardizer is **NOT required** because:
+
+- **HMMs work without it**: Mathematical model functions with raw state numbers
+- **Domain-agnostic design**: HMMs used for speech, weather, DNA, etc. - not just finance
+- **Research flexibility**: Some applications need different state interpretations
+- **Performance**: Semantic interpretation adds computational overhead
+
+## When to Use StateStandardizer
+
+✅ **Use for financial applications** when you need:
+- Interpretable regime labels for reports/dashboards
+- Consistent state naming across different models
+- Economic validation of detected regimes
+- Trading strategies based on regime types
+
+✅ **Use in production systems** that need:
+- Human-readable output
+- Standardized regime definitions
+- Cross-model comparisons
+- Client-facing explanations
+
+## When NOT to Use StateStandardizer
+
+❌ **Skip for research contexts** where you:
+- Want to discover new regime patterns
+- Don't care about specific regime names
+- Are experimenting with different state counts
+- Need maximum computational speed
+
+❌ **Skip for non-financial domains** like:
+- Speech recognition (phonemes, not market regimes)
+- Medical data (symptoms, not Bull/Bear cycles)
+- Manufacturing (machine states, not economic regimes)
+
+❌ **Skip for exploratory analysis** where you:
+- Don't know how many states to expect
+- Want completely data-driven models
+- Are testing different economic hypotheses
+
+## Usage Example
+
+    ```python
+    from hidden_regime.models.state_standardizer import StateStandardizer
+    import numpy as np
+    
+    # Create standardizer for 5-state regime
+    standardizer = StateStandardizer(regime_type='5_state')
+    
+    # Get emission parameters from trained HMM model
+    emission_params = np.array([
+        [-0.002, 0.025],  # State 0
+        [-0.008, 0.035],  # State 1
+        [0.0001, 0.015],  # State 2
+        [0.001, 0.018],   # State 3
+        [0.005, 0.022]    # State 4
+    ])
+    
+    # Map states to regime names
+    state_mapping = standardizer.standardize_states(emission_params)
+    
+    # Convert state sequence to regime names
+    states = np.array([3, 4, 4, 1, 1, 1, 1])
+    regime_names = [state_mapping[state] for state in states]
+    # Result: ['Bull', 'Euphoric', 'Euphoric', 'Crisis', 'Crisis', 'Crisis', 'Crisis']
+    ```
 """
 
 import numpy as np

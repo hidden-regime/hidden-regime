@@ -3,6 +3,46 @@ Base Hidden Markov Model implementation for market regime detection.
 
 Provides the main HiddenMarkovModel class with training, inference,
 and real-time regime detection capabilities.
+
+## State Standardization
+
+This HMM implementation can optionally use StateStandardizer to map raw state numbers 
+to meaningful regime names (Bear, Bull, Sideways, etc.). The standardizer is **optional**
+and automatically created when:
+
+- `config.regime_type` is set to '3_state', '4_state', or '5_state'
+- `config.auto_select_states` is True (uses 'auto' mode)
+
+## Usage Patterns
+
+### Raw States (No Standardization)
+```python
+config = HMMConfig(n_states=3)  # No regime_type specified
+model = HiddenMarkovModel(config)
+model.fit(returns)
+states = model.predict(returns)  # Returns: [0, 1, 2, 1, 0, ...]
+```
+
+### Standardized Regimes (With StateStandardizer)
+```python
+config = HMMConfig.for_standardized_regimes(regime_type='3_state')
+model = HiddenMarkovModel(config) 
+model.fit(returns)
+states = model.predict(returns)  # Returns: [0, 1, 2, 1, 0, ...]
+
+# Convert to regime names
+from hidden_regime.models.state_standardizer import StateStandardizer
+standardizer = StateStandardizer(regime_type='3_state')
+state_mapping = standardizer.standardize_states(model.emission_params_)
+regime_names = [state_mapping[s] for s in states]  # ['Bear', 'Sideways', 'Bull', ...]
+```
+
+### Access State Mapping from Trained Model
+```python
+# If model was trained with standardization enabled
+if hasattr(model, '_state_mapping') and model._state_mapping:
+    regime_names = [model._state_mapping[s] for s in states]
+```
 """
 
 import numpy as np
