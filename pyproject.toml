@@ -223,6 +223,7 @@ markers = [
     "network: Tests that require network access",
     "models: Tests related to HMM models",
     "data: Tests related to data loading and processing",
+    "asyncio: Asynchronous tests requiring asyncio support",
 ]
 filterwarnings = [
     "ignore::UserWarning:yfinance.*",
