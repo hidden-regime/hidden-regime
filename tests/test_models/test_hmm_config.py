@@ -162,7 +162,8 @@ class TestHMMConfig:
             'n_states', 'max_iterations', 'tolerance', 'regularization',
             'initialization_method', 'random_seed', 'min_regime_duration',
             'min_variance', 'check_convergence_every', 'early_stopping',
-            'log_likelihood_threshold'
+            'log_likelihood_threshold', 'regime_type', 'auto_select_states',
+            'state_validation_threshold', 'force_state_ordering', 'validate_regime_economics'
         }
         
         assert set(config_dict.keys()) == expected_keys

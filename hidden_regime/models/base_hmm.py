@@ -648,7 +648,9 @@ class HiddenMarkovModel:
             
             # Add standardization attributes if present
             if hasattr(self, '_state_mapping') and self._state_mapping is not None:
-                model_data['state_mapping'] = self._state_mapping
+                # Convert numpy keys to Python native types for JSON serialization
+                state_mapping_serializable = {int(k): v for k, v in self._state_mapping.items()}
+                model_data['state_mapping'] = state_mapping_serializable
             if hasattr(self, '_standardization_confidence') and self._standardization_confidence is not None:
                 model_data['standardization_confidence'] = self._standardization_confidence
             
@@ -707,7 +709,9 @@ class HiddenMarkovModel:
             
             # Restore standardization attributes if available
             if model_data.get('state_mapping') is not None:
-                model._state_mapping = model_data['state_mapping']
+                # Convert string keys back to integers for internal use
+                state_mapping = {int(k): v for k, v in model_data['state_mapping'].items()}
+                model._state_mapping = state_mapping
             if model_data.get('standardization_confidence') is not None:
                 model._standardization_confidence = model_data['standardization_confidence']
             

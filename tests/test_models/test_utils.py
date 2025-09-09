@@ -355,9 +355,9 @@ class TestHMMUtils:
         assert "Bull" in interpretations[2]
         
         # Check volatility descriptions
-        assert "High Vol" in interpretations[0]   # 0.03 > 0.03 threshold
-        assert "Low Vol" in interpretations[1]    # 0.015 > 0.01, < 0.03
-        assert "Moderate Vol" in interpretations[2]  # 0.025 between thresholds
+        assert "Moderate Vol" in interpretations[0]   # 0.03 < 0.035 (High Vol threshold)
+        assert "Low Vol" in interpretations[1]    # 0.015 <= 0.015 (Low Vol threshold)
+        assert "Moderate Vol" in interpretations[2]  # 0.025 between 0.015 and 0.035
     
     def test_calculate_regime_statistics(self):
         """Test regime statistics calculation."""
