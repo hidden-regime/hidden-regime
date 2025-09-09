@@ -10,7 +10,7 @@ authors = [
 ]
 description = "Market regime detection using Hidden Markov Models with Bayesian uncertainty quantification"
 readme = "README.md"
-license = {file = "LICENSE"}
+license = {text = "MIT"}
 requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -20,7 +20,6 @@ classifiers = [
     "Topic :: Office/Business :: Financial :: Investment", 
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: Information Analysis",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
@@ -109,6 +108,9 @@ version = {attr = "hidden_regime._version.__version__"}
 
 [tool.setuptools.package-data]
 hidden_regime = ["py.typed", "*.pyi"]
+
+[tool.setuptools_scm]
+write_to = "hidden_regime/_version.py"
 
 # Black configuration
 [tool.black]

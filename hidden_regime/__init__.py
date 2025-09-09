@@ -14,17 +14,17 @@ Features:
 For documentation and examples, visit: https://hiddenregime.com
 """
 
-# Import version information from centralized location
-from ._version import (
-    __version__, 
-    __author__, 
-    __author_email__ as __email__,
-    __title__,
-    __description__,
-    __url__,
-    __license__,
-    __copyright__
-)
+# Import version information from setuptools-scm
+from ._version import __version__
+
+# Package metadata
+__title__ = "hidden-regime"
+__author__ = "aoaustin"
+__email__ = "contact@hiddenregime.com"
+__description__ = "Market regime detection using Hidden Markov Models with Bayesian uncertainty quantification"
+__url__ = "https://hiddenregime.com"
+__license__ = "MIT"
+__copyright__ = "Copyright 2024 aoaustin"
 
 # Import main data pipeline classes
 from .data import DataLoader, DataPreprocessor, DataValidator

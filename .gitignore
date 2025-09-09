@@ -95,7 +95,7 @@ scratch/
 TODOS.md
 
 # Data files (you'll probably have these later)
-data/
+/data/
 *.csv
 *.json
 *.pkl
