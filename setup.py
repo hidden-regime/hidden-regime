@@ -96,6 +96,7 @@ setup(
             "pytest-cov>=4.0.0",
             "pytest-xdist>=3.0.0",
             "pytest-benchmark>=4.0.0",
+            "psutil>=5.8.0",
             "black>=22.0.0",
             "isort>=5.10.0",
             "flake8>=4.0.0",
