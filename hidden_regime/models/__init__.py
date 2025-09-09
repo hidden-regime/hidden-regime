@@ -10,21 +10,25 @@ from .base_hmm import HiddenMarkovModel
 from .config import HMMConfig
 from .online_hmm import OnlineHMM, OnlineHMMConfig
 from .streaming import (
-    StreamingProcessor, StreamingConfig, StreamingMode,
-    StreamingObservation, StreamingResult, 
-    SimulatedDataSource, StreamingDataSource
+    StreamingProcessor,
+    StreamingConfig,
+    StreamingMode,
+    StreamingObservation,
+    StreamingResult,
+    SimulatedDataSource,
+    StreamingDataSource,
 )
 
 __all__ = [
-    'HiddenMarkovModel',
-    'HMMConfig',
-    'OnlineHMM',
-    'OnlineHMMConfig', 
-    'StreamingProcessor',
-    'StreamingConfig',
-    'StreamingMode',
-    'StreamingObservation',
-    'StreamingResult',
-    'SimulatedDataSource',
-    'StreamingDataSource'
+    "HiddenMarkovModel",
+    "HMMConfig",
+    "OnlineHMM",
+    "OnlineHMMConfig",
+    "StreamingProcessor",
+    "StreamingConfig",
+    "StreamingMode",
+    "StreamingObservation",
+    "StreamingResult",
+    "SimulatedDataSource",
+    "StreamingDataSource",
 ]

@@ -12,15 +12,15 @@ from .plotting import (
     plot_regime_statistics,
     get_regime_colors,
     format_financial_axis,
-    create_regime_legend
+    create_regime_legend,
 )
 
 __all__ = [
-    'setup_financial_plot_style',
-    'plot_returns_with_regimes', 
-    'plot_regime_heatmap',
-    'plot_regime_statistics',
-    'get_regime_colors',
-    'format_financial_axis',
-    'create_regime_legend'
+    "setup_financial_plot_style",
+    "plot_returns_with_regimes",
+    "plot_regime_heatmap",
+    "plot_regime_statistics",
+    "get_regime_colors",
+    "format_financial_axis",
+    "create_regime_legend",
 ]

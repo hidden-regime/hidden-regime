@@ -9,7 +9,7 @@ from .exceptions import (
     HiddenRegimeError,
     DataLoadError,
     DataQualityError,
-    ValidationError
+    ValidationError,
 )
 
-__all__ = ['HiddenRegimeError', 'DataLoadError', 'DataQualityError', 'ValidationError']
+__all__ = ["HiddenRegimeError", "DataLoadError", "DataQualityError", "ValidationError"]

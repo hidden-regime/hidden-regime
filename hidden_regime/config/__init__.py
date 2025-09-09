@@ -7,4 +7,4 @@ preprocessing, and validation parameters.
 
 from .settings import DataConfig, ValidationConfig, PreprocessingConfig
 
-__all__ = ['DataConfig', 'ValidationConfig', 'PreprocessingConfig']
+__all__ = ["DataConfig", "ValidationConfig", "PreprocessingConfig"]
