@@ -53,6 +53,49 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .[dev,ml]
 
+    - name: Debug package structure
+      run: |
+        echo "=== Installed packages ==="
+        pip list | grep hidden-regime
+        echo "=== Python import test ==="
+        python -c "import sys; print(f'Python path: {sys.path[:3]}...')"
+        echo "=== Package structure check ==="
+        python -c "
+        import os, sys
+        pkg_path = None
+        for path in sys.path:
+            test_path = os.path.join(path, 'hidden_regime')
+            if os.path.exists(test_path):
+                pkg_path = test_path
+                break
+        if pkg_path:
+            print(f'Package found at: {pkg_path}')
+            for root, dirs, files in os.walk(pkg_path):
+                if '__pycache__' not in root:
+                    level = root.replace(pkg_path, '').count(os.sep)
+                    indent = '  ' * level
+                    print(f'{indent}{os.path.basename(root)}/')
+                    subindent = '  ' * (level + 1)
+                    for file in files:
+                        if not file.endswith('.pyc'):
+                            print(f'{subindent}{file}')
+        else:
+            print('Package not found in sys.path')
+        "
+        echo "=== Import test ==="
+        python -c "
+        try:
+            import hidden_regime
+            print('✓ hidden_regime imported successfully')
+            try:
+                from hidden_regime.data import DataLoader
+                print('✓ hidden_regime.data imported successfully')
+            except ImportError as e:
+                print(f'✗ hidden_regime.data failed: {e}')
+        except ImportError as e:
+            print(f'✗ hidden_regime failed: {e}')
+        "
+
     - name: Run unit tests
       run: |
         pytest tests/ -v --tb=short --strict-markers --disable-warnings --cov=hidden_regime --cov-report=xml --cov-report=term-missing

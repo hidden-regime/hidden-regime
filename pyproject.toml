@@ -101,7 +101,7 @@ Changelog = "https://github.com/hidden-regime/hidden-regime/blob/main/CHANGELOG.
 hidden-regime = "hidden_regime.cli:main"
 
 [tool.setuptools]
-packages = {find = {where = ["."], include = ["hidden_regime*"]}}
+packages = ["hidden_regime", "hidden_regime.config", "hidden_regime.data", "hidden_regime.models", "hidden_regime.utils", "hidden_regime.visualization"]
 include-package-data = true
 
 [tool.setuptools.dynamic]
