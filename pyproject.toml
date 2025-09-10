@@ -140,7 +140,7 @@ use_parentheses = true
 ensure_newline_before_comments = true
 line_length = 88
 src_paths = ["hidden_regime", "tests", "examples"]
-skip = ["__version.py"]
+skip_glob = ["**/_version.py"]
 
 # MyPy configuration
 [tool.mypy]
@@ -233,7 +233,6 @@ filterwarnings = [
     "ignore::RuntimeWarning:numpy.*",
     "ignore:.*divide by zero encountered.*:RuntimeWarning",
     "ignore:.*invalid value encountered.*:RuntimeWarning",
-    "ignore:.*The 'nopython' keyword.*:NumbaWarning",
 ]
 timeout = 300
 log_cli = false
