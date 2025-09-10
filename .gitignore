@@ -105,3 +105,9 @@ TODOS.md
 checkpoints/
 results/
 *.png
+
+# Pip
+requirements.txt
+
+# Setuptools
+_version.py
