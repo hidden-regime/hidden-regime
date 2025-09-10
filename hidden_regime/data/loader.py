@@ -7,11 +7,20 @@ with robust error handling, caching, and data quality checks.
 
 import time
 import warnings
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
+import matplotlib
+import matplotlib.pyplot as plt
+
+from ..visualization.plotting import (
+    REGIME_COLORS,
+    format_financial_axis,
+    save_plot,
+    setup_financial_plot_style,
+)
 
 try:
     import yfinance as yf
@@ -290,7 +299,7 @@ class DataLoader:
         plot_type: str = "all",
         figsize: Tuple[int, int] = (15, 10),
         save_path: Optional[str] = None,
-    ) -> "matplotlib.Figure":
+    ) -> matplotlib.figure:
         """
         Create comprehensive visualizations of market data.
 
@@ -307,23 +316,6 @@ class DataLoader:
             ImportError: If matplotlib/seaborn not available
             ValueError: If required columns missing from data
         """
-        try:
-            import matplotlib.dates as mdates
-            import matplotlib.pyplot as plt
-            import seaborn as sns
-
-            from ..visualization.plotting import (
-                REGIME_COLORS,
-                format_financial_axis,
-                get_regime_colors,
-                save_plot,
-                setup_financial_plot_style,
-            )
-        except ImportError:
-            raise ImportError(
-                "Plotting requires matplotlib and seaborn. Install with: pip install matplotlib seaborn"
-            )
-
         # Validate required columns
         required_columns = ["date", "price", "log_return"]
         missing_columns = [col for col in required_columns if col not in data.columns]
