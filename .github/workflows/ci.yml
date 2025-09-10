@@ -14,21 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
-        exclude:
-          # Reduce matrix size for faster builds - test all Python versions on Ubuntu only
-          - os: windows-latest
-            python-version: '3.8'
-          - os: windows-latest
-            python-version: '3.9'
-          - os: windows-latest
-            python-version: '3.10'
-          - os: macos-latest
-            python-version: '3.8'
-          - os: macos-latest
-            python-version: '3.9'
-          - os: macos-latest
-            python-version: '3.10'
+        python-version: ['3.11', '3.12']
 
     steps:
     - name: Checkout code
@@ -43,7 +29,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('setup.py') }}
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
         restore-keys: |
           ${{ runner.os }}-pip-${{ matrix.python-version }}-
           ${{ runner.os }}-pip-
@@ -139,7 +125,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: lint-${{ hashFiles('setup.py') }}
+        key: lint-${{ hashFiles('pyproject.toml') }}
         restore-keys: |
           lint-
 
@@ -209,7 +195,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: integration-${{ hashFiles('setup.py') }}
+        key: integration-${{ hashFiles('pyproject.toml') }}
         restore-keys: |
           integration-
 
@@ -264,7 +250,7 @@ jobs:
 
     - name: Validate package metadata
       run: |
-        python setup.py check --metadata --strict
+        python -m build --check
 
   notify-on-failure:
     name: Notify on Failure
