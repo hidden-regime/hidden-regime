@@ -15,23 +15,24 @@ Author: Hidden Regime Team
 Created: 2025-01-XX
 """
 
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from typing import Dict, List, Tuple, Optional, Any
+import sys
 import warnings
 from datetime import datetime, timedelta
 from pathlib import Path
-import sys
+from typing import Any, Dict, List, Optional, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
 
 # Add hidden regime to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from hidden_regime.visualization.plotting import (
-    setup_financial_plot_style,
     REGIME_COLORS,
     get_regime_colors,
+    setup_financial_plot_style,
 )
 
 

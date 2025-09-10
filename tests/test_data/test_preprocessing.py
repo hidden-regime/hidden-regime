@@ -5,17 +5,18 @@ Tests data preprocessing functionality including outlier detection,
 missing value handling, return calculations, and feature engineering.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
 
-from hidden_regime.data.preprocessing import DataPreprocessor
+import numpy as np
+import pandas as pd
+import pytest
+
 from hidden_regime.config.settings import PreprocessingConfig, ValidationConfig
+from hidden_regime.data.preprocessing import DataPreprocessor
 from hidden_regime.utils.exceptions import DataQualityError
 from tests.fixtures.sample_data import (
-    create_sample_stock_data,
     create_invalid_stock_data,
+    create_sample_stock_data,
     get_test_config_variations,
 )
 

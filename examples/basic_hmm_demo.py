@@ -7,11 +7,12 @@ training, inference, real-time regime tracking, and comprehensive visualizations
 This example shows how to integrate plotting capabilities into HMM workflows.
 """
 
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import warnings
 from datetime import datetime, timedelta
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 # Import the hidden-regime package
 import hidden_regime as hr

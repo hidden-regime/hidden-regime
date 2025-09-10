@@ -2,9 +2,10 @@
 Quick test script to verify state standardization functionality.
 """
 
-import numpy as np
 import sys
 from pathlib import Path
+
+import numpy as np
 
 # Add hidden-regime to path if running from examples directory
 sys.path.insert(0, str(Path(__file__).parent.parent))

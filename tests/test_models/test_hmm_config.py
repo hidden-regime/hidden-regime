@@ -4,8 +4,9 @@ Unit tests for HMMConfig class.
 Tests configuration validation, factory methods, and integration with data validation.
 """
 
-import pytest
 import numpy as np
+import pytest
+
 from hidden_regime.models.config import HMMConfig
 
 

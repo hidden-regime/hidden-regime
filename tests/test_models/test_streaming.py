@@ -9,23 +9,24 @@ Created: 2025-09-03
 """
 
 import asyncio
+import time
+from unittest.mock import AsyncMock, Mock, patch
+
 import numpy as np
 import pandas as pd
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
-import time
 
+from hidden_regime.models.config import HMMConfig
+from hidden_regime.models.online_hmm import OnlineHMM, OnlineHMMConfig
 from hidden_regime.models.streaming import (
+    SimulatedDataSource,
     StreamingConfig,
+    StreamingDataSource,
     StreamingMode,
     StreamingObservation,
-    StreamingResult,
-    StreamingDataSource,
-    SimulatedDataSource,
     StreamingProcessor,
+    StreamingResult,
 )
-from hidden_regime.models.online_hmm import OnlineHMM, OnlineHMMConfig
-from hidden_regime.models.config import HMMConfig
 
 
 class TestStreamingConfig:

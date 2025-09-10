@@ -4,22 +4,23 @@ Unit tests for HMM utility functions.
 Tests parameter initialization, validation, and helper functions.
 """
 
-import pytest
+import warnings
+from unittest.mock import patch
+
 import numpy as np
 import pandas as pd
-from unittest.mock import patch
-import warnings
+import pytest
 
 from hidden_regime.models.utils import (
-    validate_returns_data,
-    initialize_parameters_random,
-    initialize_parameters_kmeans,
-    check_convergence,
-    normalize_probabilities,
-    log_normalize,
-    validate_hmm_parameters,
-    get_regime_interpretation,
     calculate_regime_statistics,
+    check_convergence,
+    get_regime_interpretation,
+    initialize_parameters_kmeans,
+    initialize_parameters_random,
+    log_normalize,
+    normalize_probabilities,
+    validate_hmm_parameters,
+    validate_returns_data,
 )
 
 

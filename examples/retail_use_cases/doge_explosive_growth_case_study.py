@@ -19,22 +19,24 @@ Key Learning Objectives:
 5. Risk management during euphoric bubble periods
 """
 
-import numpy as np
-import pandas as pd
-import yfinance as yf
-import matplotlib.pyplot as plt
+import sys
 import warnings
 from datetime import datetime, timedelta
 from pathlib import Path
-import sys
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import yfinance as yf
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from performance_analysis import RetailPerformanceAnalyzer
+from retail_trading_framework import RegimeTrader, RetailTradingSimulator, TradingConfig
+
 from hidden_regime import HiddenMarkovModel, HMMConfig
 from hidden_regime.models.online_hmm import OnlineHMM, OnlineHMMConfig
-from retail_trading_framework import RetailTradingSimulator, RegimeTrader, TradingConfig
-from performance_analysis import RetailPerformanceAnalyzer
 
 warnings.filterwarnings("ignore")
 

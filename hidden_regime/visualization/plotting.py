@@ -5,16 +5,17 @@ Provides shared visualization functions, consistent styling, and helper utilitie
 for creating clear, informative financial plots with proper date handling.
 """
 
+import warnings
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-from typing import Optional, Union, Dict, List, Tuple, Any
-import warnings
 
 try:
-    import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
-    from matplotlib.colors import ListedColormap
+    import matplotlib.pyplot as plt
     import seaborn as sns
+    from matplotlib.colors import ListedColormap
 
     MATPLOTLIB_AVAILABLE = True
 except ImportError:

@@ -17,19 +17,20 @@ Created: 2025-09-03
 """
 
 import asyncio
+import logging
 import time
+from abc import ABC, abstractmethod
+from collections import deque
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+
 import numpy as np
 import pandas as pd
-from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Callable, Any, AsyncIterator
-from dataclasses import dataclass
-from collections import deque
-import logging
-from enum import Enum
 
-from .online_hmm import OnlineHMM
 from ..data.loader import DataLoader
 from ..utils.exceptions import HiddenRegimeError
+from .online_hmm import OnlineHMM
 
 
 class StreamingMode(Enum):

@@ -5,11 +5,12 @@ Demonstrates state standardization and utility functions on realistic market dat
 Optimized for quick execution and testing.
 """
 
+import sys
+import warnings
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-import warnings
-import sys
-from pathlib import Path
 
 # Add hidden-regime to path if running from examples directory
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -18,8 +19,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import hidden_regime as hr
 from hidden_regime import HiddenMarkovModel, HMMConfig
 from hidden_regime.models.utils import (
-    validate_regime_economics,
     analyze_regime_transitions,
+    validate_regime_economics,
 )
 
 

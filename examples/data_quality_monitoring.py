@@ -9,16 +9,17 @@ Demonstrates continuous data quality monitoring including:
 """
 
 import sys
-import warnings
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-from collections import defaultdict
 import time
+import warnings
+from collections import defaultdict
+from datetime import datetime, timedelta
+
+import numpy as np
+import pandas as pd
 
 # Import the hidden-regime package
 import hidden_regime as hr
-from hidden_regime import DataConfig, ValidationConfig, PreprocessingConfig
+from hidden_regime import DataConfig, PreprocessingConfig, ValidationConfig
 
 
 class DataQualityMonitor:

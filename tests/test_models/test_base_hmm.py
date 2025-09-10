@@ -5,19 +5,20 @@ Tests core functionality including initialization, training, inference,
 and persistence operations.
 """
 
-import pytest
+import json
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import numpy as np
 import pandas as pd
-import tempfile
-import json
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+import pytest
 
 from hidden_regime.models import HiddenMarkovModel, HMMConfig
 from hidden_regime.models.base_hmm import (
-    HMMTrainingError,
     HMMConvergenceError,
     HMMInferenceError,
+    HMMTrainingError,
 )
 
 

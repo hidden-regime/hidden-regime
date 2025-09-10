@@ -5,10 +5,11 @@ Provides helper functions for parameter validation, initialization,
 convergence checking, and numerical stability.
 """
 
+import warnings
+from typing import Any, Dict, Optional, Tuple
+
 import numpy as np
 import pandas as pd
-from typing import Tuple, Optional, Dict, Any
-import warnings
 
 try:
     from sklearn.cluster import KMeans

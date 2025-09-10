@@ -45,28 +45,29 @@ if hasattr(model, '_state_mapping') and model._state_mapping:
 ```
 """
 
-import numpy as np
-import pandas as pd
-import pickle
 import json
-from pathlib import Path
-from typing import Optional, Union, Dict, Any, Tuple, List
+import pickle
 import warnings
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from .config import HMMConfig
+import numpy as np
+import pandas as pd
+
+from ..utils.exceptions import HiddenRegimeError
 from .algorithms import HMMAlgorithms
+from .config import HMMConfig
 from .state_standardizer import StateStandardizer
 from .utils import (
-    validate_returns_data,
-    initialize_parameters_random,
-    initialize_parameters_kmeans,
-    check_convergence,
-    validate_hmm_parameters,
-    get_regime_interpretation,
     calculate_regime_statistics,
+    check_convergence,
+    get_regime_interpretation,
+    initialize_parameters_kmeans,
+    initialize_parameters_random,
+    validate_hmm_parameters,
+    validate_returns_data,
 )
-from ..utils.exceptions import HiddenRegimeError
 
 
 class HMMTrainingError(HiddenRegimeError):
@@ -851,13 +852,14 @@ class HiddenMarkovModel:
         try:
             import matplotlib.pyplot as plt
             import seaborn as sns
+
             from ..visualization.plotting import (
-                setup_financial_plot_style,
                 format_financial_axis,
-                save_plot,
-                plot_returns_with_regimes,
-                plot_regime_heatmap,
                 get_regime_colors,
+                plot_regime_heatmap,
+                plot_returns_with_regimes,
+                save_plot,
+                setup_financial_plot_style,
             )
         except ImportError:
             raise ImportError(

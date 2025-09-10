@@ -13,18 +13,19 @@ Run this script to see professional-quality financial visualizations with consis
 import os
 import sys
 import warnings
+from datetime import datetime, timedelta
+
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from hidden_regime.config.settings import DataConfig
 from hidden_regime.data.loader import DataLoader
 from hidden_regime.models.base_hmm import HiddenMarkovModel
-from hidden_regime.models.state_standardizer import StateStandardizer
-from hidden_regime.config.settings import DataConfig
 from hidden_regime.models.config import HMMConfig
+from hidden_regime.models.state_standardizer import StateStandardizer
 
 
 def main():

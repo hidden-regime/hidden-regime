@@ -5,10 +5,11 @@ Provides dataclass-based configuration for HMM training parameters,
 initialization strategies, and inference settings.
 """
 
-from dataclasses import dataclass
-from typing import Optional, Union, List, Literal
-import numpy as np
 import warnings
+from dataclasses import dataclass
+from typing import List, Literal, Optional, Union
+
+import numpy as np
 
 
 @dataclass

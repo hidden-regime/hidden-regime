@@ -24,19 +24,12 @@ __email__ = "contact@hiddenregime.com"
 __description__ = "Market regime detection using Hidden Markov Models with Bayesian uncertainty quantification"
 __url__ = "https://hiddenregime.com"
 __license__ = "MIT"
-__copyright__ = "Copyright 2024 aoaustin"
+__copyright__ = "Copyright 2025 Hidden Regime"
+
+from .config import DataConfig, PreprocessingConfig, ValidationConfig
 
 # Import main data pipeline classes
 from .data import DataLoader, DataPreprocessor, DataValidator
-from .config import DataConfig, ValidationConfig, PreprocessingConfig
-from .utils.exceptions import (
-    HiddenRegimeError,
-    DataLoadError,
-    DataQualityError,
-    ValidationError,
-    HMMTrainingError,
-    HMMInferenceError,
-)
 
 # Import HMM classes
 from .models import (
@@ -44,8 +37,16 @@ from .models import (
     HMMConfig,
     OnlineHMM,
     OnlineHMMConfig,
-    StreamingProcessor,
     StreamingConfig,
+    StreamingProcessor,
+)
+from .utils.exceptions import (
+    DataLoadError,
+    DataQualityError,
+    HiddenRegimeError,
+    HMMInferenceError,
+    HMMTrainingError,
+    ValidationError,
 )
 
 # Main API exports

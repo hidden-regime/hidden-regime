@@ -5,9 +5,10 @@ Test script to verify the DataLoader color fixes are working correctly.
 
 import os
 import sys
+from datetime import datetime, timedelta
+
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

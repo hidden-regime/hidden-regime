@@ -4,9 +4,10 @@ Simple State Standardization Demo for hidden-regime package.
 Basic demonstration of the standardization framework without complex features.
 """
 
-import numpy as np
 import sys
 from pathlib import Path
+
+import numpy as np
 
 # Add hidden-regime to path if running from examples directory
 sys.path.insert(0, str(Path(__file__).parent.parent))

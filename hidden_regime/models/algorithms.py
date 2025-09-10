@@ -5,11 +5,12 @@ Implements Forward-Backward, Viterbi, and Baum-Welch algorithms
 with numerical stability enhancements for market regime detection.
 """
 
-import numpy as np
-from typing import Tuple, Optional
 import warnings
-from scipy.stats import norm
+from typing import Optional, Tuple
+
+import numpy as np
 from scipy.special import logsumexp
+from scipy.stats import norm
 
 
 class HMMAlgorithms:

@@ -5,17 +5,18 @@ Tests end-to-end workflows combining data loading, validation,
 preprocessing with HMM training and inference.
 """
 
-import pytest
-import numpy as np
-import pandas as pd
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pandas as pd
+import pytest
 
 import hidden_regime as hr
+from hidden_regime.config import DataConfig, PreprocessingConfig, ValidationConfig
+from hidden_regime.data import DataLoader, DataPreprocessor, DataValidator
 from hidden_regime.models import HiddenMarkovModel, HMMConfig
-from hidden_regime.data import DataLoader, DataValidator, DataPreprocessor
-from hidden_regime.config import DataConfig, ValidationConfig, PreprocessingConfig
 
 
 class TestHMMIntegration:

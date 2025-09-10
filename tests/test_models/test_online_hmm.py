@@ -9,19 +9,20 @@ Author: aoaustin
 Created: 2025-09-03
 """
 
+import warnings
+from unittest.mock import Mock, patch
+
 import numpy as np
 import pandas as pd
 import pytest
-from unittest.mock import Mock, patch
-import warnings
 
+from hidden_regime.models.config import HMMConfig
 from hidden_regime.models.online_hmm import (
     OnlineHMM,
     OnlineHMMConfig,
     SufficientStatistics,
 )
-from hidden_regime.models.config import HMMConfig
-from hidden_regime.utils.exceptions import HMMTrainingError, HMMInferenceError
+from hidden_regime.utils.exceptions import HMMInferenceError, HMMTrainingError
 
 
 class TestOnlineHMMConfig:

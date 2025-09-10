@@ -5,23 +5,24 @@ Tests performance characteristics, memory usage, and benchmarks to detect
 regressions and ensure the pipeline scales appropriately with data size.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
-import time
 import gc
-import psutil
 import os
+import time
 from typing import Dict, List, Tuple
 from unittest.mock import patch
 
+import numpy as np
+import pandas as pd
+import psutil
+import pytest
+
 from hidden_regime import (
-    DataLoader,
-    DataValidator,
-    DataPreprocessor,
     DataConfig,
-    ValidationConfig,
+    DataLoader,
+    DataPreprocessor,
+    DataValidator,
     PreprocessingConfig,
+    ValidationConfig,
 )
 from tests.fixtures.sample_data import MockYFinanceTicker, create_sample_stock_data
 

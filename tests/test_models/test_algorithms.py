@@ -5,8 +5,8 @@ Tests Forward-Backward, Viterbi, and Baum-Welch algorithms
 with focus on numerical stability and mathematical correctness.
 """
 
-import pytest
 import numpy as np
+import pytest
 from scipy.stats import norm
 
 from hidden_regime.models.algorithms import HMMAlgorithms

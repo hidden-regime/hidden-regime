@@ -5,12 +5,13 @@ Demonstrates state standardization and utility functions on actual market data,
 showing how to detect and validate regime changes across different market periods.
 """
 
-import numpy as np
-import pandas as pd
+import sys
 import warnings
 from datetime import datetime, timedelta
-import sys
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 # Add hidden-regime to path if running from examples directory
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -19,9 +20,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import hidden_regime as hr
 from hidden_regime import HiddenMarkovModel, HMMConfig
 from hidden_regime.models.utils import (
-    validate_regime_economics,
     analyze_regime_transitions,
     get_standardized_regime_name,
+    validate_regime_economics,
 )
 
 

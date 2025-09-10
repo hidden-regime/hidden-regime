@@ -6,13 +6,13 @@ including data loaders, HMM models, and state standardizers.
 """
 
 from .plotting import (
-    setup_financial_plot_style,
-    plot_returns_with_regimes,
+    create_regime_legend,
+    format_financial_axis,
+    get_regime_colors,
     plot_regime_heatmap,
     plot_regime_statistics,
-    get_regime_colors,
-    format_financial_axis,
-    create_regime_legend,
+    plot_returns_with_regimes,
+    setup_financial_plot_style,
 )
 
 __all__ = [

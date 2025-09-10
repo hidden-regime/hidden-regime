@@ -6,9 +6,9 @@ used across the package.
 """
 
 from .exceptions import (
-    HiddenRegimeError,
     DataLoadError,
     DataQualityError,
+    HiddenRegimeError,
     ValidationError,
 )
 

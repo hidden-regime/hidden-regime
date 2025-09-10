@@ -5,12 +5,13 @@ Provides DataLoader class for loading stock market data from various sources
 with robust error handling, caching, and data quality checks.
 """
 
-import pandas as pd
-import numpy as np
-from typing import Optional, Union, Dict, Any, List, Tuple
-from datetime import datetime, timedelta
 import time
 import warnings
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import pandas as pd
 
 try:
     import yfinance as yf
@@ -307,15 +308,16 @@ class DataLoader:
             ValueError: If required columns missing from data
         """
         try:
-            import matplotlib.pyplot as plt
             import matplotlib.dates as mdates
+            import matplotlib.pyplot as plt
             import seaborn as sns
+
             from ..visualization.plotting import (
-                setup_financial_plot_style,
-                format_financial_axis,
-                save_plot,
-                get_regime_colors,
                 REGIME_COLORS,
+                format_financial_axis,
+                get_regime_colors,
+                save_plot,
+                setup_financial_plot_style,
             )
         except ImportError:
             raise ImportError(

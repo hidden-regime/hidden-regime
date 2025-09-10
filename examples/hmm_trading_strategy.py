@@ -5,11 +5,12 @@ Demonstrates how to build trading strategies based on HMM regime detection
 including position sizing, risk management, and performance analysis.
 """
 
-import numpy as np
-import pandas as pd
 import warnings
 from datetime import datetime, timedelta
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
 
 # Import the hidden-regime package
 import hidden_regime as hr

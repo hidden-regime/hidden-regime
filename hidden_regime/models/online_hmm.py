@@ -16,19 +16,20 @@ Author: aoaustin
 Created: 2025-09-03
 """
 
+import warnings
+from collections import deque
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-import warnings
-from typing import Dict, List, Optional, Tuple, Union, Any
-from dataclasses import dataclass, field
-from collections import deque
 from scipy.special import logsumexp
 
+from ..utils.exceptions import HMMInferenceError, HMMTrainingError
+from .algorithms import HMMAlgorithms
 from .base_hmm import HiddenMarkovModel
 from .config import HMMConfig
-from .algorithms import HMMAlgorithms
-from .utils import validate_returns_data, get_regime_interpretation
-from ..utils.exceptions import HMMTrainingError, HMMInferenceError
+from .utils import get_regime_interpretation, validate_returns_data
 
 
 @dataclass

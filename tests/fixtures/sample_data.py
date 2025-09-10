@@ -4,10 +4,11 @@ Test fixtures for hidden-regime package.
 Provides sample data and test utilities for unit testing.
 """
 
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
+import numpy as np
+import pandas as pd
 
 
 def create_sample_stock_data(
@@ -235,7 +236,7 @@ def get_test_config_variations() -> Dict[str, Dict[str, Any]]:
     Returns:
         Dictionary of configuration scenarios
     """
-    from hidden_regime.config import DataConfig, ValidationConfig, PreprocessingConfig
+    from hidden_regime.config import DataConfig, PreprocessingConfig, ValidationConfig
 
     configs = {}
 

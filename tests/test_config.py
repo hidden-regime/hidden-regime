@@ -5,21 +5,22 @@ Tests configuration classes, validation, serialization, inheritance,
 edge cases, and interactions between different configuration types.
 """
 
-import pytest
-import pandas as pd
 import json
-import tempfile
 import os
+import tempfile
 from dataclasses import asdict, fields
 from typing import Any, Dict
 from unittest.mock import patch
 
+import pandas as pd
+import pytest
+
+from hidden_regime import DataLoader, DataPreprocessor, DataValidator
 from hidden_regime.config.settings import (
     DataConfig,
-    ValidationConfig,
     PreprocessingConfig,
+    ValidationConfig,
 )
-from hidden_regime import DataLoader, DataValidator, DataPreprocessor
 
 
 class TestDataConfig:
@@ -268,6 +269,7 @@ class TestConfigurationInteractions:
     def test_data_loader_config_integration(self):
         """Test DataLoader with various DataConfig options."""
         from unittest.mock import patch
+
         from tests.fixtures.sample_data import MockYFinanceTicker
 
         # Test strict data quality requirements
@@ -342,6 +344,7 @@ class TestConfigurationInteractions:
     def test_configuration_override_behavior(self):
         """Test how method parameters override configuration defaults."""
         from unittest.mock import patch
+
         from tests.fixtures.sample_data import MockYFinanceTicker
 
         # Create loader with OHLC average disabled

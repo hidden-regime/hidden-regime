@@ -100,13 +100,14 @@ The StateStandardizer is **NOT required** because:
     ```
 """
 
+import warnings
+from dataclasses import dataclass
+from typing import Any, Dict, List, Literal, Optional, Tuple
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Tuple, Optional, Literal, Any
-from dataclasses import dataclass
-import warnings
 from scipy import stats
-import matplotlib.pyplot as plt
 
 try:
     from sklearn.cluster import KMeans
@@ -716,10 +717,10 @@ class StateStandardizer:
         try:
             from ..visualization.plotting import (
                 check_plotting_available,
-                setup_financial_plot_style,
-                get_regime_colors,
                 create_subplot_grid,
+                get_regime_colors,
                 save_plot,
+                setup_financial_plot_style,
             )
         except ImportError:
             raise ImportError(
