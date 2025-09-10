@@ -10,10 +10,10 @@ import warnings
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import numpy as np
-import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 from ..visualization.plotting import (
     REGIME_COLORS,
