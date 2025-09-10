@@ -72,14 +72,14 @@ jobs:
         python -c "
         try:
             import hidden_regime
-            print('✓ hidden_regime imported successfully')
+            print('[OK] hidden_regime imported successfully')
             try:
                 from hidden_regime.data import DataLoader
-                print('✓ hidden_regime.data imported successfully')
+                print('[OK] hidden_regime.data imported successfully')
             except ImportError as e:
-                print(f'✗ hidden_regime.data failed: {e}')
+                print(f'[ERROR] hidden_regime.data failed: {e}')
         except ImportError as e:
-            print(f'✗ hidden_regime failed: {e}')
+            print(f'[ERROR] hidden_regime failed: {e}')
         "
 
     - name: Run unit tests
