@@ -37,56 +37,22 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e .[dev,ml]
+        pip install -e .[dev,docs]
 
-    - name: Debug package structure
+    # Windows needs different shell for scripts
+    - name: Run full test suite (Windows)
+      if: runner.os == 'Windows'
       run: |
-        echo "=== Installed packages ==="
-        pip list | grep hidden-regime
-        echo "=== Python import test ==="
-        python -c "import sys; print(f'Python path: {sys.path[:3]}...')"
-        echo "=== Package structure check ==="
-        python -c "
-        import os, sys
-        pkg_path = None
-        for path in sys.path:
-            test_path = os.path.join(path, 'hidden_regime')
-            if os.path.exists(test_path):
-                pkg_path = test_path
-                break
-        if pkg_path:
-            print(f'Package found at: {pkg_path}')
-            for root, dirs, files in os.walk(pkg_path):
-                if '__pycache__' not in root:
-                    level = root.replace(pkg_path, '').count(os.sep)
-                    indent = '  ' * level
-                    print(f'{indent}{os.path.basename(root)}/')
-                    subindent = '  ' * (level + 1)
-                    for file in files:
-                        if not file.endswith('.pyc'):
-                            print(f'{subindent}{file}')
-        else:
-            print('Package not found in sys.path')
-        "
-        echo "=== Import test ==="
-        python -c "
-        try:
-            import hidden_regime
-            print('[OK] hidden_regime imported successfully')
-            try:
-                from hidden_regime.data import DataLoader
-                print('[OK] hidden_regime.data imported successfully')
-            except ImportError as e:
-                print(f'[ERROR] hidden_regime.data failed: {e}')
-        except ImportError as e:
-            print(f'[ERROR] hidden_regime failed: {e}')
-        "
-
-    - name: Run unit tests
-      run: |
-        pytest tests/ -v --tb=short --strict-markers --disable-warnings --cov=hidden_regime --cov-report=xml --cov-report=term-missing
+        pytest tests/ --cov=hidden_regime --cov-report=xml --cov-report=term-missing --verbose --tb=short --strict-markers --disable-warnings
       env:
-        # Prevent yfinance from making real API calls during testing
+        PYTHONPATH: ${{ github.workspace }}
+
+    # Unix systems can use the script directly
+    - name: Run full test suite (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        ./scripts/test_full.sh
+      env:
         PYTHONPATH: ${{ github.workspace }}
 
     - name: Upload coverage to Codecov
@@ -107,6 +73,7 @@ jobs:
           coverage.xml
           .coverage
           pytest.log
+          htmlcov/
         retention-days: 30
 
   lint:
@@ -134,23 +101,21 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .[dev]
 
-    - name: Check code formatting with Black
+    - name: Run linting checks
       run: |
-        black --check --diff hidden_regime/ tests/
+        ./scripts/lint.sh
 
-    - name: Check import sorting with isort
-      run: |
-        isort --check-only --diff hidden_regime/ tests/
+    - name: Upload linting artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: lint-results
+        path: |
+          bandit-report.json
+        retention-days: 30
 
-    - name: Lint with flake8
-      run: |
-        # Stop the build if there are Python syntax errors or undefined names
-        flake8 hidden_regime/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Exit-zero treats all errors as warnings
-        flake8 hidden_regime/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
-
-  security:
-    name: Security Scan
+  build-docs:
+    name: Build Documentation
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -161,21 +126,22 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install bandit
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install bandit[toml]
+        pip install -e .[dev]
 
-    - name: Run security scan
+    - name: Build and validate package
       run: |
-        bandit -r hidden_regime/ -f json -o bandit-report.json || true
+        ./scripts/build_check.sh
 
-    - name: Upload security scan results
+    - name: Upload build artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: security-scan-results
-        path: bandit-report.json
+        name: build-artifacts
+        path: |
+          dist/
         retention-days: 30
 
   integration-test:
@@ -202,7 +168,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e .[dev,ml]
+        pip install -e .[dev,docs]
 
     - name: Run integration tests
       run: |
@@ -216,47 +182,10 @@ jobs:
         pip install .
         python -c "import hidden_regime; print('Package installed successfully')"
 
-  build-docs:
-    name: Build Documentation
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e .[dev]
-
-    - name: Check README renders correctly
-      run: |
-        python -c "
-        import sys
-        try:
-            with open('README.md', 'r', encoding='utf-8') as f:
-                content = f.read()
-            if len(content) < 100:
-                sys.exit('README.md seems too short')
-            print('README.md is valid')
-        except Exception as e:
-            print(f'README.md validation failed: {e}')
-            sys.exit(1)
-        "
-
-    - name: Validate package metadata
-      run: |
-        python -m build --sdist --wheel
-        twine check dist/*
-
   notify-on-failure:
     name: Notify on Failure
     runs-on: ubuntu-latest
-    needs: [test, lint, security, integration-test]
+    needs: [test, lint, integration-test, build-docs]
     if: failure() && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     steps:
     - name: Create Issue on Failure
@@ -273,6 +202,19 @@ jobs:
           **Run:** ${context.runId}
           
           Please check the [workflow run](${context.payload.repository.html_url}/actions/runs/${context.runId}) for details.
+          
+          ## 🔧 Local Debugging
+          
+          To reproduce this failure locally, run:
+          \`\`\`bash
+          ./scripts/ci_local.sh
+          \`\`\`
+          
+          For specific checks:
+          - \`./scripts/test_unit.sh\` - Fast unit tests
+          - \`./scripts/test_full.sh\` - Complete test suite with coverage
+          - \`./scripts/lint.sh\` - Code quality checks
+          - \`./scripts/build_check.sh\` - Package build validation
           `;
           
           github.rest.issues.create({
@@ -280,5 +222,5 @@ jobs:
             repo: context.repo.repo,
             title: title,
             body: body,
-            labels: ['bug', 'ci-failure']
+            labels: ['bug', 'ci-failure', 'needs-investigation']
           });
