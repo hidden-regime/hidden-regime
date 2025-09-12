@@ -143,6 +143,9 @@ line_length = 88
 src_paths = ["hidden_regime", "tests", "examples"]
 skip_glob = ["**/_version.py"]
 
+[tool.flake8]
+exclude = [".git", "__pycache__", "build", "dist", "tests/"]
+
 # MyPy configuration
 [tool.mypy]
 python_version = "3.8"

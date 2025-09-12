@@ -52,6 +52,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import matplotlib
 import numpy as np
 import pandas as pd
 
@@ -828,7 +829,7 @@ class HiddenMarkovModel:
         plot_type: str = "all",
         figsize: Tuple[int, int] = (16, 12),
         save_path: Optional[str] = None,
-    ) -> "matplotlib.Figure":
+    ) -> matplotlib.figure:
         """
         Create comprehensive visualizations of HMM regime detection results.
 
