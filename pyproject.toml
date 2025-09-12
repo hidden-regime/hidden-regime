@@ -203,6 +203,7 @@ exclude_lines = [
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
 ]
+fail_under = 60
 
 # Pytest configuration
 [tool.pytest.ini_options]

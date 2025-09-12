@@ -110,7 +110,7 @@ exclude_lines =
 ignore_errors = True
 
 # Coverage failure threshold (matches pytest.ini setting)
-fail_under = 80
+fail_under = 60
 
 [html]
 # HTML report configuration

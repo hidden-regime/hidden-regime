@@ -250,7 +250,8 @@ jobs:
 
     - name: Validate package metadata
       run: |
-        python -m build --check
+        python -m build --sdist --wheel
+        twine check dist/*
 
   notify-on-failure:
     name: Notify on Failure
