@@ -144,7 +144,8 @@ src_paths = ["hidden_regime", "tests", "examples"]
 skip_glob = ["**/_version.py"]
 
 [tool.flake8]
-exclude = [".git", "__pycache__", "build", "dist", "tests/"]
+exclude = [".git", "__pycache__", "build", "dist"]
+extend-exclude = ["tests/**", "notebooks"]
 
 # MyPy configuration
 [tool.mypy]
