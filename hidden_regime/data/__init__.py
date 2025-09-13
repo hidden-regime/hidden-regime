@@ -7,7 +7,7 @@ This module provides functionality for:
 - Data quality validation and anomaly detection
 """
 
-from .loader import DataLoader
+from .loader import DataLoader, DataConfig
 from .preprocessing import DataPreprocessor
 from .validation import DataValidator
 

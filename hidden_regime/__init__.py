@@ -10,6 +10,10 @@ Features:
 - Advanced outlier detection and data quality assessment
 - Production-ready Hidden Markov Models for regime detection
 - Real-time regime inference and analysis
+- Technical indicators integration with 50+ indicators via `ta` library
+- HMM vs traditional indicators comparison framework
+- Historical market events dataset with regime validation
+- Blog content generation for market analysis
 
 For documentation and examples, visit: https://hiddenregime.com
 """
@@ -49,6 +53,15 @@ from .utils.exceptions import (
     ValidationError,
 )
 
+# Import key functions from new modules
+from .indicators import calculate_all_indicators, compare_hmm_vs_indicators
+from .historical import load_historical_period, validate_historical_detection
+from .content import (
+    generate_comparative_report,
+    generate_historical_analysis,
+    generate_market_report,
+)
+
 # Main API exports
 __all__ = [
     # Data pipeline
@@ -78,6 +91,16 @@ __all__ = [
     "validate_data",
     "detect_regimes",
     "analyze_regime_transitions",
+    # Technical indicators (import explicitly)
+    "calculate_all_indicators",
+    "compare_hmm_vs_indicators",
+    # Historical analysis (import explicitly)
+    "validate_historical_detection",
+    "load_historical_period",
+    # Content generation (import explicitly)
+    "generate_market_report",
+    "generate_historical_analysis",
+    "generate_comparative_report",
 ]
 
 

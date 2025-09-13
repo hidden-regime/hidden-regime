@@ -53,6 +53,7 @@ dependencies = [
     "scipy>=1.7.0", 
     "matplotlib>=3.4.0",
     "yfinance>=0.2.0",
+    "ta>=0.10.2",
 ]
 
 [project.optional-dependencies]
@@ -171,6 +172,7 @@ module = [
     "yfinance.*",
     "matplotlib.*",
     "sklearn.*",
+    "ta.*",
 ]
 ignore_missing_imports = true
 
