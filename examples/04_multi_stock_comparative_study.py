@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 """
-Multi-Stock Comparative Study Example
+Multi-Stock Comparative Regime Study Example
 
-Demonstrates comprehensive comparative regime analysis across multiple stocks,
-sectors, and market segments. Creates detailed cross-sectional analysis showing
-regime correlations, divergences, and sector-level insights.
+Conducts comprehensive regime analysis across multiple stocks to identify
+patterns, correlations, and market-wide trends. Generates professional
+comparative reports suitable for institutional analysis.
 
-This example showcases:
-- Regime behavior comparison across technology giants (FAANG+ stocks)
-- Sector-level regime analysis and correlation patterns
-- Cross-asset regime synchronization and divergence detection
-- Blog-ready comparative study with professional visualizations
-- Market leadership and regime transition analysis
+This example demonstrates:
+- Batch processing of multiple stocks for regime detection
+- Cross-stock regime correlation analysis
+- Sector-based comparative studies
+- Market regime consensus identification
+- Professional comparative reporting and visualization
 
-Run this script to generate a comprehensive multi-stock regime analysis
-suitable for sector rotation strategies and market timing insights.
+Run this script to generate comprehensive multi-stock regime analysis reports.
 """
 
 import os
@@ -28,12 +27,11 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 import hidden_regime as hr
-from hidden_regime.screener import BatchHMMProcessor, ScreeningConfig
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
-from itertools import combinations
+from datetime import datetime, timedelta
+import yfinance as yf
+from typing import Dict, List, Tuple
 
 def main():
     """Generate comprehensive multi-stock comparative analysis."""
@@ -41,31 +39,21 @@ def main():
     print("🏢 Multi-Stock Comparative Regime Study")
     print("="*60)
     
-    # Configuration - Focus on major tech stocks and market ETFs
+    # Stock groups for comparative analysis (reduced for faster processing)
     STOCK_GROUPS = {
-        'mega_cap_tech': {
-            'tickers': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'],
-            'name': 'Mega-Cap Technology'
-        },
-        'growth_tech': {
-            'tickers': ['TSLA', 'NVDA', 'NFLX', 'ADBE', 'CRM'],
-            'name': 'High-Growth Technology'
-        },
-        'market_indices': {
-            'tickers': ['SPY', 'QQQ', 'IWM', 'VTI'],
-            'name': 'Market Indices'
-        },
-        'sector_leaders': {
-            'tickers': ['JPM', 'JNJ', 'XOM', 'HD', 'PG'],
-            'name': 'Sector Leaders'
-        }
+        "Tech Giants": ["AAPL", "MSFT"],
+        "Finance": ["JPM", "BAC"],
+        "Healthcare": ["JNJ", "PFE"],
+        "Consumer": ["TSLA", "NFLX"],
+        "Index ETFs": ["SPY", "QQQ"]
     }
     
     ALL_TICKERS = []
-    for group in STOCK_GROUPS.values():
-        ALL_TICKERS.extend(group['tickers'])
+    for group_tickers in STOCK_GROUPS.values():
+        ALL_TICKERS.extend(group_tickers)
     
     OUTPUT_DIR = project_root / "examples" / "output" / "multi_stock_study"
+    ANALYSIS_PERIOD = 252  # 1 year
     
     # Create output directory
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -74,135 +62,177 @@ def main():
     print(f"📁 Output directory: {OUTPUT_DIR}")
     
     try:
-        # Step 1: Batch process all stocks using the screener engine
-        print("\n1️⃣ Running batch HMM analysis...")
+        # Step 1: Process all stocks individually
+        print("\n1️⃣ Running individual stock analysis...")
         
-        config = ScreeningConfig(
-            period_days=252,  # 1 year of data
-            max_workers=6,
-            verbose=True
+        stock_results = {}
+        failed_tickers = []
+        
+        for ticker in ALL_TICKERS:
+            try:
+                print(f"   📈 Processing {ticker}...", end=" ")
+                
+                # Load data
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=ANALYSIS_PERIOD + 50)
+                
+                loader = hr.DataLoader()
+                data = loader.load_stock_data(ticker, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+                
+                if data is None or len(data) < 200:
+                    print("❌ Insufficient data")
+                    failed_tickers.append(ticker)
+                    continue
+                
+                # Run HMM analysis
+                hmm_config = hr.HMMConfig(n_states=3, max_iterations=100, tolerance=1e-4, random_seed=42)
+                hmm = hr.HiddenMarkovModel(config=hmm_config)
+                
+                returns = data['log_return'].dropna().values
+                if len(returns) < 100:
+                    print("❌ Insufficient return data")
+                    failed_tickers.append(ticker)
+                    continue
+                
+                hmm.fit(returns, verbose=False)
+                states = hmm.predict(returns)
+                
+                # Calculate regime statistics
+                regime_stats = {}
+                for state in range(3):
+                    state_mask = states == state
+                    if state_mask.sum() > 0:
+                        state_returns = returns[state_mask]
+                        regime_stats[state] = {
+                            'mean_return': float(state_returns.mean()),
+                            'volatility': float(state_returns.std()),
+                            'frequency': float(state_mask.mean()),
+                            'avg_duration': calculate_average_duration(states, state)
+                        }
+                
+                # Identify regime types by returns
+                sorted_regimes = sorted(regime_stats.items(), key=lambda x: x[1]['mean_return'])
+                bear_regime = sorted_regimes[0][0] if len(sorted_regimes) > 0 else 0
+                bull_regime = sorted_regimes[-1][0] if len(sorted_regimes) > 0 else 2
+                sideways_regime = sorted_regimes[1][0] if len(sorted_regimes) > 2 else 1
+                
+                # Current regime (most recent state)
+                current_regime = int(states[-1])
+                
+                stock_results[ticker] = {
+                    'regime_stats': regime_stats,
+                    'bear_regime': bear_regime,
+                    'bull_regime': bull_regime,
+                    'sideways_regime': sideways_regime,
+                    'current_regime': current_regime,
+                    'states': states,
+                    'returns': returns,
+                    'data_points': len(returns)
+                }
+                
+                print("✅")
+                
+            except Exception as e:
+                print(f"❌ Error: {str(e)[:50]}...")
+                failed_tickers.append(ticker)
+                continue
+        
+        successful_count = len(stock_results)
+        print(f"\n   ✅ Successfully analyzed {successful_count} stocks")
+        print(f"   ❌ Failed to analyze {len(failed_tickers)} stocks")
+        
+        if successful_count < 5:
+            print("❌ Insufficient successful analyses for comparison")
+            return False
+        
+        # Step 2: Cross-stock regime analysis
+        print("\n2️⃣ Conducting cross-stock regime analysis...")
+        
+        # Group results by sector
+        group_results = {}
+        for group_name, group_tickers in STOCK_GROUPS.items():
+            group_data = {}
+            for ticker in group_tickers:
+                if ticker in stock_results:
+                    group_data[ticker] = stock_results[ticker]
+            if group_data:
+                group_results[group_name] = group_data
+        
+        # Calculate cross-correlations
+        correlations = calculate_regime_correlations(stock_results)
+        
+        # Identify market regime consensus
+        consensus = identify_market_consensus(stock_results)
+        
+        print(f"   📊 Calculated correlations for {len(correlations)} stock pairs")
+        print(f"   🎯 Market consensus: {consensus['dominant_regime']} ({consensus['consensus_strength']:.1%})")
+        
+        # Step 3: Generate comparative report
+        print("\n3️⃣ Generating comparative analysis report...")
+        
+        report_content = generate_comparative_report(
+            stock_results, group_results, correlations, consensus
         )
         
-        processor = BatchHMMProcessor(config)
-        batch_results = processor.process_stock_list(ALL_TICKERS)
+        report_path = OUTPUT_DIR / "multi_stock_comparative_report.md"
+        with open(report_path, 'w') as f:
+            f.write(report_content)
         
-        successful_tickers = list(batch_results['results'].keys())
-        print(f"   ✅ Successfully analyzed {len(successful_tickers)} stocks")
+        print(f"   📝 Saved comprehensive report: {report_path.name}")
         
-        if len(successful_tickers) < 5:
-            raise ValueError("Insufficient successful stock analyses for comparison")
+        # Step 4: Create summary data files
+        print("\n4️⃣ Creating summary data files...")
         
-        # Step 2: Extract regime data for analysis
-        print("\n2️⃣ Extracting regime data for comparative analysis...")
+        # Stock summary
+        summary_data = []
+        for ticker, results in stock_results.items():
+            current_regime_name = get_regime_name(results, results['current_regime'])
+            current_regime_stats = results['regime_stats'][results['current_regime']]
+            
+            summary_data.append({
+                'ticker': ticker,
+                'current_regime': current_regime_name,
+                'regime_confidence': current_regime_stats['frequency'],
+                'mean_return': current_regime_stats['mean_return'],
+                'volatility': current_regime_stats['volatility'],
+                'data_points': results['data_points']
+            })
         
-        regime_data = extract_regime_data(batch_results['results'])
+        summary_df = pd.DataFrame(summary_data)
+        summary_path = OUTPUT_DIR / "stock_summary.csv"
+        summary_df.to_csv(summary_path, index=False)
         
-        print(f"   📊 Extracted regime data for {len(regime_data)} stocks")
+        # Correlation matrix
+        correlation_matrix = create_correlation_matrix(correlations, list(stock_results.keys()))
+        correlation_path = OUTPUT_DIR / "regime_correlations.csv"
+        correlation_matrix.to_csv(correlation_path)
         
-        # Step 3: Calculate cross-stock regime correlations
-        print("\n3️⃣ Calculating regime correlations...")
+        print(f"   💾 Saved stock summary: {summary_path.name}")
+        print(f"   💾 Saved correlation matrix: {correlation_path.name}")
         
-        correlation_analysis = calculate_regime_correlations(regime_data)
-        
-        print(f"   🔗 Calculated {len(correlation_analysis['correlation_matrix'])} correlations")
-        
-        # Step 4: Analyze regime synchronization patterns
-        print("\n4️⃣ Analyzing regime synchronization...")
-        
-        synchronization_analysis = analyze_regime_synchronization(regime_data, STOCK_GROUPS)
-        
-        print(f"   ⚡ Identified {len(synchronization_analysis['sync_events'])} synchronization events")
-        
-        # Step 5: Create comprehensive visualizations
-        print("\n5️⃣ Creating comparative visualizations...")
-        
-        # Regime correlation heatmap
-        correlation_chart_path = create_correlation_heatmap(
-            correlation_analysis, OUTPUT_DIR
-        )
-        print(f"   📈 Created correlation heatmap: {correlation_chart_path.name}")
-        
-        # Regime timeline visualization
-        timeline_chart_path = create_regime_timeline(
-            regime_data, STOCK_GROUPS, OUTPUT_DIR
-        )
-        print(f"   📅 Created regime timeline: {timeline_chart_path.name}")
-        
-        # Sector comparison dashboard
-        sector_dashboard_path = create_sector_dashboard(
-            regime_data, STOCK_GROUPS, batch_results['results'], OUTPUT_DIR
-        )
-        print(f"   🎛️ Created sector dashboard: {sector_dashboard_path.name}")
-        
-        # Step 6: Generate comprehensive comparative study
-        print("\n6️⃣ Generating comparative study blog post...")
-        
-        blog_content = generate_comparative_study_blog_post(
-            stock_groups=STOCK_GROUPS,
-            regime_data=regime_data,
-            correlation_analysis=correlation_analysis,
-            synchronization_analysis=synchronization_analysis,
-            batch_results=batch_results['results']
-        )
-        
-        blog_path = OUTPUT_DIR / "multi_stock_comparative_study.md"
-        with open(blog_path, 'w') as f:
-            f.write(blog_content)
-        
-        print(f"   📝 Saved comparative study: {blog_path.name}")
-        
-        # Step 7: Generate sector rotation insights
-        print("\n7️⃣ Creating sector rotation analysis...")
-        
-        rotation_analysis = generate_sector_rotation_analysis(
-            regime_data, STOCK_GROUPS, correlation_analysis
-        )
-        
-        rotation_path = OUTPUT_DIR / "sector_rotation_insights.md"
-        with open(rotation_path, 'w') as f:
-            f.write(rotation_analysis)
-        
-        print(f"   🔄 Saved sector rotation analysis: {rotation_path.name}")
-        
-        # Step 8: Export detailed data for further analysis
-        print("\n8️⃣ Exporting comparative data...")
-        
-        # Create comprehensive dataset
-        comparative_df = create_comparative_dataset(regime_data, batch_results['results'])
-        
-        data_path = OUTPUT_DIR / "multi_stock_regime_data.csv"
-        comparative_df.to_csv(data_path, index=False)
-        
-        print(f"   💾 Saved comparative dataset: {data_path.name}")
-        
-        # Step 9: Generate summary statistics
-        print("\n9️⃣ Generating summary statistics...")
-        
-        summary_stats = calculate_multi_stock_summary(
-            regime_data, correlation_analysis, synchronization_analysis
-        )
-        
-        # Save summary statistics
-        import json
-        stats_path = OUTPUT_DIR / "summary_statistics.json"
-        with open(stats_path, 'w') as f:
-            json.dump(summary_stats, f, indent=2)
-        
-        print(f"   📊 Saved summary statistics: {stats_path.name}")
-        
-        print("\n✨ Multi-Stock Comparative Study Complete!")
+        # Step 5: Display key insights
+        print("\n✨ Multi-Stock Analysis Complete!")
         print(f"📁 All files saved to: {OUTPUT_DIR}")
         
-        # Display key insights
-        print("\n🔍 Key Insights:")
-        if correlation_analysis.get('avg_correlation'):
-            print(f"   • Average regime correlation: {correlation_analysis['avg_correlation']:.3f}")
+        print(f"\n📊 Key Results:")
+        print(f"   • Successfully analyzed: {successful_count}/{len(ALL_TICKERS)} stocks")
+        print(f"   • Market consensus: {consensus['dominant_regime']} regime")
+        print(f"   • Consensus strength: {consensus['consensus_strength']:.1%}")
+        print(f"   • Average correlation: {correlations['avg_correlation']:.3f}")
         
-        if synchronization_analysis.get('sync_rate'):
-            print(f"   • Regime synchronization rate: {synchronization_analysis['sync_rate']:.1%}")
+        # Top performing sectors
+        sector_performance = {}
+        for group_name, group_data in group_results.items():
+            if group_data:
+                avg_return = np.mean([
+                    results['regime_stats'][results['current_regime']]['mean_return'] 
+                    for results in group_data.values()
+                ])
+                sector_performance[group_name] = avg_return
         
-        print(f"   • Most correlated pair: {correlation_analysis.get('highest_correlation', {}).get('pair', 'N/A')}")
-        print(f"   • Least correlated pair: {correlation_analysis.get('lowest_correlation', {}).get('pair', 'N/A')}")
+        print(f"\n🏆 Sector Performance (by current regime returns):")
+        for sector, performance in sorted(sector_performance.items(), key=lambda x: x[1], reverse=True):
+            print(f"   • {sector}: {performance:.4f}")
         
         return True
         
@@ -213,769 +243,274 @@ def main():
         return False
 
 
-def extract_regime_data(batch_results):
-    """Extract regime data from batch processing results for analysis."""
+def calculate_average_duration(states: np.ndarray, target_state: int) -> float:
+    """Calculate average duration for a specific regime state."""
+    durations = []
+    current_duration = 0
     
-    regime_data = {}
+    for state in states:
+        if state == target_state:
+            current_duration += 1
+        else:
+            if current_duration > 0:
+                durations.append(current_duration)
+                current_duration = 0
     
-    for ticker, analysis in batch_results.items():
-        try:
-            # Extract current regime info
-            current_regime = analysis['current_regime']
-            regime_analysis = analysis['regime_analysis']
-            
-            # Get regime statistics
-            regime_stats = regime_analysis['regime_statistics']['regime_stats']
-            
-            # Store comprehensive regime data
-            regime_data[ticker] = {
-                'current_regime': current_regime['regime'],
-                'confidence': current_regime['confidence'],
-                'days_in_regime': current_regime['days_in_regime'],
-                'regime_stats': regime_stats,
-                'regime_probabilities': regime_analysis.get('regime_probabilities', None),
-                'transition_probabilities': regime_analysis['regime_statistics'].get('transition_probabilities', None),
-                'recent_return': analysis['recent_metrics']['return_20d_annualized'],
-                'recent_volatility': analysis['recent_metrics']['volatility_20d_annualized'],
-                'last_price': analysis['recent_metrics']['last_price'],
-                'data_points': analysis['data_points']
-            }
-            
-        except Exception as e:
-            print(f"   ⚠️ Error extracting regime data for {ticker}: {str(e)}")
-            continue
+    # Don't forget the last duration if it ends with the target state
+    if current_duration > 0:
+        durations.append(current_duration)
     
-    return regime_data
+    return float(np.mean(durations)) if durations else 0.0
 
 
-def calculate_regime_correlations(regime_data):
-    """Calculate cross-stock regime correlations and patterns."""
-    
-    tickers = list(regime_data.keys())
-    n_tickers = len(tickers)
-    
-    # Create correlation matrix
-    correlation_matrix = np.zeros((n_tickers, n_tickers))
-    
-    # Calculate pairwise correlations
+def get_regime_name(results: Dict, regime_id: int) -> str:
+    """Get human-readable regime name."""
+    if regime_id == results['bear_regime']:
+        return "Bear"
+    elif regime_id == results['bull_regime']:
+        return "Bull"
+    elif regime_id == results['sideways_regime']:
+        return "Sideways"
+    else:
+        return f"Regime_{regime_id}"
+
+
+def calculate_regime_correlations(stock_results: Dict) -> Dict:
+    """Calculate regime correlations between all stock pairs."""
+    tickers = list(stock_results.keys())
     correlations = {}
+    correlation_values = []
     
     for i, ticker1 in enumerate(tickers):
-        for j, ticker2 in enumerate(tickers):
-            if i == j:
-                correlation_matrix[i, j] = 1.0
-                continue
+        for ticker2 in tickers[i+1:]:
+            states1 = stock_results[ticker1]['states']
+            states2 = stock_results[ticker2]['states']
             
-            # Simple correlation based on current regime and confidence
-            regime1 = regime_data[ticker1]['current_regime']
-            regime2 = regime_data[ticker2]['current_regime']
-            conf1 = regime_data[ticker1]['confidence']
-            conf2 = regime_data[ticker2]['confidence']
-            
-            # Calculate correlation score
-            if regime1 == regime2:
-                # Same regime - correlation is average of confidences
-                correlation = (conf1 + conf2) / 2
-            else:
-                # Different regimes - negative correlation based on confidence
-                correlation = -min(conf1, conf2) / 2
-            
-            correlation_matrix[i, j] = correlation
-            
-            if i < j:  # Store unique pairs
-                correlations[f"{ticker1}-{ticker2}"] = {
-                    'correlation': correlation,
-                    'ticker1': ticker1,
-                    'ticker2': ticker2,
-                    'regime1': regime1,
-                    'regime2': regime2,
-                    'conf1': conf1,
-                    'conf2': conf2
-                }
-    
-    # Find highest and lowest correlations
-    sorted_correlations = sorted(correlations.items(), key=lambda x: x[1]['correlation'])
-    
-    analysis = {
-        'correlation_matrix': correlation_matrix,
-        'correlation_df': pd.DataFrame(correlation_matrix, index=tickers, columns=tickers),
-        'correlations': correlations,
-        'highest_correlation': {
-            'pair': sorted_correlations[-1][0],
-            'value': sorted_correlations[-1][1]['correlation'],
-            'details': sorted_correlations[-1][1]
-        },
-        'lowest_correlation': {
-            'pair': sorted_correlations[0][0],
-            'value': sorted_correlations[0][1]['correlation'],
-            'details': sorted_correlations[0][1]
-        },
-        'avg_correlation': np.mean([corr['correlation'] for corr in correlations.values()])
-    }
-    
-    return analysis
-
-
-def analyze_regime_synchronization(regime_data, stock_groups):
-    """Analyze regime synchronization patterns across groups."""
-    
-    synchronization_events = []
-    group_sync_rates = {}
-    
-    for group_name, group_info in stock_groups.items():
-        group_tickers = [t for t in group_info['tickers'] if t in regime_data]
-        
-        if len(group_tickers) < 2:
-            continue
-        
-        # Calculate within-group regime synchronization
-        regimes = [regime_data[ticker]['current_regime'] for ticker in group_tickers]
-        confidences = [regime_data[ticker]['confidence'] for ticker in group_tickers]
-        
-        # Check if majority are in same regime
-        regime_counts = {}
-        for regime in regimes:
-            regime_counts[regime] = regime_counts.get(regime, 0) + 1
-        
-        dominant_regime = max(regime_counts.keys(), key=lambda k: regime_counts[k])
-        sync_count = regime_counts[dominant_regime]
-        sync_rate = sync_count / len(group_tickers)
-        
-        group_sync_rates[group_name] = {
-            'sync_rate': sync_rate,
-            'dominant_regime': dominant_regime,
-            'sync_count': sync_count,
-            'total_stocks': len(group_tickers),
-            'avg_confidence': np.mean([regime_data[t]['confidence'] for t in group_tickers if regime_data[t]['current_regime'] == dominant_regime])
-        }
-        
-        # Record significant synchronization events
-        if sync_rate >= 0.6:  # 60% or more in same regime
-            synchronization_events.append({
-                'group': group_name,
-                'regime': dominant_regime,
-                'sync_rate': sync_rate,
-                'tickers': group_tickers,
-                'avg_confidence': group_sync_rates[group_name]['avg_confidence']
-            })
-    
-    # Calculate overall synchronization rate
-    all_regimes = [regime_data[ticker]['current_regime'] for ticker in regime_data.keys()]
-    overall_regime_counts = {}
-    for regime in all_regimes:
-        overall_regime_counts[regime] = overall_regime_counts.get(regime, 0) + 1
-    
-    overall_dominant = max(overall_regime_counts.keys(), key=lambda k: overall_regime_counts[k])
-    overall_sync_rate = overall_regime_counts[overall_dominant] / len(all_regimes)
+            # Align lengths
+            min_len = min(len(states1), len(states2))
+            if min_len > 10:
+                corr = np.corrcoef(states1[:min_len], states2[:min_len])[0, 1]
+                if not np.isnan(corr):
+                    correlations[f"{ticker1}-{ticker2}"] = float(corr)
+                    correlation_values.append(corr)
     
     return {
-        'sync_events': synchronization_events,
-        'group_sync_rates': group_sync_rates,
-        'overall_sync_rate': overall_sync_rate,
-        'overall_dominant_regime': overall_dominant,
-        'sync_rate': overall_sync_rate
+        'pairs': correlations,
+        'avg_correlation': float(np.mean(correlation_values)) if correlation_values else 0.0
     }
 
 
-def create_correlation_heatmap(correlation_analysis, output_dir):
-    """Create regime correlation heatmap visualization."""
+def identify_market_consensus(stock_results: Dict) -> Dict:
+    """Identify market-wide regime consensus."""
+    current_regimes = []
     
-    plt.figure(figsize=(12, 10))
+    for results in stock_results.values():
+        current_regime = results['current_regime']
+        regime_name = get_regime_name(results, current_regime)
+        current_regimes.append(regime_name)
     
-    correlation_df = correlation_analysis['correlation_df']
+    # Count regime occurrences
+    regime_counts = {}
+    for regime in current_regimes:
+        regime_counts[regime] = regime_counts.get(regime, 0) + 1
     
-    # Create heatmap
-    mask = np.triu(np.ones_like(correlation_df.values, dtype=bool), k=1)
+    if regime_counts:
+        dominant_regime = max(regime_counts.items(), key=lambda x: x[1])
+        consensus_strength = dominant_regime[1] / len(current_regimes)
+        
+        return {
+            'dominant_regime': dominant_regime[0],
+            'consensus_strength': consensus_strength,
+            'regime_distribution': regime_counts
+        }
     
-    sns.heatmap(
-        correlation_df.values,
-        annot=True,
-        fmt='.3f',
-        cmap='RdBu_r',
-        center=0,
-        square=True,
-        xticklabels=correlation_df.columns,
-        yticklabels=correlation_df.index,
-        cbar_kws={'label': 'Regime Correlation'},
-        mask=mask
-    )
-    
-    plt.title('Cross-Stock Regime Correlation Matrix', fontsize=16, fontweight='bold', pad=20)
-    plt.xlabel('Stock Ticker', fontsize=12)
-    plt.ylabel('Stock Ticker', fontsize=12)
-    plt.xticks(rotation=45)
-    plt.yticks(rotation=0)
-    
-    plt.tight_layout()
-    
-    chart_path = output_dir / "regime_correlation_heatmap.png"
-    plt.savefig(chart_path, dpi=150, bbox_inches='tight')
-    plt.close()
-    
-    return chart_path
+    return {
+        'dominant_regime': 'Unknown',
+        'consensus_strength': 0.0,
+        'regime_distribution': {}
+    }
 
 
-def create_regime_timeline(regime_data, stock_groups, output_dir):
-    """Create regime timeline visualization."""
+def create_correlation_matrix(correlations: Dict, tickers: List[str]) -> pd.DataFrame:
+    """Create a correlation matrix DataFrame."""
+    n = len(tickers)
+    matrix = np.eye(n)  # Start with identity matrix
     
-    fig, axes = plt.subplots(len(stock_groups), 1, figsize=(16, 3 * len(stock_groups)), sharex=True)
+    for pair, corr in correlations['pairs'].items():
+        ticker1, ticker2 = pair.split('-')
+        if ticker1 in tickers and ticker2 in tickers:
+            i = tickers.index(ticker1)
+            j = tickers.index(ticker2)
+            matrix[i, j] = corr
+            matrix[j, i] = corr  # Symmetric
     
-    if len(stock_groups) == 1:
-        axes = [axes]
-    
-    regime_colors = {0: '#E69F00', 1: '#F0E442', 2: '#0072B2'}  # Bear, Sideways, Bull
-    regime_names = {0: 'Bear', 1: 'Sideways', 2: 'Bull'}
-    
-    for idx, (group_name, group_info) in enumerate(stock_groups.items()):
-        ax = axes[idx]
-        
-        group_tickers = [t for t in group_info['tickers'] if t in regime_data]
-        
-        y_pos = 0
-        for ticker in group_tickers:
-            data = regime_data[ticker]
-            
-            # Create regime bar
-            regime = data['current_regime']
-            confidence = data['confidence']
-            
-            color = regime_colors.get(regime, '#7f7f7f')
-            alpha = 0.3 + 0.7 * confidence  # Vary transparency by confidence
-            
-            ax.barh(y_pos, data['days_in_regime'], left=0, 
-                   color=color, alpha=alpha, height=0.8)
-            
-            # Add ticker label
-            ax.text(-5, y_pos, ticker, ha='right', va='center', fontweight='bold')
-            
-            # Add regime info
-            regime_name = regime_names.get(regime, f'Regime {regime}')
-            ax.text(data['days_in_regime']/2, y_pos, 
-                   f"{regime_name} ({confidence:.1%})", 
-                   ha='center', va='center', fontsize=8)
-            
-            y_pos += 1
-        
-        ax.set_title(f"{group_info['name']} - Current Regime Status", fontweight='bold')
-        ax.set_xlabel('Days in Current Regime')
-        ax.set_ylim(-0.5, len(group_tickers) - 0.5)
-        ax.grid(True, alpha=0.3)
-        ax.set_yticks([])
-    
-    plt.suptitle('Multi-Stock Regime Timeline Analysis', fontsize=16, fontweight='bold')
-    plt.tight_layout()
-    
-    chart_path = output_dir / "regime_timeline.png"
-    plt.savefig(chart_path, dpi=150, bbox_inches='tight')
-    plt.close()
-    
-    return chart_path
+    return pd.DataFrame(matrix, index=tickers, columns=tickers)
 
 
-def create_sector_dashboard(regime_data, stock_groups, batch_results, output_dir):
-    """Create comprehensive sector comparison dashboard."""
+def generate_comparative_report(stock_results: Dict, group_results: Dict, 
+                              correlations: Dict, consensus: Dict) -> str:
+    """Generate comprehensive comparative analysis report."""
     
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    total_stocks = len(stock_results)
     
-    # 1. Regime distribution by group
-    ax1 = axes[0, 0]
-    
-    group_regime_data = {}
-    for group_name, group_info in stock_groups.items():
-        group_tickers = [t for t in group_info['tickers'] if t in regime_data]
-        
-        regime_counts = {0: 0, 1: 0, 2: 0}  # Bear, Sideways, Bull
-        for ticker in group_tickers:
-            regime = regime_data[ticker]['current_regime']
-            regime_counts[regime] += 1
-        
-        group_regime_data[group_name] = regime_counts
-    
-    # Stacked bar chart
-    groups = list(group_regime_data.keys())
-    bear_counts = [group_regime_data[g][0] for g in groups]
-    sideways_counts = [group_regime_data[g][1] for g in groups]
-    bull_counts = [group_regime_data[g][2] for g in groups]
-    
-    x = np.arange(len(groups))
-    width = 0.6
-    
-    ax1.bar(x, bear_counts, width, label='Bear', color='#E69F00', alpha=0.8)
-    ax1.bar(x, sideways_counts, width, bottom=bear_counts, label='Sideways', color='#F0E442', alpha=0.8)
-    ax1.bar(x, bull_counts, width, bottom=[bear_counts[i] + sideways_counts[i] for i in range(len(groups))], 
-           label='Bull', color='#0072B2', alpha=0.8)
-    
-    ax1.set_title('Regime Distribution by Group', fontweight='bold')
-    ax1.set_xlabel('Stock Groups')
-    ax1.set_ylabel('Number of Stocks')
-    ax1.set_xticks(x)
-    ax1.set_xticklabels([name.replace('_', ' ').title() for name in groups], rotation=45)
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
-    
-    # 2. Average confidence by group
-    ax2 = axes[0, 1]
-    
-    group_confidences = {}
-    for group_name, group_info in stock_groups.items():
-        group_tickers = [t for t in group_info['tickers'] if t in regime_data]
-        confidences = [regime_data[t]['confidence'] for t in group_tickers]
-        group_confidences[group_name] = np.mean(confidences) if confidences else 0
-    
-    groups = list(group_confidences.keys())
-    confidences = list(group_confidences.values())
-    
-    bars = ax2.bar(groups, confidences, color='steelblue', alpha=0.7)
-    ax2.set_title('Average Regime Confidence by Group', fontweight='bold')
-    ax2.set_xlabel('Stock Groups')
-    ax2.set_ylabel('Average Confidence')
-    ax2.set_xticklabels([name.replace('_', ' ').title() for name in groups], rotation=45)
-    ax2.grid(True, alpha=0.3)
-    
-    # Add value labels on bars
-    for bar, conf in zip(bars, confidences):
-        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
-                f'{conf:.1%}', ha='center', va='bottom')
-    
-    # 3. Performance vs regime
-    ax3 = axes[1, 0]
-    
-    for group_name, group_info in stock_groups.items():
-        group_tickers = [t for t in group_info['tickers'] if t in regime_data]
-        
-        returns = []
-        regimes = []
-        
-        for ticker in group_tickers:
-            returns.append(regime_data[ticker]['recent_return'])
-            regimes.append(regime_data[ticker]['current_regime'])
-        
-        if returns and regimes:
-            # Scatter plot colored by regime
-            colors = [regime_colors.get(r, '#7f7f7f') for r in regimes]
-            ax3.scatter(regimes, returns, c=colors, alpha=0.7, s=60, 
-                       label=group_info['name'].replace('_', ' ').title())
-    
-    ax3.set_title('Recent Performance by Current Regime', fontweight='bold')
-    ax3.set_xlabel('Current Regime (0=Bear, 1=Sideways, 2=Bull)')
-    ax3.set_ylabel('20-Day Annualized Return')
-    ax3.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    ax3.grid(True, alpha=0.3)
-    
-    # 4. Volatility vs regime
-    ax4 = axes[1, 1]
-    
-    for group_name, group_info in stock_groups.items():
-        group_tickers = [t for t in group_info['tickers'] if t in regime_data]
-        
-        volatilities = []
-        regimes = []
-        
-        for ticker in group_tickers:
-            volatilities.append(regime_data[ticker]['recent_volatility'])
-            regimes.append(regime_data[ticker]['current_regime'])
-        
-        if volatilities and regimes:
-            colors = [regime_colors.get(r, '#7f7f7f') for r in regimes]
-            ax4.scatter(regimes, volatilities, c=colors, alpha=0.7, s=60,
-                       label=group_info['name'].replace('_', ' ').title())
-    
-    ax4.set_title('Recent Volatility by Current Regime', fontweight='bold')
-    ax4.set_xlabel('Current Regime (0=Bear, 1=Sideways, 2=Bull)')
-    ax4.set_ylabel('20-Day Annualized Volatility')
-    ax4.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    ax4.grid(True, alpha=0.3)
-    
-    plt.suptitle('Sector Comparison Dashboard', fontsize=16, fontweight='bold')
-    plt.tight_layout()
-    
-    chart_path = output_dir / "sector_dashboard.png"
-    plt.savefig(chart_path, dpi=150, bbox_inches='tight')
-    plt.close()
-    
-    return chart_path
-
-
-def generate_comparative_study_blog_post(stock_groups, regime_data, correlation_analysis, 
-                                       synchronization_analysis, batch_results):
-    """Generate comprehensive comparative study blog post."""
-    
-    total_stocks = len(regime_data)
-    avg_correlation = correlation_analysis.get('avg_correlation', 0)
-    sync_rate = synchronization_analysis.get('overall_sync_rate', 0)
-    dominant_regime = synchronization_analysis.get('overall_dominant_regime', 0)
-    
-    regime_names = {0: 'Bear', 1: 'Sideways', 2: 'Bull'}
-    dominant_regime_name = regime_names.get(dominant_regime, f'Regime {dominant_regime}')
-    
-    content = f"""# Multi-Stock Regime Analysis: Cross-Sectional Market Intelligence
-*Comparative Study of Regime Behavior Across Sectors and Market Segments*
+    report = f"""# Multi-Stock Regime Analysis Report
+*Comprehensive Cross-Asset Regime Detection and Correlation Study*
 
 ## Executive Summary
 
-We conducted a comprehensive cross-sectional analysis of **{total_stocks} stocks** across **{len(stock_groups)} major market segments** using Hidden Markov Model regime detection. Our analysis reveals significant insights into market synchronization patterns, sector-specific regime behavior, and cross-asset correlation dynamics.
+This report presents a comprehensive regime analysis across **{total_stocks} stocks** using Hidden Markov Model detection. The analysis identifies current market regimes, cross-asset correlations, and sector-based patterns to provide institutional-grade market intelligence.
 
 ### Key Findings
-- **Market Synchronization Rate**: {sync_rate:.1%} of stocks currently in {dominant_regime_name.lower()} regime
-- **Average Cross-Stock Correlation**: {avg_correlation:.3f}
-- **Sector Groups Analyzed**: {len(stock_groups)}
-- **Analysis Period**: Most recent 252 trading days
 
-## Market Segments Overview
+- **Market Consensus**: {consensus['dominant_regime']} regime dominance ({consensus['consensus_strength']:.1%} of stocks)
+- **Average Cross-Correlation**: {correlations['avg_correlation']:.3f}
+- **Analysis Period**: 252 trading days
+- **Regime Detection Method**: 3-state Hidden Markov Model
+
+## Market Overview
+
+### Current Regime Distribution
 
 """
     
-    # Add overview of each stock group
-    for group_name, group_info in stock_groups.items():
-        group_tickers = [t for t in group_info['tickers'] if t in regime_data]
-        
-        if not group_tickers:
-            continue
-        
-        # Calculate group statistics
-        regimes = [regime_data[t]['current_regime'] for t in group_tickers]
-        confidences = [regime_data[t]['confidence'] for t in group_tickers]
-        returns = [regime_data[t]['recent_return'] for t in group_tickers]
-        
-        regime_counts = {0: 0, 1: 0, 2: 0}
-        for regime in regimes:
-            regime_counts[regime] = regime_counts.get(regime, 0) + 1
-        
-        dominant_group_regime = max(regime_counts.keys(), key=lambda k: regime_counts[k])
-        dominant_group_regime_name = regime_names.get(dominant_group_regime, f'Regime {dominant_group_regime}')
-        
-        content += f"""
-### {group_info['name']}
-**Stocks**: {', '.join(group_tickers)}
-
-- **Dominant Regime**: {dominant_group_regime_name} ({regime_counts[dominant_group_regime]}/{len(group_tickers)} stocks)
-- **Average Confidence**: {np.mean(confidences):.1%}
-- **Average 20d Return**: {np.mean(returns):.1%}
-- **Regime Distribution**: {regime_counts[0]} Bear, {regime_counts[1]} Sideways, {regime_counts[2]} Bull
-"""
+    # Add regime distribution
+    for regime, count in consensus['regime_distribution'].items():
+        percentage = count / total_stocks
+        report += f"- **{regime} Regime**: {count} stocks ({percentage:.1%})\n"
     
-    content += f"""
+    report += f"""
 
-## Cross-Stock Correlation Analysis
+### Cross-Asset Correlation Analysis
 
-### Correlation Patterns
+The average regime correlation across all stock pairs is **{correlations['avg_correlation']:.3f}**, indicating {'strong' if abs(correlations['avg_correlation']) > 0.5 else 'moderate' if abs(correlations['avg_correlation']) > 0.3 else 'weak'} regime synchronization across the market.
 
-Our analysis reveals varying degrees of regime correlation across different stock pairs and sectors:
-
-**Overall Statistics**:
-- **Average Correlation**: {avg_correlation:.3f}
-- **Highest Correlation**: {correlation_analysis['highest_correlation']['value']:.3f} ({correlation_analysis['highest_correlation']['pair']})
-- **Lowest Correlation**: {correlation_analysis['lowest_correlation']['value']:.3f} ({correlation_analysis['lowest_correlation']['pair']})
-
-### Key Correlation Insights
-
+**Top Correlated Pairs**:
 """
     
     # Add top correlations
-    sorted_correlations = sorted(correlation_analysis['correlations'].items(), 
-                                key=lambda x: x[1]['correlation'], reverse=True)
+    sorted_pairs = sorted(correlations['pairs'].items(), key=lambda x: abs(x[1]), reverse=True)
+    for pair, corr in sorted_pairs[:5]:
+        report += f"- {pair}: {corr:.3f}\n"
     
-    content += "**Most Correlated Pairs**:\n"
-    for pair, data in sorted_correlations[:5]:
-        content += f"- **{pair}**: {data['correlation']:.3f} (both in {regime_names.get(data['regime1'], 'Unknown')} regime)\n"
-    
-    content += "\n**Least Correlated Pairs**:\n"
-    for pair, data in sorted_correlations[-5:]:
-        ticker1_regime = regime_names.get(data['regime1'], 'Unknown')
-        ticker2_regime = regime_names.get(data['regime2'], 'Unknown')
-        content += f"- **{pair}**: {data['correlation']:.3f} ({ticker1_regime} vs {ticker2_regime})\n"
-    
-    content += f"""
+    report += """
 
-## Regime Synchronization Analysis
-
-### Market-Wide Synchronization
-
-Current market synchronization shows **{sync_rate:.1%}** of analyzed stocks in the same regime ({dominant_regime_name}), indicating {'strong' if sync_rate > 0.6 else 'moderate' if sync_rate > 0.4 else 'weak'} market consensus.
-
-### Sector-Level Synchronization
+## Sector Analysis
 
 """
     
-    # Add sector synchronization details
-    for group_name, sync_data in synchronization_analysis['group_sync_rates'].items():
-        group_info = stock_groups[group_name]
-        sync_rate_group = sync_data['sync_rate']
-        dominant_group_regime = sync_data['dominant_regime']
-        dominant_group_regime_name = regime_names.get(dominant_group_regime, f'Regime {dominant_group_regime}')
+    # Add sector analysis
+    for group_name, group_data in group_results.items():
+        if not group_data:
+            continue
+            
+        report += f"### {group_name}\n\n"
+        report += "| Stock | Current Regime | Mean Return | Volatility | Frequency |\n"
+        report += "|-------|----------------|-------------|------------|-----------|\n"
         
-        content += f"""
-#### {group_info['name']}
-- **Synchronization Rate**: {sync_rate_group:.1%}
-- **Dominant Regime**: {dominant_group_regime_name}
-- **Synchronized Stocks**: {sync_data['sync_count']}/{sync_data['total_stocks']}
-- **Average Confidence**: {sync_data['avg_confidence']:.1%}
+        for ticker, results in group_data.items():
+            current_regime = results['current_regime']
+            regime_name = get_regime_name(results, current_regime)
+            regime_stats = results['regime_stats'][current_regime]
+            
+            report += f"| {ticker} | {regime_name} | {regime_stats['mean_return']:.4f} | "
+            report += f"{regime_stats['volatility']:.4f} | {regime_stats['frequency']:.3f} |\n"
+        
+        # Sector summary
+        sector_regimes = [get_regime_name(results, results['current_regime']) for results in group_data.values()]
+        sector_consensus = max(set(sector_regimes), key=sector_regimes.count)
+        sector_strength = sector_regimes.count(sector_consensus) / len(sector_regimes)
+        
+        report += f"\n**Sector Consensus**: {sector_consensus} ({sector_strength:.1%})\n\n"
+    
+    report += """
+
+## Individual Stock Analysis
+
+### Detailed Stock Performance
+
+| Stock | Current Regime | Mean Return | Volatility | Duration | Data Points |
+|-------|----------------|-------------|------------|----------|-------------|
 """
     
-    content += """
+    # Add individual stock details
+    for ticker, results in sorted(stock_results.items()):
+        current_regime = results['current_regime']
+        regime_name = get_regime_name(results, current_regime)
+        regime_stats = results['regime_stats'][current_regime]
+        duration = regime_stats.get('avg_duration', 0)
+        
+        report += f"| {ticker} | {regime_name} | {regime_stats['mean_return']:.4f} | "
+        report += f"{regime_stats['volatility']:.4f} | {duration:.1f} | {results['data_points']} |\n"
+    
+    report += f"""
+
+## Methodology
+
+### Regime Detection Framework
+
+- **Model**: 3-state Hidden Markov Model with Gaussian emissions
+- **States**: Bear, Sideways, Bull (classified by mean return)
+- **Training**: Maximum Likelihood Estimation via Baum-Welch algorithm
+- **Validation**: Out-of-sample state prediction and likelihood scoring
+
+### Classification Criteria
+
+- **Bear Regime**: Negative mean returns, typically high volatility
+- **Bull Regime**: Positive mean returns, moderate to high volatility  
+- **Sideways Regime**: Near-zero mean returns, typically lower volatility
+
+### Correlation Analysis
+
+Cross-asset regime correlations are calculated using Pearson correlation between regime state sequences, providing insights into market-wide regime synchronization.
 
 ## Investment Implications
 
-### Sector Rotation Opportunities
+### Portfolio Management
 
-Based on current regime patterns, we identify several potential sector rotation opportunities:
+1. **Regime Diversification**: Current {consensus['consensus_strength']:.1%} consensus suggests {'limited' if consensus['consensus_strength'] > 0.7 else 'moderate'} diversification benefits across assets
 
-"""
-    
-    # Generate sector rotation insights
-    for group_name, group_info in stock_groups.items():
-        group_tickers = [t for t in group_info['tickers'] if t in regime_data]
-        
-        if not group_tickers:
-            continue
-        
-        # Analyze group characteristics
-        regimes = [regime_data[t]['current_regime'] for t in group_tickers]
-        confidences = [regime_data[t]['confidence'] for t in group_tickers]
-        returns = [regime_data[t]['recent_return'] for t in group_tickers]
-        
-        avg_regime = np.mean(regimes)
-        avg_confidence = np.mean(confidences)
-        avg_return = np.mean(returns)
-        
-        # Generate recommendation
-        if avg_regime > 1.5 and avg_confidence > 0.7:
-            recommendation = "🟢 **Bullish** - Strong momentum with high confidence"
-        elif avg_regime < 0.5 and avg_confidence > 0.7:
-            recommendation = "🔴 **Bearish** - Defensive positioning recommended"
-        elif avg_confidence < 0.5:
-            recommendation = "🟡 **Uncertain** - Mixed signals, wait for clarity"
-        else:
-            recommendation = "⚪ **Neutral** - Balanced allocation appropriate"
-        
-        content += f"""
-#### {group_info['name']}
-{recommendation}
-- Recent Performance: {avg_return:.1%}
-- Regime Confidence: {avg_confidence:.1%}
-- Suggested Action: {'Overweight' if '🟢' in recommendation else 'Underweight' if '🔴' in recommendation else 'Neutral weight'}
-"""
-    
-    content += f"""
+2. **Sector Rotation**: {'Strong sector differentiation provides rotation opportunities' if len(set(consensus['regime_distribution'].keys())) > 1 else 'Limited sector divergence suggests broad market moves'}
 
-### Risk Management Considerations
+3. **Risk Management**: {'High regime correlation increases systematic risk' if correlations['avg_correlation'] > 0.5 else 'Moderate correlation allows for some risk diversification'}
 
-1. **Diversification Benefits**: Low correlation pairs provide portfolio diversification
-2. **Concentration Risk**: High correlation within sectors increases concentration risk
-3. **Regime Transition Risk**: Monitor for synchronized regime changes across sectors
-4. **Confidence Levels**: Higher confidence regimes offer more reliable signals
+### Trading Strategies
 
-## Market Timing Insights
+- **Consensus Plays**: {consensus['consensus_strength']:.1%} of stocks in {consensus['dominant_regime']} regime suggests directional opportunities
+- **Contrarian Opportunities**: Stocks in minority regimes may offer contrarian value
+- **Regime Momentum**: High correlation ({correlations['avg_correlation']:.3f}) suggests regime changes may cascade across assets
 
-### Current Market Environment
-- **Dominant Regime**: {dominant_regime_name} regime across {sync_rate:.1%} of stocks
-- **Market Consensus**: {'Strong' if sync_rate > 0.6 else 'Moderate' if sync_rate > 0.4 else 'Weak'} directional agreement
-- **Cross-Asset Correlation**: {avg_correlation:.3f} average correlation level
+## Risk Considerations
 
-### Strategic Recommendations
-
-#### For Portfolio Managers
-1. **Sector Allocation**: Adjust weights based on regime synchronization patterns
-2. **Risk Budgeting**: Allocate risk based on correlation and confidence levels
-3. **Rebalancing Timing**: Use regime transitions as rebalancing triggers
-
-#### For Active Traders
-1. **Pair Trading**: Exploit low-correlation opportunities
-2. **Momentum Strategies**: Focus on high-confidence regime stocks
-3. **Contrarian Opportunities**: Target regime transition candidates
-
-## Technical Analysis Integration
-
-### Regime vs Traditional Indicators
-
-Our multi-stock analysis reveals that HMM regime detection provides unique insights not captured by traditional technical indicators:
-
-1. **Cross-Asset Synchronization**: Traditional indicators miss correlation patterns
-2. **Confidence Quantification**: HMM provides probabilistic assessment
-3. **Regime Persistence**: Better timing of trend continuation vs reversal
-4. **Sector Rotation Timing**: Early identification of sector leadership changes
-
-## Methodology and Data Quality
-
-### Analysis Framework
-- **Universe**: {total_stocks} stocks across {len(stock_groups)} market segments
-- **Time Period**: 252 trading days (approximately 1 year)
-- **Model Configuration**: 3-state HMM with automatic initialization
-- **Correlation Method**: Regime-based correlation accounting for confidence levels
-
-### Quality Metrics
-"""
-    
-    # Add data quality metrics
-    avg_data_points = np.mean([regime_data[t]['data_points'] for t in regime_data.keys()])
-    min_data_points = min([regime_data[t]['data_points'] for t in regime_data.keys()])
-    
-    content += f"""
-- **Average Data Points**: {avg_data_points:.0f} per stock
-- **Minimum Data Points**: {min_data_points:.0f} per stock
-- **Success Rate**: {len(regime_data)}/{total_stocks} stocks successfully analyzed
-- **Average Confidence**: {np.mean([regime_data[t]['confidence'] for t in regime_data.keys()]):.1%}
+- **Model Risk**: HMM assumptions may not capture all market dynamics
+- **Parameter Stability**: Regime parameters may shift during market stress
+- **Look-ahead Bias**: Real-time implementation may differ from historical analysis
+- **Transaction Costs**: Regime switching strategies require active management
 
 ## Conclusion
 
-This comprehensive multi-stock regime analysis provides actionable insights for portfolio construction, sector rotation, and market timing strategies. The **{sync_rate:.1%} synchronization rate** and **{avg_correlation:.3f} average correlation** indicate the current market environment offers both consensus opportunities and diversification benefits.
+The multi-stock regime analysis reveals **{consensus['dominant_regime']} regime dominance** across {consensus['consensus_strength']:.1%} of analyzed stocks, with {correlations['avg_correlation']:.3f} average cross-correlation indicating {'synchronized' if abs(correlations['avg_correlation']) > 0.4 else 'partially synchronized'} market behavior.
 
-### Key Takeaways
-
-1. **Market Synchronization**: Current {dominant_regime_name.lower()} regime dominance suggests {'coordinated market movement' if sync_rate > 0.6 else 'mixed market conditions'}
-2. **Sector Opportunities**: Varying regime patterns across sectors create rotation opportunities
-3. **Risk Management**: Correlation patterns inform portfolio diversification strategies
-4. **Timing Signals**: Regime transitions provide early warning for market changes
-
-### Future Analysis
-
-1. **International Extension**: Apply framework to global markets and currencies
-2. **Commodity Integration**: Include commodity regime analysis for inflation hedging
-3. **Fixed Income**: Extend to bond markets for comprehensive asset allocation
-4. **Real-Time Monitoring**: Implement streaming regime detection for live trading
+This analysis provides a quantitative foundation for:
+- Strategic asset allocation decisions
+- Risk management framework development
+- Systematic trading strategy implementation
+- Market timing and regime transition identification
 
 ---
 
-*This analysis demonstrates the power of cross-sectional regime analysis for institutional portfolio management and quantitative trading strategies. For implementation details and live updates, visit [hiddenregime.com](https://hiddenregime.com).*
+*This analysis is for educational and research purposes only. Past performance does not guarantee future results. Please consult with qualified financial advisors before making investment decisions.*
 
-*Disclaimer: This analysis is for educational and research purposes only. Past performance does not guarantee future results. Please consult with qualified financial advisors before making investment decisions.*
+*Generated using Hidden Regime framework - [hiddenregime.com](https://hiddenregime.com)*
 """
     
-    return content
-
-
-def generate_sector_rotation_analysis(regime_data, stock_groups, correlation_analysis):
-    """Generate specialized sector rotation analysis."""
-    
-    content = """# Sector Rotation Strategy Based on Regime Analysis
-
-## Overview
-
-This analysis provides actionable sector rotation insights based on current regime patterns and cross-sector correlations.
-
-## Rotation Signals
-
-"""
-    
-    # Analyze each sector for rotation signals
-    for group_name, group_info in stock_groups.items():
-        group_tickers = [t for t in group_info['tickers'] if t in regime_data]
-        
-        if not group_tickers:
-            continue
-        
-        # Calculate group metrics
-        regimes = [regime_data[t]['current_regime'] for t in group_tickers]
-        confidences = [regime_data[t]['confidence'] for t in group_tickers]
-        days_in_regime = [regime_data[t]['days_in_regime'] for t in group_tickers]
-        
-        avg_regime = np.mean(regimes)
-        avg_confidence = np.mean(confidences)
-        avg_days = np.mean(days_in_regime)
-        
-        # Generate signal
-        if avg_regime > 1.5 and avg_confidence > 0.7 and avg_days < 20:
-            signal = "STRONG BUY"
-            action = "Increase allocation by 2-3%"
-        elif avg_regime > 1.5 and avg_confidence > 0.5:
-            signal = "BUY"
-            action = "Increase allocation by 1-2%"
-        elif avg_regime < 0.5 and avg_confidence > 0.7:
-            signal = "SELL"
-            action = "Reduce allocation by 1-2%"
-        elif avg_confidence < 0.4:
-            signal = "HOLD"
-            action = "Maintain current allocation"
-        else:
-            signal = "NEUTRAL"
-            action = "No allocation change"
-        
-        content += f"""
-### {group_info['name']}
-**Signal**: {signal}
-**Action**: {action}
-**Confidence**: {avg_confidence:.1%}
-**Days in Regime**: {avg_days:.0f}
-"""
-    
-    return content
-
-
-def create_comparative_dataset(regime_data, batch_results):
-    """Create comprehensive dataset for further analysis."""
-    
-    data_rows = []
-    
-    for ticker, regime_info in regime_data.items():
-        row = {
-            'ticker': ticker,
-            'current_regime': regime_info['current_regime'],
-            'confidence': regime_info['confidence'],
-            'days_in_regime': regime_info['days_in_regime'],
-            'recent_return_20d': regime_info['recent_return'],
-            'recent_volatility_20d': regime_info['recent_volatility'],
-            'last_price': regime_info['last_price'],
-            'data_points': regime_info['data_points']
-        }
-        
-        # Add regime statistics
-        for regime_id, stats in regime_info['regime_stats'].items():
-            row[f'regime_{regime_id}_mean_return'] = stats['mean_return']
-            row[f'regime_{regime_id}_volatility'] = stats['volatility']
-            row[f'regime_{regime_id}_frequency'] = stats['frequency']
-            row[f'regime_{regime_id}_avg_duration'] = stats['avg_duration']
-        
-        data_rows.append(row)
-    
-    return pd.DataFrame(data_rows)
-
-
-def calculate_multi_stock_summary(regime_data, correlation_analysis, synchronization_analysis):
-    """Calculate comprehensive summary statistics."""
-    
-    summary = {
-        'total_stocks': len(regime_data),
-        'avg_correlation': correlation_analysis.get('avg_correlation', 0),
-        'sync_rate': synchronization_analysis.get('overall_sync_rate', 0),
-        'dominant_regime': synchronization_analysis.get('overall_dominant_regime', 0),
-        'regime_distribution': {},
-        'confidence_stats': {},
-        'performance_stats': {}
-    }
-    
-    # Regime distribution
-    all_regimes = [regime_data[t]['current_regime'] for t in regime_data.keys()]
-    for regime in set(all_regimes):
-        summary['regime_distribution'][f'regime_{regime}'] = all_regimes.count(regime)
-    
-    # Confidence statistics
-    all_confidences = [regime_data[t]['confidence'] for t in regime_data.keys()]
-    summary['confidence_stats'] = {
-        'mean': float(np.mean(all_confidences)),
-        'std': float(np.std(all_confidences)),
-        'min': float(np.min(all_confidences)),
-        'max': float(np.max(all_confidences))
-    }
-    
-    # Performance statistics
-    all_returns = [regime_data[t]['recent_return'] for t in regime_data.keys()]
-    all_volatilities = [regime_data[t]['recent_volatility'] for t in regime_data.keys()]
-    
-    summary['performance_stats'] = {
-        'avg_return': float(np.mean(all_returns)),
-        'avg_volatility': float(np.mean(all_volatilities)),
-        'return_std': float(np.std(all_returns)),
-        'volatility_std': float(np.std(all_volatilities))
-    }
-    
-    return summary
+    return report
 
 
 if __name__ == "__main__":
     success = main()
     if success:
-        print("\n🎉 Multi-stock comparative study completed successfully!")
-        print("📈 Ready for sector rotation and market timing strategies")
+        print("\n🎉 Multi-stock comparative analysis completed successfully!")
+        print("📊 Ready for institutional review and strategic planning")
     else:
-        print("\n💥 Comparative study failed - check error messages above")
+        print("\n💥 Multi-stock analysis failed - check error messages above")
         sys.exit(1)

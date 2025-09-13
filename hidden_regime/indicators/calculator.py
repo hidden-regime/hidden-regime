@@ -270,9 +270,9 @@ class IndicatorCalculator:
         ).money_flow_index()
         
         # Volume Weighted Average Price (VWAP)
-        indicators['vwap'] = ta.volume.VolumeSMAIndicator(
-            clean_data['close'], clean_data['volume']
-        ).volume_sma()
+        indicators['vwap'] = ta.volume.VolumeWeightedAveragePrice(
+            clean_data['high'], clean_data['low'], clean_data['close'], clean_data['volume']
+        ).volume_weighted_average_price()
         
         # Ease of Movement
         indicators['eom'] = ta.volume.EaseOfMovementIndicator(

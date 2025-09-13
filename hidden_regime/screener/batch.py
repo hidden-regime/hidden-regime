@@ -71,8 +71,7 @@ class BatchHMMProcessor:
                 use_ohlc_average=True,
                 include_volume=True,
                 cache_enabled=True,
-                max_missing_data_pct=0.1,  # Allow some missing data for speed
-                fill_method='forward'
+                max_missing_data_pct=0.1  # Allow some missing data for speed
             )
         else:
             self.data_config = self.config.data_config

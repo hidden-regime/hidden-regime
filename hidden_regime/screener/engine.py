@@ -103,17 +103,20 @@ class MarketScreener:
             print(f"Screening {len(tickers)} stocks using criteria: {criteria.name}")
         
         # Get or perform HMM analysis
-        if not force_reprocess and universe in self._analysis_cache:
+        # Convert universe list to tuple for caching (hashable key)
+        universe_key = tuple(sorted(tickers)) if isinstance(tickers, list) else universe
+        
+        if not force_reprocess and universe_key in self._analysis_cache:
             if self.config.verbose:
                 print("Using cached analysis results...")
-            batch_results = self._analysis_cache[universe]
+            batch_results = self._analysis_cache[universe_key]
         else:
             if self.config.verbose:
                 print("Performing HMM analysis...")
             batch_results = self.batch_processor.process_stock_list(tickers)
             
             if self.cache_results:
-                self._analysis_cache[universe] = batch_results
+                self._analysis_cache[universe_key] = batch_results
         
         # Apply screening criteria
         passed_stocks = {}
