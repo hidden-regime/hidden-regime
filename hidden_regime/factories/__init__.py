@@ -6,10 +6,12 @@ from configuration objects, enabling easy extensibility and consistent
 component instantiation.
 """
 
-from .pipeline import PipelineFactory
-from .components import ComponentFactory
+from .pipeline import PipelineFactory, pipeline_factory
+from .components import ComponentFactory, component_factory
 
 __all__ = [
     "PipelineFactory",
     "ComponentFactory",
+    "pipeline_factory",
+    "component_factory",
 ]

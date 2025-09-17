@@ -1,14 +1,12 @@
 """
-Data loading, preprocessing, and validation module for hidden-regime.
+Data loading components for hidden-regime pipeline.
 
-This module provides functionality for:
-- Loading stock market data from multiple sources
-- Data preprocessing including log returns calculation
-- Data quality validation and anomaly detection
+Provides data loading components that implement the DataComponent interface
+for various data sources including financial market data.
 """
 
-from .loader import DataLoader, DataConfig
-from .preprocessing import DataPreprocessor
-from .validation import DataValidator
+from .financial import FinancialDataLoader
 
-__all__ = ["DataLoader", "DataPreprocessor", "DataValidator"]
+__all__ = [
+    "FinancialDataLoader",
+]
