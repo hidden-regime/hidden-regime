@@ -44,14 +44,11 @@ class RegimeAnalyzer:
                 
             # Calculate log returns (data already has log_return column)
             returns = data['log_return'].dropna()
-            
+
             # Create HMM configuration
-            hmm_config = HMMConfig(
-                n_states=n_states,
-                regime_type='3_state' if n_states == 3 else 'auto',
-                max_iterations=100,
-                tolerance=1e-6,
-                random_seed=42
+            hmm_config = HMMConfig.for_standardized_regimes(
+                regime_type=f'{n_states}_state',
+                conservative=False
             )
             
             # Fit HMM model

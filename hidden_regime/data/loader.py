@@ -222,7 +222,8 @@ class DataLoader:
             result["date"] = raw_data.index
 
         # Calculate log returns
-        result["log_return"] = np.log(result["price"] / result["price"].shift(1))
+        result['returns'] = result["price"] / result["price"].shift(1)
+        result["log_return"] = np.log(result['returns'])
 
         # Add volume if requested and available
         if self.config.include_volume and "Volume" in data.columns:
