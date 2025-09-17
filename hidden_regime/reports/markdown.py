@@ -67,6 +67,11 @@ class MarkdownReportGenerator(ReportComponent):
         if self.config.include_performance_metrics and model_output is not None:
             report_sections.append(self._generate_performance_section(model_output, analysis))
         
+        # Advanced performance analysis (if analysis component supports it)
+        if (self.config.include_performance_metrics and analysis is not None and 
+            hasattr(analysis, 'get_comprehensive_performance_metrics')):
+            report_sections.append(self._generate_advanced_performance_section(analysis))
+        
         # Risk analysis section
         if self.config.include_risk_analysis and analysis is not None:
             report_sections.append(self._generate_risk_analysis_section(analysis))
@@ -220,6 +225,119 @@ class MarkdownReportGenerator(ReportComponent):
             for state, count in state_counts.items():
                 percentage = (count / len(model_output)) * 100
                 section.append(f"| {state} | {count} | {percentage:.1f}% |")
+        
+        return "\n".join(section)
+    
+    def _generate_advanced_performance_section(self, analysis) -> str:
+        """Generate advanced performance analysis section using comprehensive metrics."""
+        section = ["## Advanced Performance Analysis"]
+        
+        try:
+            # Get comprehensive performance metrics
+            if hasattr(analysis, 'get_comprehensive_performance_metrics'):
+                performance_metrics = analysis.get_comprehensive_performance_metrics()
+                
+                if 'error' in performance_metrics:
+                    section.append(f"Performance analysis unavailable: {performance_metrics['error']}")
+                    return "\n".join(section)
+                
+                # Summary section
+                if 'summary' in performance_metrics:
+                    summary = performance_metrics['summary']
+                    section.append("### Performance Summary")
+                    section.append("| Metric | Value |")
+                    section.append("|--------|-------|")
+                    section.append(f"| Overall Quality | {summary.get('overall_quality', 'Unknown')} |")
+                    section.append(f"| Quality Score | {summary.get('quality_score', 0)}/100 |")
+                    section.append(f"| Average Confidence | {summary.get('average_confidence', 0):.1%} |")
+                    section.append(f"| Balance Score | {summary.get('balance_score', 0):.3f} |")
+                    section.append(f"| Stability Rating | {summary.get('stability_rating', 'Unknown')} |")
+                
+                # Regime Distribution
+                if 'regime_distribution' in performance_metrics:
+                    dist = performance_metrics['regime_distribution']
+                    section.append("### Detailed Regime Distribution")
+                    
+                    if 'regime_name_percentages' in dist:
+                        section.append("| Regime | Percentage | Periods |")
+                        section.append("|--------|------------|---------|")
+                        for regime, pct in dist['regime_name_percentages'].items():
+                            count = dist.get('regime_name_counts', {}).get(regime, 0)
+                            section.append(f"| {regime} | {pct:.1f}% | {count} |")
+                    
+                    if 'regime_dominance' in dist:
+                        dominance = dist['regime_dominance']
+                        section.append("#### Regime Balance Analysis")
+                        section.append(f"- **Most Frequent**: {dominance.get('most_frequent_state', 'Unknown')} ({dominance.get('dominance_percentage', 0):.1f}%)")
+                        section.append(f"- **Market Balance**: {'Dominated' if dominance.get('is_dominated', False) else 'Balanced'}")
+                        section.append(f"- **Balance Score**: {dominance.get('balance_score', 0):.3f} (higher = more balanced)")
+                
+                # Transition Analysis
+                if 'transition_analysis' in performance_metrics:
+                    trans = performance_metrics['transition_analysis']
+                    section.append("### Regime Transition Analysis")
+                    section.append(f"- **Total Transitions**: {trans.get('total_transitions', 0)}")
+                    section.append(f"- **Transition Rate**: {trans.get('transition_rate', 0):.1%} per period")
+                    section.append(f"- **Average Persistence**: {trans.get('average_persistence', 0):.1%}")
+                    section.append(f"- **Stability Score**: {trans.get('stability_score', 0):.3f}")
+                    
+                    if 'persistence_by_state' in trans:
+                        section.append("#### Regime Persistence")
+                        section.append("| State | Persistence |")
+                        section.append("|-------|-------------|")
+                        for state, persistence in trans['persistence_by_state'].items():
+                            section.append(f"| {state} | {persistence:.1%} |")
+                
+                # Duration Analysis
+                if 'duration_analysis' in performance_metrics:
+                    duration = performance_metrics['duration_analysis']
+                    section.append("### Regime Duration Analysis")
+                    
+                    if 'duration_stats_by_state' in duration:
+                        section.append("| State | Avg Duration | Episodes | Time Share |")
+                        section.append("|-------|-------------|----------|------------|")
+                        for state, stats in duration['duration_stats_by_state'].items():
+                            section.append(f"| {state} | {stats['mean_duration']:.1f} | {stats['count']} | {stats['percentage_of_time']:.1f}% |")
+                    
+                    overall = duration.get('overall_duration_stats', {})
+                    section.append("#### Overall Duration Statistics")
+                    section.append(f"- **Mean Episode Duration**: {overall.get('mean', 0):.1f} periods")
+                    section.append(f"- **Median Episode Duration**: {overall.get('median', 0):.1f} periods")
+                    section.append(f"- **Longest Episode**: {overall.get('max', 0)} periods")
+                
+                # Confidence Analysis
+                if 'confidence_analysis' in performance_metrics:
+                    conf = performance_metrics['confidence_analysis']
+                    section.append("### Model Confidence Analysis")
+                    
+                    if 'confidence_quality' in conf:
+                        quality = conf['confidence_quality']
+                        section.append("| Confidence Level | Percentage |")
+                        section.append("|------------------|------------|")
+                        section.append(f"| High (>70%) | {quality.get('high_confidence_pct', 0):.1f}% |")
+                        section.append(f"| Medium (50-70%) | {quality.get('medium_confidence_pct', 0):.1f}% |")
+                        section.append(f"| Low (<50%) | {quality.get('low_confidence_pct', 0):.1f}% |")
+                        section.append(f"- **Confidence Stability**: {quality.get('confidence_stability', 0):.3f}")
+                
+                # Return Performance (if available)
+                if 'regime_performance' in performance_metrics:
+                    perf = performance_metrics['regime_performance']
+                    if 'regime_performance' in perf:
+                        section.append("### Return Performance by Regime")
+                        section.append("| Regime | Avg Return | Volatility | Sharpe | Win Rate |")
+                        section.append("|--------|------------|------------|--------|----------|")
+                        for state, stats in perf['regime_performance'].items():
+                            section.append(f"| {state} | {stats['mean_return']:.2%} | {stats['std_return']:.2%} | {stats['sharpe_ratio']:.2f} | {stats['positive_days_pct']:.1f}% |")
+                        
+                        if 'performance_summary' in perf:
+                            summary = perf['performance_summary']
+                            section.append("#### Performance Highlights")
+                            section.append(f"- **Best Performer**: {summary.get('best_performing_regime', 'Unknown')}")
+                            section.append(f"- **Most Volatile**: {summary.get('most_volatile_regime', 'Unknown')}")
+                            section.append(f"- **Least Volatile**: {summary.get('least_volatile_regime', 'Unknown')}")
+                
+        except Exception as e:
+            section.append(f"Advanced performance analysis failed: {str(e)}")
         
         return "\n".join(section)
     

@@ -21,6 +21,14 @@ from .indicators import (
     plot_indicator_performance_dashboard,
     plot_price_with_regimes_and_indicators,
 )
+from .advanced_plots import (
+    RegimePlotter,
+    PerformancePlotter,
+    ComparisonPlotter,
+    InteractivePlotter,
+    create_regime_timeline_plot,
+    create_multi_asset_regime_comparison,
+)
 
 __all__ = [
     # Core plotting functions
@@ -36,4 +44,12 @@ __all__ = [
     "plot_hmm_vs_indicators_comparison",
     "plot_indicator_performance_dashboard",
     "create_regime_transition_visualization",
+    # Advanced plotting classes
+    "RegimePlotter",
+    "PerformancePlotter",
+    "ComparisonPlotter", 
+    "InteractivePlotter",
+    # Utility plotting functions
+    "create_regime_timeline_plot",
+    "create_multi_asset_regime_comparison",
 ]

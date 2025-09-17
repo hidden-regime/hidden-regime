@@ -5,14 +5,28 @@ Provides FinancialAnalysis that implements AnalysisComponent interface for
 interpreting HMM regime predictions in financial context with domain knowledge.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import warnings
 
 from ..pipeline.interfaces import AnalysisComponent
 from ..config.analysis import FinancialAnalysisConfig
 from ..utils.exceptions import ValidationError
+from .performance import RegimePerformanceAnalyzer
+
+# Try to import technical indicators
+try:
+    from ..indicators import (
+        IndicatorCalculator,
+        calculate_all_indicators,
+        compare_hmm_vs_indicators
+    )
+    INDICATORS_AVAILABLE = True
+except ImportError:
+    INDICATORS_AVAILABLE = False
+    warnings.warn("Technical indicators not available - indicator comparisons disabled")
 
 
 class FinancialAnalysis(AnalysisComponent):
@@ -33,19 +47,32 @@ class FinancialAnalysis(AnalysisComponent):
         self.config = config
         self._last_model_output = None
         self._last_analysis = None
+        self._last_raw_data = None
         
         # Get regime labels
         self.regime_labels = config.get_default_regime_labels()
         
         # Cache for computed statistics
         self._regime_stats_cache = {}
+        
+        # Initialize indicator calculator if available
+        if INDICATORS_AVAILABLE and self.config.indicator_comparisons:
+            self.indicator_calculator = IndicatorCalculator()
+            self._indicators_cache = {}
+        else:
+            self.indicator_calculator = None
+            self._indicators_cache = {}
+        
+        # Initialize performance analyzer
+        self.performance_analyzer = RegimePerformanceAnalyzer()
     
-    def update(self, model_output: pd.DataFrame) -> pd.DataFrame:
+    def update(self, model_output: pd.DataFrame, raw_data: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """
         Interpret model output and add domain knowledge.
         
         Args:
             model_output: Raw model predictions with predicted_state and confidence
+            raw_data: Optional raw OHLCV data for indicator calculations
             
         Returns:
             DataFrame with interpreted analysis results
@@ -59,8 +86,9 @@ class FinancialAnalysis(AnalysisComponent):
         if missing_cols:
             raise ValidationError(f"Required columns missing from model output: {missing_cols}")
         
-        # Store reference for plotting
+        # Store references for plotting and indicator calculations
         self._last_model_output = model_output.copy()
+        self._last_raw_data = raw_data.copy() if raw_data is not None else None
         
         # Start with model output
         analysis = model_output.copy()
@@ -83,6 +111,12 @@ class FinancialAnalysis(AnalysisComponent):
         # Add volatility analysis if requested
         if self.config.include_volatility_analysis:
             analysis = self._add_volatility_analysis(analysis)
+        
+        # Add indicator comparisons if requested and available
+        if (self.config.include_indicator_performance and 
+            self.config.indicator_comparisons and 
+            raw_data is not None):
+            analysis = self._add_indicator_comparisons(analysis, raw_data)
         
         # Add trading signals if requested
         if self.config.include_trading_signals:
@@ -211,6 +245,190 @@ class FinancialAnalysis(AnalysisComponent):
             analysis['volatility_vs_expected'] = 0.0  # Placeholder
         
         return analysis
+    
+    def _add_indicator_comparisons(self, analysis: pd.DataFrame, raw_data: pd.DataFrame) -> pd.DataFrame:
+        """Add technical indicator comparisons."""
+        if not INDICATORS_AVAILABLE or not self.indicator_calculator:
+            return analysis
+        
+        try:
+            # Calculate indicators for the specified comparisons
+            for indicator_name in self.config.indicator_comparisons:
+                indicator_values = self._calculate_single_indicator(indicator_name, raw_data)
+                
+                if indicator_values is not None and len(indicator_values) == len(analysis):
+                    # Add indicator values
+                    analysis[f'{indicator_name}_value'] = indicator_values
+                    
+                    # Add indicator signals (simplified)
+                    analysis[f'{indicator_name}_signal'] = self._get_indicator_signal(
+                        indicator_name, indicator_values
+                    )
+                    
+                    # Add regime vs indicator agreement
+                    analysis[f'{indicator_name}_agreement'] = self._calculate_regime_indicator_agreement(
+                        analysis['predicted_state'], analysis[f'{indicator_name}_signal']
+                    )
+            
+            # Add overall indicator consensus if multiple indicators
+            if len(self.config.indicator_comparisons) > 1:
+                signal_cols = [f'{ind}_signal' for ind in self.config.indicator_comparisons 
+                              if f'{ind}_signal' in analysis.columns]
+                if signal_cols:
+                    analysis['indicator_consensus'] = analysis[signal_cols].mean(axis=1)
+                    analysis['regime_consensus_agreement'] = self._calculate_regime_consensus_agreement(
+                        analysis['predicted_state'], analysis['indicator_consensus']
+                    )
+        
+        except Exception as e:
+            warnings.warn(f"Indicator comparison failed: {e}")
+        
+        return analysis
+    
+    def _calculate_single_indicator(self, indicator_name: str, raw_data: pd.DataFrame) -> Optional[pd.Series]:
+        """Calculate a single technical indicator."""
+        try:
+            # Simple implementations for common indicators
+            if indicator_name.lower() == 'rsi':
+                if 'close' in raw_data.columns:
+                    return self._calculate_rsi(raw_data['close'])
+            elif indicator_name.lower() == 'macd':
+                if 'close' in raw_data.columns:
+                    return self._calculate_macd_signal(raw_data['close'])
+            elif indicator_name.lower() == 'bollinger_bands':
+                if 'close' in raw_data.columns:
+                    return self._calculate_bollinger_position(raw_data['close'])
+            elif indicator_name.lower() == 'moving_average':
+                if 'close' in raw_data.columns:
+                    return self._calculate_ma_signal(raw_data['close'])
+            
+            # Fallback: try to use full indicators calculator if available
+            if hasattr(self.indicator_calculator, 'calculate_all_indicators'):
+                indicators = self.indicator_calculator.calculate_all_indicators(raw_data)
+                if indicator_name in indicators.columns:
+                    return indicators[indicator_name]
+        
+        except Exception as e:
+            warnings.warn(f"Failed to calculate {indicator_name}: {e}")
+        
+        return None
+    
+    def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
+        """Calculate RSI indicator."""
+        delta = prices.diff()
+        gains = delta.where(delta > 0, 0)
+        losses = -delta.where(delta < 0, 0)
+        
+        avg_gains = gains.rolling(window=period).mean()
+        avg_losses = losses.rolling(window=period).mean()
+        
+        rs = avg_gains / avg_losses
+        rsi = 100 - (100 / (1 + rs))
+        
+        return rsi
+    
+    def _calculate_macd_signal(self, prices: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.Series:
+        """Calculate MACD signal line."""
+        ema_fast = prices.ewm(span=fast).mean()
+        ema_slow = prices.ewm(span=slow).mean()
+        macd_line = ema_fast - ema_slow
+        signal_line = macd_line.ewm(span=signal).mean()
+        return macd_line - signal_line  # MACD histogram
+    
+    def _calculate_bollinger_position(self, prices: pd.Series, period: int = 20, std_dev: float = 2) -> pd.Series:
+        """Calculate position within Bollinger Bands."""
+        sma = prices.rolling(window=period).mean()
+        std = prices.rolling(window=period).std()
+        upper_band = sma + (std * std_dev)
+        lower_band = sma - (std * std_dev)
+        return (prices - lower_band) / (upper_band - lower_band)
+    
+    def _calculate_ma_signal(self, prices: pd.Series, period: int = 20) -> pd.Series:
+        """Calculate moving average signal."""
+        ma = prices.rolling(window=period).mean()
+        return (prices - ma) / ma  # Relative position to MA
+    
+    def _get_indicator_signal(self, indicator_name: str, values: pd.Series) -> pd.Series:
+        """Convert indicator values to standardized signals (-1 to 1)."""
+        if indicator_name.lower() == 'rsi':
+            # RSI: >70 overbought (sell), <30 oversold (buy)
+            signals = np.where(values > 70, -1, np.where(values < 30, 1, 0))
+            return pd.Series(signals, index=values.index)
+        elif indicator_name.lower() == 'macd':
+            # MACD: positive = bullish, negative = bearish
+            return np.sign(values)
+        elif indicator_name.lower() == 'bollinger_bands':
+            # Bollinger position: >1 above upper band, <0 below lower band
+            signals = np.where(values > 1, -1, np.where(values < 0, 1, 0))
+            return pd.Series(signals, index=values.index)
+        elif indicator_name.lower() == 'moving_average':
+            # MA signal: positive = above MA (bullish), negative = below MA (bearish)
+            return np.sign(values)
+        else:
+            # Default: standardize to -1, 1 range
+            return np.sign(values - values.median())
+    
+    def _calculate_regime_indicator_agreement(self, regime_states: pd.Series, indicator_signals: pd.Series) -> pd.Series:
+        """Calculate agreement between regime and indicator signals."""
+        # Convert regime states to signals (simplified)
+        if self.config.n_states == 3:
+            # 0=Bear(-1), 1=Sideways(0), 2=Bull(+1)
+            regime_signals = regime_states.map({0: -1, 1: 0, 2: 1})
+        elif self.config.n_states == 4:
+            # 0=Crisis(-1), 1=Bear(-1), 2=Sideways(0), 3=Bull(+1)
+            regime_signals = regime_states.map({0: -1, 1: -1, 2: 0, 3: 1})
+        else:
+            # Default mapping
+            regime_signals = regime_states - (self.config.n_states // 2)
+        
+        # Calculate agreement as correlation
+        agreement = []
+        window = 20  # Rolling window for agreement calculation
+        
+        for i in range(len(regime_signals)):
+            if i < window:
+                agreement.append(0.0)  # Not enough data
+            else:
+                regime_window = regime_signals.iloc[i-window:i]
+                indicator_window = indicator_signals.iloc[i-window:i]
+                
+                # Calculate correlation
+                try:
+                    corr = regime_window.corr(indicator_window)
+                    agreement.append(corr if not pd.isna(corr) else 0.0)
+                except:
+                    agreement.append(0.0)
+        
+        return pd.Series(agreement, index=regime_signals.index)
+    
+    def _calculate_regime_consensus_agreement(self, regime_states: pd.Series, consensus: pd.Series) -> pd.Series:
+        """Calculate agreement between regime and indicator consensus."""
+        # Similar to single indicator but using consensus signal
+        if self.config.n_states == 3:
+            regime_signals = regime_states.map({0: -1, 1: 0, 2: 1})
+        elif self.config.n_states == 4:
+            regime_signals = regime_states.map({0: -1, 1: -1, 2: 0, 3: 1})
+        else:
+            regime_signals = regime_states - (self.config.n_states // 2)
+        
+        # Calculate rolling correlation
+        agreement = []
+        window = 20
+        
+        for i in range(len(regime_signals)):
+            if i < window:
+                agreement.append(0.0)
+            else:
+                regime_window = regime_signals.iloc[i-window:i]
+                consensus_window = consensus.iloc[i-window:i]
+                
+                try:
+                    corr = regime_window.corr(consensus_window)
+                    agreement.append(corr if not pd.isna(corr) else 0.0)
+                except:
+                    agreement.append(0.0)
+        
+        return pd.Series(agreement, index=regime_signals.index)
     
     def _add_trading_signals(self, analysis: pd.DataFrame) -> pd.DataFrame:
         """Add trading signals based on regime analysis."""
@@ -376,3 +594,47 @@ class FinancialAnalysis(AnalysisComponent):
             summary['signal_strength'] = float(current.get('signal_strength', 0))
         
         return summary
+    
+    def get_comprehensive_performance_metrics(self) -> Dict[str, Any]:
+        """
+        Get comprehensive performance analysis using RegimePerformanceAnalyzer.
+        
+        Returns:
+            Dictionary with detailed performance metrics and analysis
+        """
+        if self._last_analysis is None:
+            return {"status": "No analysis available"}
+        
+        try:
+            # Get comprehensive performance analysis
+            performance_metrics = self.performance_analyzer.analyze_regime_performance(
+                analysis_results=self._last_analysis,
+                raw_data=self._last_raw_data
+            )
+            
+            return performance_metrics
+            
+        except Exception as e:
+            return {"error": f"Performance analysis failed: {str(e)}"}
+    
+    def get_regime_transition_matrix(self) -> Optional[Dict[str, Any]]:
+        """Get regime transition matrix and statistics."""
+        if self._last_analysis is None:
+            return None
+        
+        try:
+            performance_metrics = self.get_comprehensive_performance_metrics()
+            return performance_metrics.get('transition_analysis', {})
+        except Exception:
+            return None
+    
+    def get_regime_duration_statistics(self) -> Optional[Dict[str, Any]]:
+        """Get regime duration statistics."""
+        if self._last_analysis is None:
+            return None
+        
+        try:
+            performance_metrics = self.get_comprehensive_performance_metrics()
+            return performance_metrics.get('duration_analysis', {})
+        except Exception:
+            return None
