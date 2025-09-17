@@ -1,10 +1,37 @@
 """
-Configuration management for hidden-regime package.
+Configuration system for hidden-regime pipeline components.
 
-Provides settings and configuration classes for data loading,
-preprocessing, and validation parameters.
+Provides configuration classes for all pipeline components with validation,
+serialization, and factory pattern support for creating configured components.
 """
 
-from .settings import DataConfig, PreprocessingConfig, ValidationConfig
+from .base import BaseConfig
+from .data import DataConfig, FinancialDataConfig
+from .observation import ObservationConfig, FinancialObservationConfig
+from .model import ModelConfig, HMMConfig
+from .analysis import AnalysisConfig, FinancialAnalysisConfig
+from .report import ReportConfig
 
-__all__ = ["DataConfig", "ValidationConfig", "PreprocessingConfig"]
+__all__ = [
+    # Base configuration
+    "BaseConfig",
+    
+    # Data configurations
+    "DataConfig",
+    "FinancialDataConfig",
+    
+    # Observation configurations
+    "ObservationConfig", 
+    "FinancialObservationConfig",
+    
+    # Model configurations
+    "ModelConfig",
+    "HMMConfig",
+    
+    # Analysis configurations
+    "AnalysisConfig",
+    "FinancialAnalysisConfig",
+    
+    # Report configurations
+    "ReportConfig",
+]
