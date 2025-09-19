@@ -43,15 +43,16 @@ class TestFinancialDataLoader:
         assert loader.config.start_date == "2023-01-01"
         assert loader.config.end_date == "2023-12-31"
     
-    @patch('yfinance.Ticker')
+    @patch('hidden_regime.data.financial.yf.Ticker')
     def test_successful_data_loading(self, mock_ticker_class):
         """Test successful data loading from yfinance."""
         # Mock yfinance response
         mock_ticker = Mock()
         mock_ticker_class.return_value = mock_ticker
         
-        # Create sample OHLCV data
+        # Create sample OHLCV data (must have 10+ observations for validation)
         dates = pd.date_range('2023-01-01', periods=30, freq='D')
+        np.random.seed(42)  # For reproducible tests
         sample_data = pd.DataFrame({
             'Open': np.random.uniform(100, 110, 30),
             'High': np.random.uniform(110, 120, 30),
@@ -84,13 +85,14 @@ class TestFinancialDataLoader:
         mock_ticker_class.assert_called_once_with("AAPL")
         mock_ticker.history.assert_called_once()
     
-    @patch('yfinance.Ticker')
+    @patch('hidden_regime.data.financial.yf.Ticker')
     def test_get_all_data(self, mock_ticker_class):
         """Test get_all_data method."""
         mock_ticker = Mock()
         mock_ticker_class.return_value = mock_ticker
         
         dates = pd.date_range('2023-01-01', periods=20, freq='D')
+        np.random.seed(42)  # For reproducible tests
         sample_data = pd.DataFrame({
             'Open': np.random.uniform(100, 110, 20),
             'High': np.random.uniform(110, 120, 20),
@@ -110,7 +112,7 @@ class TestFinancialDataLoader:
         assert not result.empty
         assert len(result) == 20
     
-    @patch('yfinance.Ticker')
+    @patch('hidden_regime.data.financial.yf.Ticker')
     def test_empty_data_handling(self, mock_ticker_class):
         """Test handling of empty data from yfinance."""
         mock_ticker = Mock()
@@ -120,13 +122,13 @@ class TestFinancialDataLoader:
         config = FinancialDataConfig(ticker="INVALID")
         loader = FinancialDataLoader(config)
         
-        result = loader.update()
+        # Should raise DataLoadError due to empty data
+        with pytest.raises(Exception) as exc_info:
+            loader.update()
         
-        # Should return empty DataFrame rather than crash
-        assert isinstance(result, pd.DataFrame)
-        assert result.empty
+        assert "No data loaded" in str(exc_info.value) or "No data found" in str(exc_info.value)
     
-    @patch('yfinance.Ticker')
+    @patch('hidden_regime.data.financial.yf.Ticker')
     def test_yfinance_error_handling(self, mock_ticker_class):
         """Test handling of yfinance errors."""
         mock_ticker = Mock()
@@ -136,26 +138,27 @@ class TestFinancialDataLoader:
         config = FinancialDataConfig(ticker="AAPL")
         loader = FinancialDataLoader(config)
         
-        # Should handle the exception gracefully
-        result = loader.update()
-        assert isinstance(result, pd.DataFrame)
-        assert result.empty
+        # Should raise DataLoadError due to yfinance exception
+        with pytest.raises(Exception) as exc_info:
+            loader.update()
+        
+        assert "Network error" in str(exc_info.value) or "Failed to load data" in str(exc_info.value)
     
-    @patch('yfinance.Ticker')
+    @patch('hidden_regime.data.financial.yf.Ticker')
     def test_data_column_standardization(self, mock_ticker_class):
         """Test that column names are standardized to lowercase."""
         mock_ticker = Mock()
         mock_ticker_class.return_value = mock_ticker
         
         # Create data with uppercase column names (as yfinance returns)
-        dates = pd.date_range('2023-01-01', periods=10, freq='D')
+        dates = pd.date_range('2023-01-01', periods=15, freq='D')  # 15 > 10 for validation
         sample_data = pd.DataFrame({
-            'Open': [100, 101, 102, 103, 104, 105, 106, 107, 108, 109],
-            'High': [105, 106, 107, 108, 109, 110, 111, 112, 113, 114],
-            'Low': [95, 96, 97, 98, 99, 100, 101, 102, 103, 104],
-            'Close': [102, 103, 104, 105, 106, 107, 108, 109, 110, 111],
-            'Volume': [1000000] * 10,
-            'Adj Close': [102, 103, 104, 105, 106, 107, 108, 109, 110, 111]  # Extra column
+            'Open': [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114],
+            'High': [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119],
+            'Low': [95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109],
+            'Close': [102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116],
+            'Volume': [1000000] * 15,
+            'Adj Close': [102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]  # Extra column
         }, index=dates)
         
         mock_ticker.history.return_value = sample_data
@@ -175,7 +178,7 @@ class TestFinancialDataLoader:
         uppercase_columns = {'Open', 'High', 'Low', 'Close', 'Volume'}
         assert not uppercase_columns.intersection(result_columns)
     
-    @patch('yfinance.Ticker') 
+    @patch('hidden_regime.data.financial.yf.Ticker') 
     def test_current_date_parameter(self, mock_ticker_class):
         """Test update method with current_date parameter."""
         mock_ticker = Mock()
@@ -223,7 +226,7 @@ class TestFinancialDataLoader:
         # Clean up
         plt.close(fig)
     
-    @patch('yfinance.Ticker')
+    @patch('hidden_regime.data.financial.yf.Ticker')
     def test_plot_method_with_data(self, mock_ticker_class):
         """Test plot method with actual data."""
         mock_ticker = Mock()
@@ -277,7 +280,7 @@ class TestFinancialDataLoader:
             invalid_config = FinancialDataConfig(ticker="")
             invalid_config.validate()
     
-    @patch('yfinance.Ticker')
+    @patch('hidden_regime.data.financial.yf.Ticker')
     def test_data_quality_basic_checks(self, mock_ticker_class):
         """Test basic data quality checks."""
         mock_ticker = Mock()
@@ -305,7 +308,7 @@ class TestFinancialDataLoader:
         assert not result.empty
         assert len(result) == 10
     
-    @patch('yfinance.Ticker')
+    @patch('hidden_regime.data.financial.yf.Ticker')
     def test_multiple_updates(self, mock_ticker_class):
         """Test multiple update calls."""
         mock_ticker = Mock()
@@ -367,7 +370,7 @@ class TestFinancialDataLoader:
 class TestFinancialDataLoaderEdgeCases:
     """Test edge cases and error conditions for FinancialDataLoader."""
     
-    @patch('yfinance.Ticker')
+    @patch('hidden_regime.data.financial.yf.Ticker')
     def test_malformed_ticker_response(self, mock_ticker_class):
         """Test handling of malformed ticker response."""
         mock_ticker = Mock()
@@ -385,7 +388,7 @@ class TestFinancialDataLoaderEdgeCases:
         assert isinstance(result, pd.DataFrame)
         # May be empty or have processed the data somehow
     
-    @patch('yfinance.Ticker')
+    @patch('hidden_regime.data.financial.yf.Ticker')
     def test_partial_data_columns(self, mock_ticker_class):
         """Test handling of partial data columns."""
         mock_ticker = Mock()
@@ -411,7 +414,7 @@ class TestFinancialDataLoaderEdgeCases:
         assert 'close' in result.columns
         # May or may not have other columns depending on implementation
     
-    @patch('yfinance.Ticker')
+    @patch('hidden_regime.data.financial.yf.Ticker')
     def test_extremely_large_dataset(self, mock_ticker_class):
         """Test handling of very large datasets."""
         mock_ticker = Mock()
@@ -438,7 +441,7 @@ class TestFinancialDataLoaderEdgeCases:
         assert len(result) == 1000
         assert not result.empty
     
-    @patch('yfinance.Ticker')
+    @patch('hidden_regime.data.financial.yf.Ticker')
     def test_data_with_timezone_index(self, mock_ticker_class):
         """Test handling of data with timezone-aware index."""
         mock_ticker = Mock()
@@ -485,7 +488,7 @@ class TestFinancialDataLoaderEdgeCases:
         loader = FinancialDataLoader(future_config)
         assert loader.config.start_date == "2030-01-01"
     
-    @patch('yfinance.Ticker')
+    @patch('hidden_regime.data.financial.yf.Ticker')
     def test_concurrent_access(self, mock_ticker_class):
         """Test concurrent access to the same loader."""
         import threading

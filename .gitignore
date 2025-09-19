@@ -101,12 +101,14 @@ TODOS.md
 *.pkl
 *.h5
 examples/output/**
-output/**
 
 # Model outputs
 checkpoints/
 results/
 *.png
+**/*_report_*.md
+**/*_report.md
+**/*_analysis_*.md
 
 # Pip
 requirements.txt
