@@ -227,9 +227,11 @@ def main():
         analysis=analysis_results
     )
     
-    # Save report
+    # Save report to output directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_filename = f"advanced_analysis_report_{ticker}_{timestamp}.md"
+    output_dir = os.path.join(os.path.dirname(__file__), '..', 'output')
+    os.makedirs(os.path.join(output_dir, 'reports'), exist_ok=True)
+    report_filename = os.path.join(output_dir, 'reports', f"advanced_analysis_report_{ticker}_{timestamp}.md")
     
     with open(report_filename, 'w') as f:
         f.write(full_report)
@@ -267,7 +269,8 @@ def main():
         ax2.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plot_filename = f'basic_analysis_{ticker}_{timestamp}.png'
+        os.makedirs(os.path.join(output_dir, 'plots'), exist_ok=True)
+        plot_filename = os.path.join(output_dir, 'plots', f'basic_analysis_{ticker}_{timestamp}.png')
         fig.savefig(plot_filename, dpi=300, bbox_inches='tight')
         plt.close(fig)
         

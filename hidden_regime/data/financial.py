@@ -181,43 +181,33 @@ class FinancialDataLoader(DataComponent):
     
     def _process_raw_data(self, raw_data: pd.DataFrame) -> pd.DataFrame:
         """Process raw yfinance data into standardized format."""
-        result = pd.DataFrame()
-        
-        # Reset index to make date a column if needed
+        # Start with a copy to preserve the original data structure
         if isinstance(raw_data.index, pd.DatetimeIndex):
             data = raw_data.reset_index()
         else:
             data = raw_data.copy()
         
-        # Ensure we have the date column
-        if "Date" in data.columns:
-            result.index = pd.to_datetime(data["Date"])
-        elif "index" in data.columns:
-            result.index = pd.to_datetime(data["index"])
-        else:
-            result.index = raw_data.index
+        # Create result DataFrame with proper index
+        result = pd.DataFrame(index=raw_data.index)
         
         # Add standard OHLCV columns
         if "Open" in data.columns:
-            result["open"] = data["Open"]
+            result["open"] = data["Open"].values
         if "High" in data.columns:
-            result["high"] = data["High"]
+            result["high"] = data["High"].values
         if "Low" in data.columns:
-            result["low"] = data["Low"]
+            result["low"] = data["Low"].values
         if "Close" in data.columns:
-            result["close"] = data["Close"]
+            result["close"] = data["Close"].values
         if "Volume" in data.columns:
-            result["volume"] = data["Volume"]
+            result["volume"] = data["Volume"].values
         
         # Calculate price based on preference (for backward compatibility)
-        if all(col in data.columns for col in ["Open", "High", "Low", "Close"]):
-            # Use OHLC average or close based on configuration (defaulting to close)
-            result["price"] = data["Close"]  # Default to close for simplicity
-        else:
-            result["price"] = data["Close"]
+        if "Close" in data.columns:
+            result["price"] = data["Close"].values
         
         # Remove any rows with missing essential data
-        result = result.dropna(subset=["price"]).reset_index(drop=False)
+        result = result.dropna(subset=["price"])
         
         return result
     

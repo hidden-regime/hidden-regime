@@ -109,6 +109,8 @@ results/
 **/*_report_*.md
 **/*_report.md
 **/*_analysis_*.md
+output/*.md
+output/*.png
 
 # Pip
 requirements.txt

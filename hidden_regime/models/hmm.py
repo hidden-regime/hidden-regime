@@ -87,7 +87,11 @@ class HiddenMarkovModel(ModelComponent):
         if self.config.observed_signal not in observations.columns:
             raise ValueError(f"Observed signal '{self.config.observed_signal}' not found in observations")
         
-        returns = observations[self.config.observed_signal].values
+        # Clean data - remove NaN values
+        clean_observations = observations.dropna(subset=[self.config.observed_signal])
+        returns = clean_observations[self.config.observed_signal].values
+        
+        print(f"Training on {len(returns)} observations (removed {len(observations) - len(returns)} NaN values)")
         
         # Validate returns data
         if HMM_UTILS_AVAILABLE:
@@ -120,27 +124,49 @@ class HiddenMarkovModel(ModelComponent):
         if not self.is_fitted:
             raise HMMInferenceError("Model must be fitted before prediction")
         
-        # Extract the observed signal
+        # Extract the observed signal and clean data
         if self.config.observed_signal not in observations.columns:
             raise ValueError(f"Observed signal '{self.config.observed_signal}' not found in observations")
         
-        returns = observations[self.config.observed_signal].values
+        # Clean data - remove NaN values but keep original index for results
+        clean_observations = observations.dropna(subset=[self.config.observed_signal])
+        returns = clean_observations[self.config.observed_signal].values
         
-        # Get most likely state sequence using Viterbi algorithm
-        states = self._viterbi_decode(returns)
+        # Use sophisticated algorithms if available
+        if HMM_UTILS_AVAILABLE and self._algorithms is not None:
+            # Create emission parameters array
+            emission_params = np.column_stack([self.emission_means_, self.emission_stds_])
+            
+            # Get most likely state sequence using sophisticated Viterbi algorithm
+            states, _ = self._algorithms.viterbi_algorithm(
+                returns, self.initial_probs_, self.transition_matrix_, emission_params
+            )
+            
+            # Calculate state probabilities using sophisticated forward-backward
+            gamma, _, _ = self._algorithms.forward_backward_algorithm(
+                returns, self.initial_probs_, self.transition_matrix_, emission_params
+            )
+            state_probs = gamma
+            confidence = np.max(state_probs, axis=1)
+        else:
+            # Fallback to simplified algorithms
+            states = self._viterbi_decode(returns)
+            state_probs = self._forward_backward(returns)
+            confidence = np.max(state_probs, axis=1)
         
-        # Calculate state probabilities for confidence
-        state_probs = self._forward_backward(returns)
-        confidence = np.max(state_probs, axis=1)
-        
-        # Create results DataFrame
-        results = pd.DataFrame(index=observations.index)
+        # Create results DataFrame using clean observations index
+        results = pd.DataFrame(index=clean_observations.index)
         results['predicted_state'] = states
         results['confidence'] = confidence
         
         # Add individual state probabilities
         for i in range(self.n_states):
             results[f'state_{i}_prob'] = state_probs[:, i]
+        
+        # Reindex to match original observations (fill NaN rows with default state)
+        results = results.reindex(observations.index)
+        results['predicted_state'] = results['predicted_state'].fillna(0).astype(int)
+        results['confidence'] = results['confidence'].fillna(0.0)
         
         return results
     
@@ -259,9 +285,11 @@ class HiddenMarkovModel(ModelComponent):
         try:
             if HMM_UTILS_AVAILABLE and self.config.initialization_method == "kmeans":
                 # Use sophisticated initialization
-                initial_probs, transition_matrix, means, stds = initialize_parameters_kmeans(
+                initial_probs, transition_matrix, emission_params = initialize_parameters_kmeans(
                     self.n_states, returns, self.config.random_seed
                 )
+                means = emission_params[:, 0]
+                stds = emission_params[:, 1]
             else:
                 # Simple random initialization
                 initial_probs, transition_matrix, means, stds = self._initialize_parameters_simple(returns)
@@ -307,19 +335,45 @@ class HiddenMarkovModel(ModelComponent):
         
         prev_log_likelihood = -np.inf
         
+        # Create emission parameters array
+        emission_params = np.column_stack([self.emission_means_, self.emission_stds_])
+        
         for iteration in range(self.config.max_iterations):
-            # E-step: Forward-backward algorithm
-            log_likelihood, alpha, beta = self._forward_backward_with_scaling(returns)
-            
-            # Check convergence
-            if iteration > 0:
-                improvement = log_likelihood - prev_log_likelihood
-                if improvement < self.config.tolerance:
-                    self.training_history_['converged'] = True
-                    break
-            
-            # M-step: Update parameters
-            self._update_parameters(returns, alpha, beta)
+            if HMM_UTILS_AVAILABLE and self._algorithms is not None:
+                # Use sophisticated algorithms
+                gamma, xi, log_likelihood = self._algorithms.forward_backward_algorithm(
+                    returns, self.initial_probs_, self.transition_matrix_, emission_params
+                )
+                
+                # Check convergence
+                if iteration > 0:
+                    improvement = log_likelihood - prev_log_likelihood
+                    if improvement < self.config.tolerance:
+                        self.training_history_['converged'] = True
+                        break
+                
+                # M-step: Update parameters using sophisticated Baum-Welch
+                self.initial_probs_, self.transition_matrix_, new_emission_params = \
+                    self._algorithms.baum_welch_update(returns, gamma, xi, regularization=self.config.min_variance)
+                
+                # Update emission parameters
+                self.emission_means_ = new_emission_params[:, 0]
+                self.emission_stds_ = new_emission_params[:, 1]
+                emission_params = new_emission_params
+                
+            else:
+                # Fallback to simplified algorithm (with the original bug)
+                log_likelihood, alpha, beta = self._forward_backward_with_scaling(returns)
+                
+                # Check convergence
+                if iteration > 0:
+                    improvement = log_likelihood - prev_log_likelihood
+                    if improvement < self.config.tolerance:
+                        self.training_history_['converged'] = True
+                        break
+                
+                # M-step: Update parameters
+                self._update_parameters(returns, alpha, beta)
             
             # Store training history
             self.training_history_['log_likelihoods'].append(log_likelihood)

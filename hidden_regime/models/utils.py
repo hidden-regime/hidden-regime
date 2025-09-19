@@ -11,15 +11,7 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-try:
-    from sklearn.cluster import KMeans
-
-    SKLEARN_AVAILABLE = True
-except ImportError:
-    SKLEARN_AVAILABLE = False
-    warnings.warn(
-        "scikit-learn not available. K-means initialization will fall back to random."
-    )
+from sklearn.cluster import KMeans
 
 
 def validate_returns_data(returns: np.ndarray) -> np.ndarray:
@@ -117,11 +109,6 @@ def initialize_parameters_kmeans(
     Returns:
         Tuple of (initial_probs, transition_matrix, emission_params)
     """
-    if not SKLEARN_AVAILABLE:
-        warnings.warn(
-            "scikit-learn not available, falling back to random initialization"
-        )
-        return initialize_parameters_random(n_states, returns, random_seed)
 
     if len(returns) < n_states:
         warnings.warn(
