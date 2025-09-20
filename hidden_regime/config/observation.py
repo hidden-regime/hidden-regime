@@ -64,7 +64,9 @@ class FinancialObservationConfig(ObservationConfig):
         valid_generators = {
             "log_return", "return_ratio", "average_price", "price_change",
             "volatility", "rsi", "macd", "bollinger_bands", "moving_average",
-            "volume_sma", "volume_ratio", "price_volume_trend"
+            "volume_sma", "volume_ratio", "price_volume_trend",
+            # Enhanced regime-relevant features
+            "momentum_strength", "trend_persistence", "volatility_context", "directional_consistency"
         }
         
         for generator in self.generators:

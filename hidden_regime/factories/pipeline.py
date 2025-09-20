@@ -123,10 +123,13 @@ class PipelineFactory:
         data_config = FinancialDataConfig(**data_config_params)
         
         # Create financial observation configuration
-        observation_config = FinancialObservationConfig.create_default_financial()
-        if 'observation_config_overrides' in kwargs:
-            for key, value in kwargs['observation_config_overrides'].items():
-                setattr(observation_config, key, value)
+        if 'observations_config' in kwargs:
+            observation_config = kwargs['observations_config']
+        else:
+            observation_config = FinancialObservationConfig.create_default_financial()
+            if 'observation_config_overrides' in kwargs:
+                for key, value in kwargs['observation_config_overrides'].items():
+                    setattr(observation_config, key, value)
         
         # Create HMM model configuration
         model_config_params = {'n_states': n_states}

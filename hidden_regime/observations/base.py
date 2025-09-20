@@ -77,6 +77,11 @@ class BaseObservationGenerator(ObservationComponent):
             "return_ratio": self._generate_return_ratio,
             "price_change": self._generate_price_change,
             "volatility": self._generate_volatility,
+            # Enhanced regime-relevant features
+            "momentum_strength": self._generate_momentum_strength,
+            "trend_persistence": self._generate_trend_persistence,
+            "volatility_context": self._generate_volatility_context,
+            "directional_consistency": self._generate_directional_consistency,
         }
         
         return builtin_generators.get(name)
@@ -256,3 +261,129 @@ class BaseObservationGenerator(ObservationComponent):
         }
         
         return info
+
+    # Enhanced regime-relevant feature generators
+
+    def _generate_momentum_strength(self, data: pd.DataFrame, short_window: int = 5, long_window: int = 20) -> pd.Series:
+        """
+        Generate momentum strength indicator for Bull/Bear regime detection.
+
+        Combines recent price movement with longer-term trend direction to identify
+        sustained momentum characteristic of Bull/Bear regimes.
+
+        Args:
+            data: Input data DataFrame
+            short_window: Short-term momentum window (days)
+            long_window: Long-term trend window (days)
+
+        Returns:
+            Series with momentum strength values
+        """
+        price_col = self._get_price_column(data)
+        prices = data[price_col]
+
+        # Short-term momentum: recent price change relative to short window
+        short_momentum = (prices - prices.shift(short_window)) / prices.shift(short_window)
+
+        # Long-term trend direction: price change over longer window
+        long_trend = (prices - prices.shift(long_window)) / prices.shift(long_window)
+
+        # Momentum strength: short-term move aligned with long-term trend
+        momentum_strength = short_momentum * np.sign(long_trend) * np.abs(long_trend)
+
+        return pd.Series(momentum_strength, index=data.index, name='momentum_strength')
+
+    def _generate_trend_persistence(self, data: pd.DataFrame, window: int = 10) -> pd.Series:
+        """
+        Generate trend persistence indicator for Sideways regime detection.
+
+        Measures how consistently price moves in one direction vs random walk.
+        Low persistence suggests sideways/consolidation regimes.
+
+        Args:
+            data: Input data DataFrame
+            window: Rolling window for persistence calculation
+
+        Returns:
+            Series with trend persistence values
+        """
+        if 'log_return' not in data.columns:
+            log_returns = self._generate_log_return(data)
+        else:
+            log_returns = data['log_return']
+
+        # Calculate directional consistency over rolling window
+        rolling_returns = log_returns.rolling(window=window)
+
+        # Persistence = correlation between returns and time (trend strength)
+        def calc_trend_correlation(returns):
+            if len(returns.dropna()) < 3:
+                return 0.0
+            time_index = np.arange(len(returns))
+            valid_mask = ~np.isnan(returns)
+            if np.sum(valid_mask) < 3:
+                return 0.0
+            return np.corrcoef(returns[valid_mask], time_index[valid_mask])[0, 1] if np.sum(valid_mask) > 1 else 0.0
+
+        persistence = rolling_returns.apply(calc_trend_correlation, raw=False)
+
+        return pd.Series(persistence, index=data.index, name='trend_persistence')
+
+    def _generate_volatility_context(self, data: pd.DataFrame, vol_window: int = 20, context_window: int = 60) -> pd.Series:
+        """
+        Generate volatility context indicator for Crisis regime detection.
+
+        Compares current volatility to historical context to identify
+        volatility spikes characteristic of crisis periods.
+
+        Args:
+            data: Input data DataFrame
+            vol_window: Window for current volatility calculation
+            context_window: Window for historical volatility context
+
+        Returns:
+            Series with volatility context values (volatility shock ratio)
+        """
+        if 'log_return' not in data.columns:
+            log_returns = self._generate_log_return(data)
+        else:
+            log_returns = data['log_return']
+
+        # Current volatility (short-term)
+        current_vol = log_returns.rolling(window=vol_window).std()
+
+        # Historical volatility context (longer-term)
+        historical_vol = log_returns.rolling(window=context_window).std()
+
+        # Volatility shock ratio: current vol relative to historical context
+        vol_shock_ratio = current_vol / historical_vol
+
+        return pd.Series(vol_shock_ratio, index=data.index, name='volatility_context')
+
+    def _generate_directional_consistency(self, data: pd.DataFrame, window: int = 15) -> pd.Series:
+        """
+        Generate directional consistency indicator for regime characterization.
+
+        Measures how consistently returns have the same sign over a window,
+        helping distinguish between trending and sideways regimes.
+
+        Args:
+            data: Input data DataFrame
+            window: Rolling window for consistency calculation
+
+        Returns:
+            Series with directional consistency values (0-1)
+        """
+        if 'log_return' not in data.columns:
+            log_returns = self._generate_log_return(data)
+        else:
+            log_returns = data['log_return']
+
+        # Calculate sign of returns
+        return_signs = np.sign(log_returns)
+
+        # Rolling consistency: absolute value of average sign (1 = all same direction, 0 = random)
+        rolling_signs = return_signs.rolling(window=window)
+        consistency = rolling_signs.mean().abs()
+
+        return pd.Series(consistency, index=data.index, name='directional_consistency')

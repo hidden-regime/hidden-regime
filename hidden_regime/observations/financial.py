@@ -49,28 +49,34 @@ class FinancialObservationGenerator(BaseObservationGenerator):
             "return_ratio": self._generate_return_ratio,
             "average_price": self._generate_average_price,
             "price_change": self._generate_price_change,
-            
+
             # Volatility measures
             "volatility": self._generate_volatility,
-            
+
+            # Enhanced regime-relevant features
+            "momentum_strength": self._generate_momentum_strength,
+            "trend_persistence": self._generate_trend_persistence,
+            "volatility_context": self._generate_volatility_context,
+            "directional_consistency": self._generate_directional_consistency,
+
             # Technical indicators
             "rsi": self._generate_rsi,
             "macd": self._generate_macd,
             "bollinger_bands": self._generate_bollinger_bands,
             "moving_average": self._generate_moving_average,
-            
+
             # Volume indicators (if available)
             "volume_sma": self._generate_volume_sma,
             "volume_ratio": self._generate_volume_ratio,
             "price_volume_trend": self._generate_price_volume_trend,
         }
         
-        # Also include base generators
-        base_generators = super()._get_builtin_generator(name)
-        if base_generators is not None:
-            return base_generators
-        
-        return financial_generators.get(name)
+        # Check financial generators first
+        if name in financial_generators:
+            return financial_generators[name]
+
+        # Fallback to base generators
+        return super()._get_builtin_generator(name)
     
     def update(self, data: pd.DataFrame) -> pd.DataFrame:
         """
