@@ -85,6 +85,14 @@ from .utils.exceptions import (
     HMMInferenceError,
 )
 
+# Financial utilities
+from .utils.state_mapping import (
+    percent_change_to_log_return,
+    log_return_to_percent_change,
+    map_states_to_financial_regimes,
+    get_regime_characteristics,
+)
+
 # Convenience functions using pipeline factory
 def create_pipeline(
     data_config,
@@ -128,6 +136,11 @@ def create_financial_pipeline(
     start_date=None,
     end_date=None,
     include_report=True,
+    # Common model parameters
+    tolerance=None,
+    max_iterations=None,
+    forgetting_factor=None,
+    random_seed=None,
     **kwargs
 ):
     """
@@ -155,6 +168,10 @@ def create_financial_pipeline(
         start_date=start_date,
         end_date=end_date,
         include_report=include_report,
+        tolerance=tolerance,
+        max_iterations=max_iterations,
+        forgetting_factor=forgetting_factor,
+        random_seed=random_seed,
         **kwargs
     )
 
@@ -323,7 +340,13 @@ __all__ = [
     "ConfigurationError",
     "HMMTrainingError",
     "HMMInferenceError",
-    
+
+    # Financial utilities
+    "percent_change_to_log_return",
+    "log_return_to_percent_change",
+    "map_states_to_financial_regimes",
+    "get_regime_characteristics",
+
     # Pipeline creation functions
     "create_pipeline",
     "create_financial_pipeline",

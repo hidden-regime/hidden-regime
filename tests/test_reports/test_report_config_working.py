@@ -91,42 +91,31 @@ class TestReportConfigWorking:
         with tempfile.TemporaryDirectory() as temp_dir:
             new_dir = os.path.join(temp_dir, "new_report_dir")
             
-            # Create config without triggering validation yet
-            config = ReportConfig()
-            config.output_dir = new_dir  # Set directory without validation
-            
             # Directory should not exist yet
             assert not os.path.exists(new_dir)
-            
-            # Validation should create the directory
-            config.validate()
+
+            # Creating config should create the directory via validation
+            config = ReportConfig(output_dir=new_dir)
             assert os.path.exists(new_dir)
     
     def test_validation_invalid_output_directory(self):
         """Test validation with invalid output directory."""
-        # Create config first, then set invalid directory to bypass constructor validation
-        config = ReportConfig()
-        config.output_dir = "/root/definitely/does/not/exist/and/cannot/create"
-        
+        # Test that invalid directory raises error during construction
         with pytest.raises(ConfigurationError) as exc_info:
-            config.validate()
-        
+            ReportConfig(output_dir="/root/definitely/does/not/exist/and/cannot/create")
+
         assert "Cannot create output directory" in str(exc_info.value)
     
     def test_validation_plot_dpi_limits(self):
         """Test validation of plot DPI limits."""
-        # Test DPI too low - create config then modify to bypass constructor
-        config_low = ReportConfig()
-        config_low.plot_dpi = 50
+        # Test DPI too low - use __new__ to bypass validation
         with pytest.raises(ConfigurationError) as exc_info:
-            config_low.validate()
+            ReportConfig(plot_dpi=50)
         assert "plot_dpi must be at least 72" in str(exc_info.value)
-        
-        # Test DPI too high - create config then modify to bypass constructor  
-        config_high = ReportConfig()
-        config_high.plot_dpi = 800
+
+        # Test DPI too high - use __new__ to bypass validation
         with pytest.raises(ConfigurationError) as exc_info:
-            config_high.validate()
+            ReportConfig(plot_dpi=800)
         assert "plot_dpi should not exceed 600" in str(exc_info.value)
         
         # Test valid DPI values
@@ -137,20 +126,14 @@ class TestReportConfigWorking:
     
     def test_validation_llm_configuration(self):
         """Test validation of LLM configuration."""
-        # Test LLM analysis enabled without provider - modify after creation
-        config_no_provider = ReportConfig()
-        config_no_provider.include_llm_analysis = True
-        config_no_provider.llm_provider = None
+        # Test LLM analysis enabled without provider
         with pytest.raises(ConfigurationError) as exc_info:
-            config_no_provider.validate()
+            ReportConfig(include_llm_analysis=True, llm_provider=None)
         assert "llm_provider must be specified when include_llm_analysis=True" in str(exc_info.value)
-        
-        # Test invalid LLM provider - modify after creation
-        config_invalid_provider = ReportConfig()
-        config_invalid_provider.include_llm_analysis = True
-        config_invalid_provider.llm_provider = "invalid_provider"
+
+        # Test invalid LLM provider
         with pytest.raises(ConfigurationError) as exc_info:
-            config_invalid_provider.validate()
+            ReportConfig(include_llm_analysis=True, llm_provider="invalid_provider")
         assert "llm_provider must be one of" in str(exc_info.value)
         
         # Test valid LLM providers
@@ -285,8 +268,8 @@ class TestReportConfigWorking:
             
             # Test filename generation
             with tempfile.TemporaryDirectory() as temp_dir:
-                config.output_dir = temp_dir
-                filename = config.get_report_filename()
+                config_with_dir = ReportConfig(output_format=fmt, output_dir=temp_dir)
+                filename = config_with_dir.get_report_filename()
                 assert filename.endswith(f".{fmt}" if fmt != "markdown" else ".md")
     
     def test_all_plot_formats(self):
@@ -299,8 +282,8 @@ class TestReportConfigWorking:
             
             # Test filename generation
             with tempfile.TemporaryDirectory() as temp_dir:
-                config.output_dir = temp_dir
-                filename = config.get_plot_filename("test")
+                config_with_dir = ReportConfig(plot_format=fmt, output_dir=temp_dir)
+                filename = config_with_dir.get_plot_filename("test")
                 assert filename.endswith(f".{fmt}")
     
     def test_all_template_styles(self):

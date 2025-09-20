@@ -14,7 +14,7 @@ from .base import BaseConfig
 from ..utils.exceptions import ConfigurationError
 
 
-@dataclass
+@dataclass(frozen=True)
 class ModelConfig(BaseConfig):
     """
     Base configuration for model components.
@@ -42,7 +42,7 @@ class ModelConfig(BaseConfig):
         raise NotImplementedError("Subclasses must implement create_component")
 
 
-@dataclass
+@dataclass(frozen=True)
 class HMMConfig(ModelConfig):
     """
     Configuration for Hidden Markov Model components.
@@ -55,7 +55,7 @@ class HMMConfig(ModelConfig):
     max_iterations: int = 100
     tolerance: float = 1e-6
     regularization: float = 1e-6
-    initialization_method: Literal["random", "kmeans", "custom"] = "random"
+    initialization_method: Literal["kmeans", "random", "custom"] = "kmeans"
     
     # Stability and robustness
     min_regime_duration: int = 2
@@ -154,15 +154,15 @@ class HMMConfig(ModelConfig):
             enable_change_detection=False
         )
     
-    @classmethod 
+    @classmethod
     def create_aggressive(cls) -> 'HMMConfig':
         """Create aggressive configuration for fast-adapting HMM."""
         return cls(
             n_states=4,
-            observed_signal="log_return", 
+            observed_signal="log_return",
             max_iterations=50,
             tolerance=1e-4,
-            initialization_method="random",
+            initialization_method="kmeans",
             forgetting_factor=0.95,
             adaptation_rate=0.1,
             parameter_smoothing=True,
@@ -190,3 +190,4 @@ class HMMConfig(ModelConfig):
     def get_cache_key(self) -> str:
         """Generate cache key for this model configuration."""
         return f"hmm_{self.n_states}_{self.observed_signal}_{self.initialization_method}_{hash(self)}"
+

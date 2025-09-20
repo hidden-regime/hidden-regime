@@ -14,7 +14,7 @@ from .base import BaseConfig
 from ..utils.exceptions import ConfigurationError
 
 
-@dataclass
+@dataclass(frozen=True)
 class AnalysisConfig(BaseConfig):
     """
     Base configuration for analysis components.
@@ -38,7 +38,7 @@ class AnalysisConfig(BaseConfig):
         raise NotImplementedError("Subclasses must implement create_component")
 
 
-@dataclass
+@dataclass(frozen=True)
 class FinancialAnalysisConfig(AnalysisConfig):
     """
     Configuration for financial analysis components.

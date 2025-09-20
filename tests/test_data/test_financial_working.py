@@ -109,8 +109,7 @@ class TestFinancialDataLoaderWorking:
         mock_ticker_class.return_value = mock_ticker
         
         # Create data with only 5 rows (< 10 minimum)
-        # But due to the implementation bug, this will result in empty DataFrame
-        # so we'll get "No data loaded" instead of "Insufficient data"
+        # This should trigger "Insufficient data" error
         dates = pd.date_range('2023-01-01', periods=5, freq='D')
         small_data = pd.DataFrame({
             'Open': [100, 101, 102, 103, 104],
@@ -119,17 +118,17 @@ class TestFinancialDataLoaderWorking:
             'Close': [102, 103, 104, 105, 106],
             'Volume': [1000000] * 5
         }, index=dates)
-        
+
         mock_ticker.history.return_value = small_data
-        
+
         config = FinancialDataConfig(ticker="AAPL")  # Valid ticker
         loader = FinancialDataLoader(config)
-        
+
         with pytest.raises(DataLoadError) as exc_info:
             loader.update()
-        
-        # Due to implementation bug, we get "No data loaded" instead of "Insufficient data"
-        assert "No data loaded" in str(exc_info.value)
+
+        # Should get proper "Insufficient data" error (bug is fixed)
+        assert "Insufficient data for AAPL: 5 < 10" in str(exc_info.value)
     
     def test_cache_functionality(self):
         """Test that cache mechanisms are in place."""

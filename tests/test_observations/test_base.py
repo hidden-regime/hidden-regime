@@ -16,43 +16,72 @@ from hidden_regime.utils.exceptions import ValidationError
 
 class TestBaseObservationGenerator:
     """Test cases for BaseObservationGenerator."""
-    
+
+    def create_observation_config(self, **kwargs):
+        """Create observation configuration for testing."""
+        from hidden_regime.config.observation import ObservationConfig
+        defaults = {
+            'generators': ['log_return']
+        }
+        defaults.update(kwargs)
+        return ObservationConfig(**defaults)
+
     def test_base_observation_generator_initialization(self):
         """Test BaseObservationGenerator initialization."""
-        obs_gen = BaseObservationGenerator(window_size=20)
-        
-        assert obs_gen.window_size == 20
-        assert obs_gen.features == []
-        assert obs_gen._cache == {}
+        from hidden_regime.config.observation import ObservationConfig
+
+        config = ObservationConfig(generators=["log_return"])
+        obs_gen = BaseObservationGenerator(config)
+
+        assert obs_gen.config is not None
+        assert len(obs_gen.generators) == 1
+        assert obs_gen.last_data is None
+        assert obs_gen.last_observations is None
     
     def test_base_observation_generator_default_window_size(self):
-        """Test default window size."""
-        obs_gen = BaseObservationGenerator()
-        assert obs_gen.window_size == 10
+        """Test default generator configuration."""
+        from hidden_regime.config.observation import ObservationConfig
+
+        config = ObservationConfig(generators=["log_return"])
+        obs_gen = BaseObservationGenerator(config)
+        assert obs_gen.config is not None
+        assert len(obs_gen.generators) == 1
     
-    def test_invalid_window_size(self):
-        """Test invalid window size handling."""
-        with pytest.raises(ValueError, match="Window size must be positive"):
-            BaseObservationGenerator(window_size=0)
-        
-        with pytest.raises(ValueError, match="Window size must be positive"):
-            BaseObservationGenerator(window_size=-5)
+    def test_invalid_generator_config(self):
+        """Test invalid generator configuration handling."""
+        from hidden_regime.config.observation import ObservationConfig
+        from hidden_regime.utils.exceptions import ConfigurationError
+
+        # Test empty generators list
+        with pytest.raises(ConfigurationError, match="At least one observation generator must be specified"):
+            config = ObservationConfig(generators=[])
+            config.validate()
+
+        # Test invalid generator type
+        with pytest.raises(ConfigurationError, match="Generator 0 must be string or callable"):
+            config = ObservationConfig(generators=[123])  # Invalid type
+            config.validate()
     
     def test_update_with_insufficient_data(self):
-        """Test update with insufficient data for window size."""
-        obs_gen = BaseObservationGenerator(window_size=20)
-        
-        # Create data with fewer rows than window size
-        data = pd.DataFrame({
-            'close': [100, 101, 99, 102, 98]
-        }, index=pd.date_range('2024-01-01', periods=5, freq='D'))
-        
-        with pytest.raises(ValidationError, match="Insufficient data"):
+        """Test update with empty data."""
+        from hidden_regime.config.observation import ObservationConfig
+        from hidden_regime.utils.exceptions import ValidationError
+
+        config = ObservationConfig(generators=["log_return"])
+        obs_gen = BaseObservationGenerator(config)
+
+        # Create empty data
+        data = pd.DataFrame()
+
+        with pytest.raises(ValidationError, match="Input data cannot be empty"):
             obs_gen.update(data)
     
     def test_update_with_valid_data(self):
         """Test update with valid data."""
-        obs_gen = BaseObservationGenerator(window_size=5)
+        from hidden_regime.config.observation import ObservationConfig
+
+        config = ObservationConfig(generators=["log_return"])
+        obs_gen = BaseObservationGenerator(config)
         
         # Create sufficient data
         dates = pd.date_range('2024-01-01', periods=10, freq='D')
@@ -69,18 +98,20 @@ class TestBaseObservationGenerator:
         # Should return basic log returns
         assert isinstance(result, pd.DataFrame)
         assert 'log_return' in result.columns
-        assert len(result) == len(data) - 1  # One less due to return calculation
-        
-        # Verify log return calculation
-        expected_returns = np.log(data['close'] / data['close'].shift(1)).dropna()
+        assert len(result) == len(data)  # Same length, first value will be NaN
+
+        # Verify log return calculation (skip NaN values)
+        expected_returns = np.log(data['close'] / data['close'].shift(1))
+        # Compare non-NaN values
+        mask = ~np.isnan(result['log_return'])
         np.testing.assert_array_almost_equal(
-            result['log_return'].values,
-            expected_returns.values
+            result['log_return'][mask].values,
+            expected_returns[mask].values
         )
     
     def test_calculate_log_returns(self):
         """Test log return calculation."""
-        obs_gen = BaseObservationGenerator()
+        obs_gen = BaseObservationGenerator(self.create_observation_config())
         
         prices = pd.Series([100, 101, 99, 102, 98], name='close')
         log_returns = obs_gen._calculate_log_returns(prices)
@@ -91,7 +122,7 @@ class TestBaseObservationGenerator:
     
     def test_calculate_volatility(self):
         """Test volatility calculation."""
-        obs_gen = BaseObservationGenerator(window_size=5)
+        obs_gen = BaseObservationGenerator(self.create_observation_config())
         
         returns = pd.Series([0.01, -0.02, 0.015, -0.01, 0.005, 0.02])
         volatility = obs_gen._calculate_volatility(returns, window=3)
@@ -109,7 +140,7 @@ class TestBaseObservationGenerator:
     
     def test_add_feature_validation(self):
         """Test feature addition validation."""
-        obs_gen = BaseObservationGenerator()
+        obs_gen = BaseObservationGenerator(self.create_observation_config())
         
         # Valid feature
         obs_gen.add_feature('volatility', window=10)
@@ -125,7 +156,7 @@ class TestBaseObservationGenerator:
     
     def test_remove_feature(self):
         """Test feature removal."""
-        obs_gen = BaseObservationGenerator()
+        obs_gen = BaseObservationGenerator(self.create_observation_config())
         
         obs_gen.add_feature('volatility', window=10)
         assert 'volatility' in obs_gen.features
@@ -138,7 +169,7 @@ class TestBaseObservationGenerator:
     
     def test_generate_features_with_multiple_features(self):
         """Test feature generation with multiple features."""
-        obs_gen = BaseObservationGenerator(window_size=10)
+        obs_gen = BaseObservationGenerator(self.create_observation_config())
         obs_gen.add_feature('volatility', window=5)
         obs_gen.add_feature('momentum', window=3)
         
@@ -162,7 +193,7 @@ class TestBaseObservationGenerator:
     
     def test_caching_behavior(self):
         """Test caching of intermediate calculations."""
-        obs_gen = BaseObservationGenerator(window_size=5)
+        obs_gen = BaseObservationGenerator(self.create_observation_config())
         
         # Create test data
         data = pd.DataFrame({
@@ -179,7 +210,7 @@ class TestBaseObservationGenerator:
     
     def test_update_incremental_data(self):
         """Test incremental data updates."""
-        obs_gen = BaseObservationGenerator(window_size=5)
+        obs_gen = BaseObservationGenerator(self.create_observation_config())
         
         # Initial data
         initial_data = pd.DataFrame({
@@ -207,7 +238,7 @@ class TestBaseObservationGenerator:
     
     def test_missing_data_handling(self):
         """Test handling of missing data."""
-        obs_gen = BaseObservationGenerator(window_size=5)
+        obs_gen = BaseObservationGenerator(self.create_observation_config())
         
         # Create data with missing values
         data = pd.DataFrame({
@@ -219,7 +250,7 @@ class TestBaseObservationGenerator:
     
     def test_empty_data_handling(self):
         """Test handling of empty data."""
-        obs_gen = BaseObservationGenerator()
+        obs_gen = BaseObservationGenerator(self.create_observation_config())
         
         empty_data = pd.DataFrame()
         
@@ -228,7 +259,7 @@ class TestBaseObservationGenerator:
     
     def test_plot_functionality(self):
         """Test plotting functionality."""
-        obs_gen = BaseObservationGenerator(window_size=5)
+        obs_gen = BaseObservationGenerator(self.create_observation_config())
         obs_gen.add_feature('volatility', window=3)
         
         # Create and process data
@@ -256,7 +287,7 @@ class TestBaseObservationGenerator:
         """Test pickle serialization support."""
         import pickle
         
-        obs_gen = BaseObservationGenerator(window_size=15)
+        obs_gen = BaseObservationGenerator(self.create_observation_config())
         obs_gen.add_feature('volatility', window=5)
         
         # Serialize and deserialize

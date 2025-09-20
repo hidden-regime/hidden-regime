@@ -99,11 +99,14 @@ def initialize_parameters_kmeans(
     n_states: int, returns: np.ndarray, random_seed: Optional[int] = None
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Initialize HMM parameters using K-means clustering.
+    Initialize HMM parameters using financial domain-constrained K-means clustering.
+
+    This function applies financial domain knowledge to prevent unrealistic
+    regime centers while preserving the statistical benefits of data-driven initialization.
 
     Args:
         n_states: Number of hidden states
-        returns: Returns data
+        returns: Log returns data
         random_seed: Random seed for reproducibility
 
     Returns:
@@ -116,13 +119,31 @@ def initialize_parameters_kmeans(
         )
         return initialize_parameters_random(n_states, returns, random_seed)
 
-    # Prepare data for clustering (use returns and lagged returns for context)
+    # STEP 1: Filter extreme outliers in percentage space (easier financial intuition)
+    returns_pct = np.exp(returns) - 1  # Convert log returns to percentages
+
+    # Filter outliers: daily moves >15% are likely noise/earnings/splits
+    outlier_threshold_pct = 0.15  # 15% daily move threshold
+    outlier_mask = np.abs(returns_pct) <= outlier_threshold_pct
+
+    if outlier_mask.sum() < n_states * 5:  # Need minimum data per state
+        warnings.warn(
+            "Too many outliers removed, using less aggressive filtering"
+        )
+        outlier_threshold_pct = 0.25  # 25% threshold as fallback
+        outlier_mask = np.abs(returns_pct) <= outlier_threshold_pct
+
+    # Filter data
+    filtered_returns_pct = returns_pct[outlier_mask]
+    filtered_returns_log = np.log(filtered_returns_pct + 1)  # Back to log space
+
+    # STEP 2: Enhanced feature engineering for clustering
     features = []
-    for i in range(len(returns)):
-        feature_vec = [returns[i]]
-        # Add lagged returns if available
+    for i in range(len(filtered_returns_log)):
+        feature_vec = [filtered_returns_log[i]]
+        # Add lagged returns for temporal context (helps identify regimes)
         for lag in range(1, min(4, i + 1)):
-            feature_vec.append(returns[i - lag])
+            feature_vec.append(filtered_returns_log[i - lag])
         features.append(feature_vec)
 
     # Pad shorter feature vectors
@@ -133,7 +154,7 @@ def initialize_parameters_kmeans(
 
     features = np.array(features)
 
-    # K-means clustering
+    # STEP 3: K-means clustering on filtered data
     kmeans = KMeans(n_clusters=n_states, random_state=random_seed, n_init=10)
     try:
         cluster_labels = kmeans.fit_predict(features)
@@ -158,19 +179,99 @@ def initialize_parameters_kmeans(
     transition_matrix += 0.01
     transition_matrix = transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
 
-    # Emission parameters from cluster statistics
-    emission_params = np.zeros((n_states, 2))
+    # STEP 4: Calculate raw emission parameters from clusters
+    raw_emission_params = np.zeros((n_states, 2))
+    cluster_means = []
+
     for state in range(n_states):
-        state_returns = returns[cluster_labels == state]
+        # Use original filtered returns for state statistics
+        state_mask = cluster_labels == state
+        state_returns = filtered_returns_log[state_mask]
+
         if len(state_returns) > 0:
-            emission_params[state, 0] = np.mean(state_returns)
-            emission_params[state, 1] = max(np.std(state_returns), 1e-6)
+            mean_return = np.mean(state_returns)
+            std_return = max(np.std(state_returns), 1e-6)
         else:
             # Fallback for empty clusters
-            emission_params[state, 0] = np.mean(returns)
-            emission_params[state, 1] = np.std(returns)
+            mean_return = np.mean(filtered_returns_log)
+            std_return = np.std(filtered_returns_log)
 
-    return initial_probs, transition_matrix, emission_params
+        raw_emission_params[state, 0] = mean_return
+        raw_emission_params[state, 1] = std_return
+        cluster_means.append((state, mean_return))
+
+    # STEP 5: Apply financial domain constraints to emission means
+    # Convert means to percentage space for constraint application
+    raw_means_pct = np.exp([mean for _, mean in cluster_means]) - 1
+    sorted_cluster_info = sorted(cluster_means, key=lambda x: x[1])  # Sort by log return
+
+    # Define financial constraints in percentage space
+    constrained_means_pct = []
+    for i, (original_state, raw_mean_log) in enumerate(sorted_cluster_info):
+        raw_mean_pct = np.exp(raw_mean_log) - 1
+
+        # Apply progressive constraints based on sorted position
+        if i == 0:  # Lowest return state
+            # Bear regime: -8% to -0.1% daily reasonable range
+            constrained_pct = np.clip(raw_mean_pct, -0.08, -0.001)
+        elif i == len(sorted_cluster_info) - 1:  # Highest return state
+            # Bull regime: 0.1% to 5% daily reasonable range
+            constrained_pct = np.clip(raw_mean_pct, 0.001, 0.05)
+        else:  # Middle states
+            # Sideways-type regimes: -0.5% to 1.5% daily reasonable range
+            constrained_pct = np.clip(raw_mean_pct, -0.005, 0.015)
+
+        constrained_means_pct.append(constrained_pct)
+
+    # Convert constrained means back to log space
+    constrained_means_log = np.log(np.array(constrained_means_pct) + 1)
+
+    # STEP 6: Build final parameters with constrained means and consistent ordering
+    emission_params = np.zeros((n_states, 2))
+    state_reordering = {}
+
+    for new_state, (old_state, _) in enumerate(sorted_cluster_info):
+        # Use constrained mean, original std
+        emission_params[new_state, 0] = constrained_means_log[new_state]
+        emission_params[new_state, 1] = raw_emission_params[old_state, 1]
+        state_reordering[old_state] = new_state
+
+    # Reorder initial probabilities and transition matrix
+    reordered_initial_probs = np.zeros_like(initial_probs)
+    for old_state, new_state in state_reordering.items():
+        reordered_initial_probs[new_state] = initial_probs[old_state]
+
+    reordered_transition_matrix = np.zeros_like(transition_matrix)
+    for old_i, new_i in state_reordering.items():
+        for old_j, new_j in state_reordering.items():
+            reordered_transition_matrix[new_i, new_j] = transition_matrix[old_i, old_j]
+
+    # STEP 7: Validate final parameters make financial sense
+    _validate_financial_constraints(emission_params, n_states)
+
+    return reordered_initial_probs, reordered_transition_matrix, emission_params
+
+
+def _validate_financial_constraints(emission_params: np.ndarray, n_states: int) -> None:
+    """Validate that emission parameters satisfy financial constraints."""
+    means_log = emission_params[:, 0]
+    means_pct = np.exp(means_log) - 1
+
+    for i, mean_pct in enumerate(means_pct):
+        # Warn about extreme regimes
+        if abs(mean_pct) > 0.10:  # >10% daily is extreme
+            warnings.warn(
+                f"State {i} has extreme daily return: {mean_pct:.2%}. "
+                f"Consider using more states or different initialization."
+            )
+
+        # Check gaps between adjacent regimes
+        if i > 0:
+            gap_pct = means_pct[i] - means_pct[i-1]
+            if gap_pct > 0.03:  # >3% gap between regimes is large
+                warnings.warn(
+                    f"Large gap between regimes {i-1} and {i}: {gap_pct:.2%} daily return difference"
+                )
 
 
 def check_convergence(

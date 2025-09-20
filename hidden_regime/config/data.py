@@ -11,11 +11,116 @@ from datetime import datetime, date
 import pandas as pd
 
 from .base import BaseConfig
+from abc import ABC
+import json
+from dataclasses import asdict
 from ..utils.exceptions import ConfigurationError
 
 
 @dataclass
-class DataConfig(BaseConfig):
+class MutableBaseConfig(ABC):
+    """
+    Mutable base configuration class for configs that need to be modified after creation.
+    Similar to BaseConfig but allows modifications (used for DataConfig).
+    """
+
+    def validate(self) -> None:
+        """Validate configuration parameters."""
+        pass
+
+    def to_dict(self) -> dict:
+        """Convert configuration to dictionary."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, config_dict: dict) -> 'MutableBaseConfig':
+        """
+        Create configuration from dictionary.
+
+        Args:
+            config_dict: Dictionary with configuration parameters
+
+        Returns:
+            Configuration instance
+        """
+        return cls(**config_dict)
+
+    def to_json(self) -> str:
+        """Convert configuration to JSON string."""
+        return json.dumps(self.to_dict(), indent=2, default=str)
+
+    @classmethod
+    def from_json(cls, json_str: str) -> 'MutableBaseConfig':
+        """
+        Create configuration from JSON string.
+
+        Args:
+            json_str: JSON string with configuration
+
+        Returns:
+            Configuration instance
+        """
+        config_dict = json.loads(json_str)
+        return cls.from_dict(config_dict)
+
+    def save(self, filepath: str) -> None:
+        """
+        Save configuration to JSON file.
+
+        Args:
+            filepath: Path to save configuration file
+        """
+        with open(filepath, 'w') as f:
+            f.write(self.to_json())
+
+    @classmethod
+    def load(cls, filepath: str) -> 'MutableBaseConfig':
+        """
+        Load configuration from JSON file.
+
+        Args:
+            filepath: Path to configuration file
+
+        Returns:
+            Configuration instance
+        """
+        with open(filepath, 'r') as f:
+            json_str = f.read()
+        return cls.from_json(json_str)
+
+    def copy(self, **kwargs) -> 'MutableBaseConfig':
+        """
+        Create a copy of configuration with optional parameter updates.
+
+        Args:
+            **kwargs: Parameters to update in the copy
+
+        Returns:
+            New configuration instance with updated parameters
+        """
+        config_dict = self.to_dict()
+        config_dict.update(kwargs)
+        return self.__class__.from_dict(config_dict)
+
+    def __post_init__(self):
+        """Called after dataclass initialization to run validation."""
+        self.validate()
+
+    def __eq__(self, other) -> bool:
+        """Check equality with another configuration."""
+        if not isinstance(other, self.__class__):
+            return False
+        return self.to_dict() == other.to_dict()
+
+    def __hash__(self) -> int:
+        """Default hash implementation."""
+        # This should be overridden by subclasses for specific hashing needs
+        items = sorted(self.to_dict().items())
+        return hash(str(items))
+
+
+@dataclass
+class DataConfig(MutableBaseConfig):
     """
     Base configuration for data loading components.
     """
@@ -62,6 +167,27 @@ class DataConfig(BaseConfig):
         """Create data component - to be implemented by specific data configs."""
         raise NotImplementedError("Subclasses must implement create_component")
 
+    def __hash__(self) -> int:
+        """Custom hash implementation for DataConfig."""
+        # Hash based on immutable core attributes, excluding dates which may change
+        return hash((
+            self.source,
+            self.num_samples,
+            self.frequency
+        ))
+
+    def __eq__(self, other) -> bool:
+        """Custom equality comparison for DataConfig."""
+        if not isinstance(other, DataConfig):
+            return False
+        return (
+            self.source == other.source and
+            self.start_date == other.start_date and
+            self.end_date == other.end_date and
+            self.num_samples == other.num_samples and
+            self.frequency == other.frequency
+        )
+
 
 @dataclass
 class FinancialDataConfig(DataConfig):
@@ -98,3 +224,26 @@ class FinancialDataConfig(DataConfig):
     def get_cache_key(self) -> str:
         """Generate cache key for this data configuration."""
         return f"{self.source}_{self.ticker}_{self.start_date}_{self.end_date}_{self.frequency}"
+
+    def __hash__(self) -> int:
+        """Custom hash implementation for FinancialDataConfig."""
+        # Hash based on immutable core attributes, excluding dates which may change
+        return hash((
+            self.source,
+            self.ticker,
+            self.num_samples,
+            self.frequency
+        ))
+
+    def __eq__(self, other) -> bool:
+        """Custom equality comparison for FinancialDataConfig."""
+        if not isinstance(other, FinancialDataConfig):
+            return False
+        return (
+            self.source == other.source and
+            self.ticker == other.ticker and
+            self.start_date == other.start_date and
+            self.end_date == other.end_date and
+            self.num_samples == other.num_samples and
+            self.frequency == other.frequency
+        )

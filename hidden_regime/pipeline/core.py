@@ -112,13 +112,17 @@ class Pipeline:
             
             # Step 4: Analysis and interpretation
             self.logger.debug("Step 4: Running analysis")
-            # Pass raw data to analysis for indicator calculations if analysis component supports it
+            # Pass raw data and model component to analysis for data-driven interpretation
             try:
-                # Try to pass raw data as a parameter
-                analysis_output = self.analysis.update(model_output, raw_data=data_output)
+                # Try to pass raw data and model component for data-driven state interpretation
+                analysis_output = self.analysis.update(model_output, raw_data=data_output, model_component=self.model)
             except TypeError:
-                # Fallback for analysis components that don't accept raw_data parameter
-                analysis_output = self.analysis.update(model_output)
+                try:
+                    # Try to pass raw data only
+                    analysis_output = self.analysis.update(model_output, raw_data=data_output)
+                except TypeError:
+                    # Fallback for analysis components that don't accept additional parameters
+                    analysis_output = self.analysis.update(model_output)
             self.component_outputs['analysis'] = analysis_output
             
             # Step 5: Generate report (if report component provided)

@@ -308,12 +308,10 @@ class TestConfigurationIntegration:
             end_date='2023-12-31'
         )
         
-        model_config = HMMConfig.create_aggressive()
-        model_config.n_states = 4
-        
+        model_config = HMMConfig.create_aggressive().copy(n_states=4)
+
         observation_config = FinancialObservationConfig.create_default_financial()
-        analysis_config = FinancialAnalysisConfig.create_comprehensive_financial()
-        analysis_config.n_states = 4
+        analysis_config = FinancialAnalysisConfig.create_comprehensive_financial().copy(n_states=4)
         
         # Create pipeline using custom configs
         pipeline = hr.create_pipeline(
@@ -330,17 +328,20 @@ class TestConfigurationIntegration:
         assert pipeline.model.config.tolerance == 1e-4  # aggressive preset
     
     def test_configuration_error_propagation_in_pipeline(self):
-        """Test that configuration errors are caught during pipeline creation."""
-        # Create invalid model config
-        invalid_config = HMMConfig(n_states=1)  # Invalid: too few states
-        
-        with pytest.raises(ConfigurationError):
-            hr.create_pipeline(
-                data_config=FinancialDataConfig(ticker='TEST'),
-                observation_config=FinancialObservationConfig.create_default_financial(),
-                model_config=invalid_config,
-                analysis_config=FinancialAnalysisConfig.create_comprehensive_financial()
-            )
+        """Test that configuration errors are caught during config creation."""
+        # Test that invalid config creation raises error immediately
+        with pytest.raises(ConfigurationError, match="n_states must be at least 2"):
+            invalid_config = HMMConfig(n_states=1)  # Invalid: too few states
+
+        # Test that pipeline creation with valid configs works
+        valid_config = HMMConfig(n_states=3)
+        pipeline = hr.create_pipeline(
+            data_config=FinancialDataConfig(ticker='TEST'),
+            observation_config=FinancialObservationConfig.create_default_financial(),
+            model_config=valid_config,
+            analysis_config=FinancialAnalysisConfig.create_comprehensive_financial()
+        )
+        assert pipeline is not None
     
     def test_factory_function_validation(self):
         """Test that factory functions validate parameters."""
@@ -379,15 +380,23 @@ class TestConfigurationCaching:
         """Test cache key changes when relevant parameters change."""
         config = HMMConfig.create_balanced()
         original_key = config.get_cache_key()
-        
+
         # Changing n_states should change cache key
-        config.n_states = 4
-        new_key = config.get_cache_key()
+        config_modified = HMMConfig(
+            n_states=4,  # Changed from original
+            observed_signal=config.observed_signal,
+            initialization_method=config.initialization_method
+        )
+        new_key = config_modified.get_cache_key()
         assert original_key != new_key
-        
+
         # Changing observed_signal should change cache key
-        config.observed_signal = 'close_price'
-        newer_key = config.get_cache_key()
+        config_modified2 = HMMConfig(
+            n_states=config_modified.n_states,
+            observed_signal='close_price',  # Changed from original
+            initialization_method=config.initialization_method
+        )
+        newer_key = config_modified2.get_cache_key()
         assert new_key != newer_key
 
 

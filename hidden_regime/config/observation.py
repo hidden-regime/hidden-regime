@@ -13,7 +13,7 @@ from .base import BaseConfig
 from ..utils.exceptions import ConfigurationError
 
 
-@dataclass
+@dataclass(frozen=True)
 class ObservationConfig(BaseConfig):
     """
     Base configuration for observation generation components.
@@ -38,7 +38,7 @@ class ObservationConfig(BaseConfig):
         raise NotImplementedError("Subclasses must implement create_component")
 
 
-@dataclass 
+@dataclass(frozen=True)
 class FinancialObservationConfig(ObservationConfig):
     """
     Configuration for financial observation generation.

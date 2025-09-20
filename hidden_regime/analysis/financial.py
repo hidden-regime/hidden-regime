@@ -14,6 +14,11 @@ import warnings
 from ..pipeline.interfaces import AnalysisComponent
 from ..config.analysis import FinancialAnalysisConfig
 from ..utils.exceptions import ValidationError
+from ..utils.state_mapping import (
+    map_states_to_financial_regimes,
+    get_regime_characteristics,
+    apply_regime_mapping_to_analysis
+)
 from .performance import RegimePerformanceAnalyzer
 
 # Try to import technical indicators
@@ -66,14 +71,15 @@ class FinancialAnalysis(AnalysisComponent):
         # Initialize performance analyzer
         self.performance_analyzer = RegimePerformanceAnalyzer()
     
-    def update(self, model_output: pd.DataFrame, raw_data: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    def update(self, model_output: pd.DataFrame, raw_data: Optional[pd.DataFrame] = None, model_component: Optional[Any] = None) -> pd.DataFrame:
         """
         Interpret model output and add domain knowledge.
-        
+
         Args:
             model_output: Raw model predictions with predicted_state and confidence
             raw_data: Optional raw OHLCV data for indicator calculations
-            
+            model_component: Optional model component to get emission parameters for data-driven interpretation
+
         Returns:
             DataFrame with interpreted analysis results
         """
@@ -92,9 +98,9 @@ class FinancialAnalysis(AnalysisComponent):
         
         # Start with model output
         analysis = model_output.copy()
-        
-        # Add regime interpretations
-        analysis = self._add_regime_interpretations(analysis)
+
+        # Add regime interpretations using data-driven state mapping
+        analysis = self._add_regime_interpretations(analysis, model_component)
         
         # Add regime statistics if requested
         if self.config.calculate_regime_statistics:
@@ -127,37 +133,56 @@ class FinancialAnalysis(AnalysisComponent):
         
         return analysis
     
-    def _add_regime_interpretations(self, analysis: pd.DataFrame) -> pd.DataFrame:
-        """Add regime name interpretations."""
-        # Map state numbers to regime names
-        analysis['regime_name'] = analysis['predicted_state'].map(
-            {i: name for i, name in enumerate(self.regime_labels)}
+    def _add_regime_interpretations(self, analysis: pd.DataFrame, model_component: Optional[Any] = None) -> pd.DataFrame:
+        """
+        Add regime name interpretations using data-driven state mapping.
+
+        This method replaces arbitrary state numbering with regime labels that match
+        the actual emission characteristics of each state.
+        """
+        # Try to get emission means from model component for data-driven interpretation
+        if model_component is not None and hasattr(model_component, 'emission_means_') and model_component.emission_means_ is not None:
+            # Use data-driven state mapping based on actual emission means
+            try:
+                analysis = apply_regime_mapping_to_analysis(
+                    analysis,
+                    model_component.emission_means_,
+                    self.config.n_states
+                )
+
+                # Store the mapping for future reference
+                self._current_state_mapping = map_states_to_financial_regimes(
+                    model_component.emission_means_,
+                    self.config.n_states
+                )
+
+                return analysis
+
+            except Exception as e:
+                warnings.warn(f"Data-driven state mapping failed: {e}. Falling back to default mapping.")
+
+        # Fallback to default regime labels (but with warning about potential inconsistency)
+        warnings.warn(
+            "Using default state mapping. For accurate regime interpretation, "
+            "ensure model component with emission_means_ is provided.",
+            UserWarning
         )
-        
-        # Add regime type classification
-        analysis['regime_type'] = analysis['predicted_state'].map(self._classify_regime_type)
-        
+
+        # Create default mapping (lowest to highest state indices)
+        state_mapping = {i: label for i, label in enumerate(self.regime_labels)}
+
+        analysis['regime_name'] = analysis['predicted_state'].map(state_mapping)
+        analysis['regime_type'] = analysis['regime_name']  # Same thing
+
+        # Add default expected characteristics
+        for _, row in analysis.iterrows():
+            regime_name = row['regime_name']
+            characteristics = get_regime_characteristics(regime_name)
+
+            for char_name, char_value in characteristics.items():
+                analysis.loc[row.name, char_name] = char_value
+
         return analysis
-    
-    def _classify_regime_type(self, state: int) -> str:
-        """Classify regime type based on state number and configuration."""
-        if self.config.n_states == 2:
-            return "Bear" if state == 0 else "Bull"
-        elif self.config.n_states == 3:
-            if state == 0:
-                return "Bear"
-            elif state == 1:
-                return "Sideways"
-            else:
-                return "Bull"
-        elif self.config.n_states == 4:
-            types = ["Crisis", "Bear", "Sideways", "Bull"]
-            return types[min(state, len(types) - 1)]
-        elif self.config.n_states == 5:
-            types = ["Crisis", "Bear", "Sideways", "Bull", "Euphoric"]
-            return types[min(state, len(types) - 1)]
-        else:
-            return f"Regime_{state}"
     
     def _add_regime_statistics(self, analysis: pd.DataFrame) -> pd.DataFrame:
         """Add basic regime statistics."""
@@ -218,12 +243,29 @@ class FinancialAnalysis(AnalysisComponent):
         # Calculate regime transitions
         transitions = (analysis['predicted_state'] != analysis['predicted_state'].shift(1)).cumsum()
         analysis['regime_episode'] = transitions
-        
-        # Calculate expected remaining duration (simplified)
+
+        # Ensure required columns exist for duration analysis
+        if 'expected_duration' not in analysis.columns:
+            # Add expected duration based on regime characteristics
+            regime_characteristics = self._get_regime_characteristics()
+            if 'duration' in regime_characteristics:
+                analysis['expected_duration'] = analysis['predicted_state'].map(
+                    {i: regime_characteristics['duration'][i] if i < len(regime_characteristics['duration']) else 10.0
+                     for i in range(self.config.n_states)}
+                )
+            else:
+                # Fallback to default duration
+                analysis['expected_duration'] = 10.0
+
+        if 'days_in_regime' not in analysis.columns:
+            # Calculate days in regime if not already present
+            analysis['days_in_regime'] = self._calculate_days_in_regime(analysis['predicted_state'])
+
+        # Calculate expected remaining duration
         analysis['expected_remaining_duration'] = analysis.apply(
             lambda row: max(1, row['expected_duration'] - row['days_in_regime']), axis=1
         )
-        
+
         return analysis
     
     def _add_return_analysis(self, analysis: pd.DataFrame) -> pd.DataFrame:

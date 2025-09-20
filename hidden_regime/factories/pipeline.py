@@ -88,6 +88,11 @@ class PipelineFactory:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         include_report: bool = True,
+        # Common model parameters
+        tolerance: Optional[float] = None,
+        max_iterations: Optional[int] = None,
+        forgetting_factor: Optional[float] = None,
+        random_seed: Optional[int] = None,
         **kwargs
     ) -> Pipeline:
         """
@@ -105,13 +110,17 @@ class PipelineFactory:
             Configured financial Pipeline instance
         """
         # Create financial data configuration
-        data_config = FinancialDataConfig(
-            source="yfinance",
-            ticker=ticker,
-            start_date=start_date,
-            end_date=end_date,
-            **kwargs.get('data_config_overrides', {})
-        )
+        data_config_params = {
+            'source': 'yfinance',
+            'ticker': ticker,
+            'start_date': start_date,
+            'end_date': end_date
+        }
+
+        # Add any additional data config overrides
+        data_config_params.update(kwargs.get('data_config_overrides', {}))
+
+        data_config = FinancialDataConfig(**data_config_params)
         
         # Create financial observation configuration
         observation_config = FinancialObservationConfig.create_default_financial()
@@ -120,18 +129,29 @@ class PipelineFactory:
                 setattr(observation_config, key, value)
         
         # Create HMM model configuration
-        model_config = HMMConfig.create_balanced()
-        model_config.n_states = n_states
+        model_config_params = {'n_states': n_states}
+
+        # Add explicit common parameters if provided
+        if tolerance is not None:
+            model_config_params['tolerance'] = tolerance
+        if max_iterations is not None:
+            model_config_params['max_iterations'] = max_iterations
+        if forgetting_factor is not None:
+            model_config_params['forgetting_factor'] = forgetting_factor
+        if random_seed is not None:
+            model_config_params['random_seed'] = random_seed
+
+        # Add any additional model config overrides
         if 'model_config_overrides' in kwargs:
-            for key, value in kwargs['model_config_overrides'].items():
-                setattr(model_config, key, value)
+            model_config_params.update(kwargs['model_config_overrides'])
+
+        model_config = HMMConfig.create_balanced().copy(**model_config_params)
         
         # Create financial analysis configuration
-        analysis_config = FinancialAnalysisConfig.create_comprehensive_financial()
-        analysis_config.n_states = n_states
+        analysis_config_params = {'n_states': n_states}
         if 'analysis_config_overrides' in kwargs:
-            for key, value in kwargs['analysis_config_overrides'].items():
-                setattr(analysis_config, key, value)
+            analysis_config_params.update(kwargs['analysis_config_overrides'])
+        analysis_config = FinancialAnalysisConfig.create_comprehensive_financial().copy(**analysis_config_params)
         
         # Create report configuration if requested
         report_config = None

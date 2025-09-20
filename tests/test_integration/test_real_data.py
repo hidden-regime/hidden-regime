@@ -50,7 +50,7 @@ class TestRealDataIntegration:
             # Validate data output
             assert isinstance(data_output, pd.DataFrame)
             assert len(data_output) > 0
-            assert 'Close' in data_output.columns
+            assert 'close' in data_output.columns  # Standardized lowercase column names
             
             # Basic validation that pipeline executed successfully
             assert pipeline.update_count == 1

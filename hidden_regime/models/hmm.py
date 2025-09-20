@@ -108,7 +108,8 @@ class HiddenMarkovModel(ModelComponent):
         
         # Train using Baum-Welch algorithm
         self._train_baum_welch(returns)
-        
+
+
         self.is_fitted = True
     
     def predict(self, observations: pd.DataFrame) -> pd.DataFrame:
@@ -302,6 +303,45 @@ class HiddenMarkovModel(ModelComponent):
         self.transition_matrix_ = transition_matrix
         self.emission_means_ = means
         self.emission_stds_ = stds
+
+    def _apply_financial_constraints(self, emission_params: np.ndarray) -> np.ndarray:
+        """
+        Apply financial domain constraints to emission parameters.
+
+        Prevents extreme regime centers that are financially unrealistic.
+
+        Args:
+            emission_params: Array of shape (n_states, 2) with [means, stds]
+
+        Returns:
+            Constrained emission parameters
+        """
+        constrained_params = emission_params.copy()
+        means_log = constrained_params[:, 0]
+
+        # Convert to percentage space for constraint checking
+        means_pct = np.exp(means_log) - 1
+
+        # Apply financial domain constraints similar to kmeans initialization
+        # Maximum daily return: 8% for extreme bull markets
+        # Minimum daily return: -8% for crisis periods
+        max_daily_return_pct = 0.08  # 8% daily
+        min_daily_return_pct = -0.08  # -8% daily
+
+        # Constrain means in percentage space
+        constrained_means_pct = np.clip(means_pct, min_daily_return_pct, max_daily_return_pct)
+
+        # Convert back to log space
+        constrained_means_log = np.log(constrained_means_pct + 1.0)
+
+        # Update the constrained parameters
+        constrained_params[:, 0] = constrained_means_log
+
+        # Ensure minimum volatility to prevent numerical issues
+        min_std = 0.005  # 0.5% minimum daily volatility
+        constrained_params[:, 1] = np.maximum(constrained_params[:, 1], min_std)
+
+        return constrained_params
     
     def _initialize_parameters_simple(self, returns: np.ndarray) -> tuple:
         """Simple parameter initialization."""
@@ -355,11 +395,14 @@ class HiddenMarkovModel(ModelComponent):
                 # M-step: Update parameters using sophisticated Baum-Welch
                 self.initial_probs_, self.transition_matrix_, new_emission_params = \
                     self._algorithms.baum_welch_update(returns, gamma, xi, regularization=self.config.min_variance)
-                
+
+                # Apply financial domain constraints to emission parameters
+                constrained_emission_params = self._apply_financial_constraints(new_emission_params)
+
                 # Update emission parameters
-                self.emission_means_ = new_emission_params[:, 0]
-                self.emission_stds_ = new_emission_params[:, 1]
-                emission_params = new_emission_params
+                self.emission_means_ = constrained_emission_params[:, 0]
+                self.emission_stds_ = constrained_emission_params[:, 1]
+                emission_params = constrained_emission_params
                 
             else:
                 # Fallback to simplified algorithm (with the original bug)

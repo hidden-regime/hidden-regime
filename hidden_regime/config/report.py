@@ -13,7 +13,7 @@ from .base import BaseConfig
 from ..utils.exceptions import ConfigurationError
 
 
-@dataclass
+@dataclass(frozen=True)
 class ReportConfig(BaseConfig):
     """
     Configuration for report generation components.

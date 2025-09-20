@@ -12,4 +12,20 @@ from .exceptions import (
     ValidationError,
 )
 
-__all__ = ["HiddenRegimeError", "DataLoadError", "DataQualityError", "ValidationError"]
+from .state_mapping import (
+    percent_change_to_log_return,
+    log_return_to_percent_change,
+    map_states_to_financial_regimes,
+    get_regime_characteristics,
+)
+
+__all__ = [
+    "HiddenRegimeError",
+    "DataLoadError",
+    "DataQualityError",
+    "ValidationError",
+    "percent_change_to_log_return",
+    "log_return_to_percent_change",
+    "map_states_to_financial_regimes",
+    "get_regime_characteristics",
+]

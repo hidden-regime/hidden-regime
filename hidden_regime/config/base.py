@@ -12,7 +12,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 
 
-@dataclass
+@dataclass(frozen=True)
 class BaseConfig(ABC):
     """
     Base configuration class for all pipeline components.

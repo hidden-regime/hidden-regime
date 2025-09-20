@@ -172,7 +172,15 @@ class BaseObservationGenerator(ObservationComponent):
     
     # Built-in generator functions
     def _generate_log_return(self, data: pd.DataFrame) -> pd.Series:
-        """Generate log returns from price data."""
+        """Generate log returns from price data, preserving existing calculations."""
+        # Check if log_return already exists (e.g., from financial data loader)
+        if 'log_return' in data.columns:
+            existing_log_return = data['log_return'].dropna()
+            if len(existing_log_return) > 0:
+                # Use existing log_return if available and not empty
+                return pd.Series(data['log_return'], index=data.index, name='log_return')
+
+        # Fallback: calculate log returns from price data
         price_col = self._get_price_column(data)
         prices = data[price_col]
         log_returns = np.log(prices / prices.shift(1))

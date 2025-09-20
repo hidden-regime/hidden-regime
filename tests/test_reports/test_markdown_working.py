@@ -453,9 +453,24 @@ class TestMarkdownReportGeneratorCoverage:
     
     def test_error_handling_in_file_operations(self):
         """Test error handling in file operations."""
-        # Test with invalid output directory - use a config that bypasses validation
-        config = ReportConfig()
-        config.output_dir = "/invalid/path/that/does/not/exist"  # Set after creation to bypass validation
+        # Test with invalid output directory - create config that bypasses validation
+        config = ReportConfig.__new__(ReportConfig)
+        object.__setattr__(config, 'output_dir', "/invalid/path/that/does/not/exist")
+        object.__setattr__(config, 'output_format', 'markdown')
+        object.__setattr__(config, 'show_plots', False)
+        object.__setattr__(config, 'save_plots', True)
+        object.__setattr__(config, 'plot_format', 'png')
+        object.__setattr__(config, 'plot_dpi', 300)
+        object.__setattr__(config, 'include_summary', True)
+        object.__setattr__(config, 'include_regime_analysis', True)
+        object.__setattr__(config, 'include_performance_metrics', True)
+        object.__setattr__(config, 'include_risk_analysis', True)
+        object.__setattr__(config, 'include_trading_signals', False)
+        object.__setattr__(config, 'include_data_quality', True)
+        object.__setattr__(config, 'include_llm_analysis', False)
+        object.__setattr__(config, 'llm_provider', None)
+        object.__setattr__(config, 'title', None)
+        object.__setattr__(config, 'template_style', 'professional')
         generator = MarkdownReportGenerator(config)
         
         dates = pd.date_range('2023-01-01', periods=5, freq='D')
@@ -637,8 +652,7 @@ class TestMarkdownReportGeneratorCoverage:
     
     def test_comprehensive_workflow(self):
         """Test comprehensive workflow with realistic data patterns."""
-        config = ReportConfig.create_comprehensive()
-        config.title = "Comprehensive Workflow Test"
+        config = ReportConfig.create_comprehensive().copy(title="Comprehensive Workflow Test")
         generator = MarkdownReportGenerator(config)
         
         # Create realistic time series data
