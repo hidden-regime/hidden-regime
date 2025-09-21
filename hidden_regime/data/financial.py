@@ -302,38 +302,137 @@ class FinancialDataLoader(DataComponent):
         if "close" in data.columns and (data["close"] <= 0).any():
             raise DataLoadError(f"Invalid close price values found for {ticker}")
     
-    def plot(self, **kwargs) -> plt.Figure:
+    def plot(self, ax=None, **kwargs) -> plt.Figure:
         """
         Generate visualization of financial data.
-        
+
+        Args:
+            ax: Optional matplotlib axes to plot into for pipeline integration
+            **kwargs: Additional plotting arguments
+
         Returns:
             matplotlib Figure with financial data plots
         """
         if self._last_data is None:
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.text(0.5, 0.5, 'No data loaded yet', ha='center', va='center', fontsize=14)
-            ax.set_xlim(0, 1)
-            ax.set_ylim(0, 1)
-            ax.axis('off')
-            return fig
-        
+            if ax is not None:
+                ax.text(0.5, 0.5, 'No data loaded yet', ha='center', va='center', fontsize=14)
+                ax.set_xlim(0, 1)
+                ax.set_ylim(0, 1)
+                ax.axis('off')
+                return ax.figure
+            else:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                ax.text(0.5, 0.5, 'No data loaded yet', ha='center', va='center', fontsize=14)
+                ax.set_xlim(0, 1)
+                ax.set_ylim(0, 1)
+                ax.axis('off')
+                return fig
+
         data = self._last_data
-        
+
+        # If ax is provided, create compact plot for pipeline integration
+        if ax is not None:
+            return self._plot_compact(ax, data, **kwargs)
+
+        # Otherwise, create full standalone plot
+        return self._plot_full(data, **kwargs)
+
+    def _plot_compact(self, ax, data, **kwargs):
+        """Create compact plot for pipeline integration."""
+        # Check if regime overlay data is provided
+        regime_data = kwargs.get('regime_data', None)
+
+        # Plot price data only for compact view
+        price_col = "close" if "close" in data.columns else "price"
+        if price_col in data.columns:
+            ax.plot(data.index, data[price_col], label="Price", linewidth=1.5, color='black')
+
+        # Add regime overlay if available
+        if regime_data is not None:
+            self._add_regime_overlay(ax, data, regime_data)
+
+        ax.set_title(f'Price Data with Regime Overlay - {self.config.ticker}')
+        ax.set_ylabel('Price ($)')
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+
+        return ax.figure
+
+    def _add_regime_overlay(self, ax, price_data, regime_data):
+        """Add regime overlay to price chart."""
+        # Color map for regimes
+        regime_colors = {
+            "Crisis": "red",
+            "Bear": "orange",
+            "Sideways": "gray",
+            "Bull": "green",
+            "Euphoric": "purple"
+        }
+
+        # Create regime background using date ranges
+        current_regime = None
+        regime_start = None
+
+        # Get date range that matches both datasets
+        common_dates = price_data.index.intersection(regime_data.index)
+        if len(common_dates) == 0:
+            return  # No common dates to plot
+
+        for date in common_dates:
+            if date in regime_data.index:
+                row = regime_data.loc[date]
+                regime_type = row.get('regime_name', row.get('regime_type', f"State_{row.get('predicted_state', 0)}"))
+                confidence = row.get('confidence', 0.5)
+
+                # If regime changed or this is the first point, draw previous regime and start new one
+                if current_regime != regime_type:
+                    # Draw the previous regime background
+                    if current_regime is not None and regime_start is not None:
+                        color = regime_colors.get(current_regime, "blue")
+                        alpha = 0.2  # Fixed alpha for visibility
+                        ax.axvspan(regime_start, date, color=color, alpha=alpha, zorder=0)
+
+                    # Start new regime
+                    current_regime = regime_type
+                    regime_start = date
+
+        # Draw the final regime
+        if current_regime is not None and regime_start is not None:
+            color = regime_colors.get(current_regime, "blue")
+            alpha = 0.2
+            ax.axvspan(regime_start, common_dates[-1], color=color, alpha=alpha, zorder=0)
+
+        # Add regime legend
+        if 'regime_name' in regime_data.columns:
+            unique_regimes = regime_data['regime_name'].unique()
+        elif 'regime_type' in regime_data.columns:
+            unique_regimes = regime_data['regime_type'].unique()
+        else:
+            unique_regimes = []
+
+        if len(unique_regimes) > 0:
+            from matplotlib.patches import Patch
+            legend_elements = [Patch(facecolor=regime_colors.get(regime, "blue"),
+                                   alpha=0.3, label=regime) for regime in unique_regimes]
+            ax.legend(handles=legend_elements, loc='upper left', fontsize=8)
+
+    def _plot_full(self, data, **kwargs):
+        """Create full standalone plot with subplots."""
         # Create subplots
         fig, axes = plt.subplots(2, 1, figsize=(12, 8))
-        
+
         # Plot 1: Price data
         ax1 = axes[0]
         if "close" in data.columns:
             ax1.plot(data.index, data["close"], label="Close Price", linewidth=1.5)
         elif "price" in data.columns:
             ax1.plot(data.index, data["price"], label="Price", linewidth=1.5)
-        
+
         ax1.set_title(f'Price Data for {self.config.ticker}')
         ax1.set_ylabel('Price ($)')
         ax1.legend()
         ax1.grid(True, alpha=0.3)
-        
+
         # Plot 2: Volume (if available)
         ax2 = axes[1]
         if "volume" in data.columns:
@@ -342,13 +441,13 @@ class FinancialDataLoader(DataComponent):
             ax2.set_ylabel('Volume')
             ax2.legend()
         else:
-            ax2.text(0.5, 0.5, 'Volume data not available', 
+            ax2.text(0.5, 0.5, 'Volume data not available',
                     ha='center', va='center', transform=ax2.transAxes)
             ax2.set_title('Trading Volume')
-        
+
         ax2.set_xlabel('Date')
         ax2.grid(True, alpha=0.3)
-        
+
         plt.tight_layout()
         return fig
     

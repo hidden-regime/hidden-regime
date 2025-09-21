@@ -227,55 +227,64 @@ class Pipeline:
     def plot(self, components: Optional[list] = None, **kwargs) -> plt.Figure:
         """
         Generate visualization showing outputs from all or specified components.
-        
+
         Args:
             components: List of component names to plot. If None, plot all components.
             **kwargs: Additional plotting arguments passed to component plot methods
-            
+
         Returns:
             matplotlib Figure with subplots for each component
         """
         if components is None:
             components = ['data', 'observations', 'model', 'analysis']
-        
-        n_components = len(components)
+
+        # Filter components to only those with plot methods and outputs
+        available_components = []
+        for component_name in components:
+            component = getattr(self, component_name, None)
+            if component is not None and hasattr(component, 'plot'):
+                available_components.append(component_name)
+
+        n_components = len(available_components)
         if n_components == 0:
             fig, ax = plt.subplots(figsize=(8, 6))
-            ax.text(0.5, 0.5, 'No components to plot', ha='center', va='center', fontsize=14)
+            ax.text(0.5, 0.5, 'No components available to plot', ha='center', va='center', fontsize=14)
             ax.set_xlim(0, 1)
             ax.set_ylim(0, 1)
             ax.axis('off')
             return fig
-        
+
         # Create subplots
-        fig = plt.figure(figsize=(14, 4 * n_components))
-        
-        plot_idx = 1
-        for component_name in components:
+        fig, axes = plt.subplots(n_components, 1, figsize=(14, 4 * n_components))
+
+        # Handle single subplot case
+        if n_components == 1:
+            axes = [axes]
+
+        plot_idx = 0
+        for component_name in available_components:
+            ax = axes[plot_idx]
+            component = getattr(self, component_name, None)
+
             if component_name == 'data' and hasattr(self.data, 'plot'):
-                ax = plt.subplot(n_components, 1, plot_idx)
-                self.data.plot(**kwargs)
-                plt.title(f'{component_name.title()} Component')
-                plot_idx += 1
-                
+                # Pass regime data for overlay if analysis is available
+                plot_kwargs = kwargs.copy()
+                if 'analysis' in self.component_outputs:
+                    plot_kwargs['regime_data'] = self.component_outputs['analysis']
+                self.data.plot(ax=ax, **plot_kwargs)
+
             elif component_name == 'observations' and hasattr(self.observation, 'plot'):
-                ax = plt.subplot(n_components, 1, plot_idx)
-                self.observation.plot(**kwargs)
-                plt.title(f'{component_name.title()} Component')
-                plot_idx += 1
-                
+                self.observation.plot(ax=ax, **kwargs)
+
             elif component_name == 'model' and hasattr(self.model, 'plot'):
-                ax = plt.subplot(n_components, 1, plot_idx)
-                self.model.plot(**kwargs)
-                plt.title(f'{component_name.title()} Component')
-                plot_idx += 1
-                
+                self.model.plot(ax=ax, **kwargs)
+
             elif component_name == 'analysis' and hasattr(self.analysis, 'plot'):
-                ax = plt.subplot(n_components, 1, plot_idx)
-                self.analysis.plot(**kwargs)
-                plt.title(f'{component_name.title()} Component')
-                plot_idx += 1
-        
+                self.analysis.plot(ax=ax, **kwargs)
+
+            # The title is set by the component's compact plot method
+            plot_idx += 1
+
         plt.tight_layout()
         return fig
     

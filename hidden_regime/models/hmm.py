@@ -194,48 +194,92 @@ class HiddenMarkovModel(ModelComponent):
         
         return predictions
     
-    def plot(self, **kwargs) -> plt.Figure:
+    def plot(self, ax=None, **kwargs) -> plt.Figure:
         """
         Generate visualization for this component.
-        
+
+        Args:
+            ax: Optional matplotlib axes to plot into for pipeline integration
+            **kwargs: Additional plotting arguments
+
         Returns:
             matplotlib Figure object with HMM visualization
         """
         if not self.is_fitted:
-            fig, ax = plt.subplots(figsize=(8, 6))
-            ax.text(0.5, 0.5, 'Model not fitted yet', ha='center', va='center', fontsize=14)
-            ax.set_xlim(0, 1)
-            ax.set_ylim(0, 1)
-            ax.axis('off')
-            return fig
-        
+            if ax is not None:
+                ax.text(0.5, 0.5, 'Model not fitted yet', ha='center', va='center', fontsize=14)
+                ax.set_xlim(0, 1)
+                ax.set_ylim(0, 1)
+                ax.axis('off')
+                return ax.figure
+            else:
+                fig, ax = plt.subplots(figsize=(8, 6))
+                ax.text(0.5, 0.5, 'Model not fitted yet', ha='center', va='center', fontsize=14)
+                ax.set_xlim(0, 1)
+                ax.set_ylim(0, 1)
+                ax.axis('off')
+                return fig
+
+        # If ax is provided, create compact plot for pipeline integration
+        if ax is not None:
+            return self._plot_compact(ax, **kwargs)
+
+        # Otherwise, create full standalone plot
+        return self._plot_full(**kwargs)
+
+    def _plot_compact(self, ax, **kwargs):
+        """Create compact plot for pipeline integration."""
+        # Plot emission parameters as simple bar chart
+        states = range(self.n_states)
+        x = np.arange(len(states))
+
+        bars = ax.bar(x, self.emission_means_, alpha=0.8, color='orange')
+
+        ax.set_title(f'Model - Emission Means (States: {self.n_states})')
+        ax.set_xlabel('State')
+        ax.set_ylabel('Mean Return')
+        ax.set_xticks(x)
+        ax.set_xticklabels([f'State {i}' for i in states])
+        ax.grid(True, alpha=0.3)
+
+        # Add value labels on bars
+        for i, bar in enumerate(bars):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{height:.4f}',
+                   ha='center', va='bottom', fontsize=9)
+
+        return ax.figure
+
+    def _plot_full(self, **kwargs):
+        """Create full standalone plot with subplots."""
         # Create subplots for model visualization
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-        
+
         # Plot 1: Transition matrix heatmap
         ax1 = axes[0, 0]
         im1 = ax1.imshow(self.transition_matrix_, cmap='Blues', aspect='auto')
         ax1.set_title('Transition Matrix')
         ax1.set_xlabel('To State')
         ax1.set_ylabel('From State')
-        
+
         # Add text annotations
         for i in range(self.n_states):
             for j in range(self.n_states):
                 text = ax1.text(j, i, f'{self.transition_matrix_[i, j]:.2f}',
                                ha="center", va="center", color="black")
-        
+
         plt.colorbar(im1, ax=ax1)
-        
+
         # Plot 2: Emission parameters
         ax2 = axes[0, 1]
         states = range(self.n_states)
         width = 0.35
         x = np.arange(len(states))
-        
+
         bars1 = ax2.bar(x - width/2, self.emission_means_, width, label='Mean', alpha=0.8)
         bars2 = ax2.bar(x + width/2, self.emission_stds_, width, label='Std Dev', alpha=0.8)
-        
+
         ax2.set_title('Emission Parameters by State')
         ax2.set_xlabel('State')
         ax2.set_ylabel('Value')
@@ -243,7 +287,7 @@ class HiddenMarkovModel(ModelComponent):
         ax2.set_xticklabels([f'State {i}' for i in states])
         ax2.legend()
         ax2.grid(True, alpha=0.3)
-        
+
         # Plot 3: Training convergence
         ax3 = axes[1, 0]
         if self.training_history_['log_likelihoods']:
@@ -255,11 +299,11 @@ class HiddenMarkovModel(ModelComponent):
         else:
             ax3.text(0.5, 0.5, 'No training history', ha='center', va='center')
             ax3.set_title('Training Convergence')
-        
+
         # Plot 4: Model summary
         ax4 = axes[1, 1]
         ax4.axis('off')
-        
+
         # Create summary text
         summary_text = [
             f"States: {self.n_states}",
@@ -269,15 +313,15 @@ class HiddenMarkovModel(ModelComponent):
             "",
             "State Characteristics:",
         ]
-        
+
         for i in range(self.n_states):
             if self.emission_means_ is not None and self.emission_stds_ is not None:
                 summary_text.append(f"  State {i}: μ={self.emission_means_[i]:.4f}, σ={self.emission_stds_[i]:.4f}")
-        
+
         ax4.text(0.05, 0.95, '\n'.join(summary_text), transform=ax4.transAxes,
                 fontsize=10, verticalalignment='top', fontfamily='monospace')
         ax4.set_title('Model Summary')
-        
+
         plt.tight_layout()
         return fig
     

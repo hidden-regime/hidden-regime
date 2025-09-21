@@ -217,7 +217,52 @@ class FinancialAnalysis(AnalysisComponent):
         return pd.Series(days_in_regime, index=states.index)
     
     def _get_regime_characteristics(self) -> Dict[str, List[float]]:
-        """Get expected regime characteristics based on financial knowledge."""
+        """Get expected regime characteristics based on actual model parameters when available."""
+        # Try to use actual model parameters first
+        if hasattr(self, '_current_state_mapping') and self._last_analysis is not None:
+            try:
+                # Calculate actual characteristics from observed data
+                actual_characteristics = {
+                    'return': [],
+                    'volatility': [],
+                    'duration': []
+                }
+
+                for state_idx in range(self.config.n_states):
+                    state_mask = self._last_analysis['predicted_state'] == state_idx
+                    if state_mask.any():
+                        # Get actual returns for this state from raw data
+                        if self._last_raw_data is not None and 'log_return' in self._last_raw_data.columns:
+                            regime_dates = self._last_analysis[state_mask].index
+                            regime_returns = self._last_raw_data.loc[regime_dates, 'log_return']
+
+                            # Calculate actual characteristics
+                            actual_return = regime_returns.mean()
+                            actual_volatility = regime_returns.std()
+
+                            actual_characteristics['return'].append(actual_return)
+                            actual_characteristics['volatility'].append(actual_volatility)
+
+                            # Calculate actual duration
+                            actual_duration = self._calculate_regime_duration(state_idx)
+                            actual_characteristics['duration'].append(actual_duration)
+                        else:
+                            # Fallback to defaults for this state
+                            actual_characteristics['return'].append(0.0)
+                            actual_characteristics['volatility'].append(0.015)
+                            actual_characteristics['duration'].append(10.0)
+                    else:
+                        # No data for this state, use defaults
+                        actual_characteristics['return'].append(0.0)
+                        actual_characteristics['volatility'].append(0.015)
+                        actual_characteristics['duration'].append(10.0)
+
+                return actual_characteristics
+
+            except Exception as e:
+                warnings.warn(f"Failed to calculate actual regime characteristics: {e}")
+
+        # Fallback to default characteristics based on financial knowledge
         if self.config.n_states == 3:
             return {
                 'return': [-0.002, 0.0001, 0.001],  # Bear, Sideways, Bull daily returns
@@ -237,6 +282,43 @@ class FinancialAnalysis(AnalysisComponent):
                 'volatility': [0.015] * self.config.n_states,
                 'duration': [10.0] * self.config.n_states
             }
+
+    def _calculate_regime_duration(self, state_idx: int) -> float:
+        """Calculate average duration for a specific regime state."""
+        if self._last_analysis is None:
+            return 10.0
+
+        # Find regime episodes for this state
+        state_mask = self._last_analysis['predicted_state'] == state_idx
+
+        if not state_mask.any():
+            return 10.0
+
+        # Calculate consecutive periods in this state
+        state_series = (self._last_analysis['predicted_state'] == state_idx).astype(int)
+        transitions = state_series.diff().fillna(0)
+
+        # Find start and end of episodes
+        episode_starts = transitions == 1
+        episode_ends = transitions == -1
+
+        durations = []
+        current_start = None
+
+        for i, is_start in enumerate(episode_starts):
+            if is_start:
+                current_start = i
+            elif episode_ends.iloc[i] and current_start is not None:
+                duration = i - current_start
+                durations.append(duration)
+                current_start = None
+
+        # Handle ongoing episode at end
+        if current_start is not None:
+            duration = len(state_series) - current_start
+            durations.append(duration)
+
+        return np.mean(durations) if durations else 10.0
     
     def _add_duration_analysis(self, analysis: pd.DataFrame) -> pd.DataFrame:
         """Add regime duration analysis."""
@@ -269,24 +351,117 @@ class FinancialAnalysis(AnalysisComponent):
         return analysis
     
     def _add_return_analysis(self, analysis: pd.DataFrame) -> pd.DataFrame:
-        """Add return-based analysis."""
-        # Add rolling returns if we have sufficient data
-        if len(analysis) >= self.config.return_window:
-            # This is a placeholder - in real implementation would need price data
-            analysis['rolling_return'] = 0.0  # Placeholder
-            analysis['return_vs_expected'] = 0.0  # Placeholder
-        
+        """Add return-based analysis using actual price data."""
+        # Add rolling returns if we have sufficient data and raw data available
+        if len(analysis) >= self.config.return_window and self._last_raw_data is not None:
+            raw_data = self._last_raw_data
+
+            # Calculate rolling cumulative returns
+            if 'log_return' in raw_data.columns:
+                # Rolling return over specified window
+                rolling_log_returns = raw_data['log_return'].rolling(window=self.config.return_window).sum()
+                analysis['rolling_return'] = np.exp(rolling_log_returns) - 1  # Convert to percentage
+
+                # Calculate regime-specific expected returns based on actual emission means
+                if hasattr(self, '_current_state_mapping'):
+                    # Use actual emission means for expected returns
+                    expected_returns = {}
+                    if hasattr(self, '_last_model_output') and hasattr(self, '_current_state_mapping'):
+                        # Try to get emission means from stored model component reference
+                        for state_idx, regime_name in self._current_state_mapping.items():
+                            # Use actual daily log return as expected return
+                            expected_returns[state_idx] = analysis[analysis['predicted_state'] == state_idx]['rolling_return'].median()
+
+                    # Map expected returns to analysis
+                    analysis['expected_rolling_return'] = analysis['predicted_state'].map(expected_returns)
+
+                    # Calculate return vs expected (actual performance relative to regime expectation)
+                    analysis['return_vs_expected'] = analysis['rolling_return'] - analysis['expected_rolling_return']
+                else:
+                    # Fallback to simple return comparison
+                    analysis['return_vs_expected'] = analysis['rolling_return'] - analysis['rolling_return'].rolling(window=50).mean()
+            else:
+                # Fallback if no log_return available
+                analysis['rolling_return'] = 0.0
+                analysis['return_vs_expected'] = 0.0
+        else:
+            # Not enough data for rolling calculations
+            analysis['rolling_return'] = 0.0
+            analysis['return_vs_expected'] = 0.0
+
         return analysis
     
     def _add_volatility_analysis(self, analysis: pd.DataFrame) -> pd.DataFrame:
-        """Add volatility analysis."""
-        # Add rolling volatility if we have sufficient data
-        if len(analysis) >= self.config.volatility_window:
-            # This is a placeholder - in real implementation would need price data
-            analysis['rolling_volatility'] = 0.0  # Placeholder
-            analysis['volatility_vs_expected'] = 0.0  # Placeholder
-        
+        """Add volatility analysis using actual price data."""
+        # Add rolling volatility if we have sufficient data and raw data available
+        if len(analysis) >= self.config.volatility_window and self._last_raw_data is not None:
+            raw_data = self._last_raw_data
+
+            # Calculate rolling volatility using log returns
+            if 'log_return' in raw_data.columns:
+                # Standard rolling volatility (standard deviation of log returns)
+                rolling_vol = raw_data['log_return'].rolling(window=self.config.volatility_window).std()
+                analysis['rolling_volatility'] = rolling_vol * np.sqrt(252)  # Annualized volatility
+
+                # Calculate regime-specific expected volatility based on actual data
+                if hasattr(self, '_current_state_mapping'):
+                    # Calculate actual volatility by regime from historical data
+                    expected_volatilities = {}
+                    for state_idx, regime_name in self._current_state_mapping.items():
+                        state_mask = analysis['predicted_state'] == state_idx
+                        if state_mask.any():
+                            # Get log returns for this regime's periods
+                            regime_dates = analysis[state_mask].index
+                            regime_returns = raw_data.loc[regime_dates, 'log_return']
+
+                            # Calculate regime-specific volatility
+                            regime_vol = regime_returns.std() * np.sqrt(252)  # Annualized
+                            expected_volatilities[state_idx] = regime_vol
+
+                    # Map expected volatilities to analysis
+                    analysis['expected_volatility'] = analysis['predicted_state'].map(expected_volatilities)
+
+                    # Calculate volatility vs expected (current vol relative to regime average)
+                    analysis['volatility_vs_expected'] = analysis['rolling_volatility'] - analysis['expected_volatility']
+
+                    # Add volatility regime classification
+                    analysis['volatility_regime'] = analysis.apply(
+                        lambda row: self._classify_volatility_regime(
+                            row['rolling_volatility'],
+                            row.get('expected_volatility', 0.15)
+                        ), axis=1
+                    )
+                else:
+                    # Fallback to simple volatility comparison
+                    long_term_vol = raw_data['log_return'].std() * np.sqrt(252)
+                    analysis['expected_volatility'] = long_term_vol
+                    analysis['volatility_vs_expected'] = analysis['rolling_volatility'] - long_term_vol
+                    analysis['volatility_regime'] = 'Normal'
+            else:
+                # Fallback if no log_return available
+                analysis['rolling_volatility'] = 0.0
+                analysis['volatility_vs_expected'] = 0.0
+                analysis['expected_volatility'] = 0.0
+                analysis['volatility_regime'] = 'Unknown'
+        else:
+            # Not enough data for rolling calculations
+            analysis['rolling_volatility'] = 0.0
+            analysis['volatility_vs_expected'] = 0.0
+            analysis['expected_volatility'] = 0.0
+            analysis['volatility_regime'] = 'Unknown'
+
         return analysis
+
+    def _classify_volatility_regime(self, current_vol: float, expected_vol: float) -> str:
+        """Classify current volatility relative to expected."""
+        if current_vol > expected_vol * 1.5:
+            return 'High Volatility'
+        elif current_vol > expected_vol * 1.2:
+            return 'Elevated Volatility'
+        elif current_vol < expected_vol * 0.8:
+            return 'Low Volatility'
+        else:
+            return 'Normal Volatility'
     
     def _add_indicator_comparisons(self, analysis: pd.DataFrame, raw_data: pd.DataFrame) -> pd.DataFrame:
         """Add technical indicator comparisons."""
@@ -507,106 +682,160 @@ class FinancialAnalysis(AnalysisComponent):
         
         return analysis
     
-    def plot(self, **kwargs) -> plt.Figure:
+    def plot(self, ax=None, **kwargs) -> plt.Figure:
         """
         Generate visualization for analysis results.
-        
+
+        Args:
+            ax: Optional matplotlib axes to plot into for pipeline integration
+            **kwargs: Additional plotting arguments
+
         Returns:
             matplotlib Figure with analysis visualizations
         """
         if self._last_analysis is None:
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.text(0.5, 0.5, 'No analysis results yet', ha='center', va='center', fontsize=14)
-            ax.set_xlim(0, 1)
-            ax.set_ylim(0, 1)
-            ax.axis('off')
-            return fig
-        
+            if ax is not None:
+                ax.text(0.5, 0.5, 'No analysis results yet', ha='center', va='center', fontsize=14)
+                ax.set_xlim(0, 1)
+                ax.set_ylim(0, 1)
+                ax.axis('off')
+                return ax.figure
+            else:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                ax.text(0.5, 0.5, 'No analysis results yet', ha='center', va='center', fontsize=14)
+                ax.set_xlim(0, 1)
+                ax.set_ylim(0, 1)
+                ax.axis('off')
+                return fig
+
+        # If ax is provided, create compact plot for pipeline integration
+        if ax is not None:
+            return self._plot_compact(ax, **kwargs)
+
+        # Otherwise, create full standalone plot
+        return self._plot_full(**kwargs)
+
+    def _plot_compact(self, ax, **kwargs):
+        """Create compact plot for pipeline integration."""
         analysis = self._last_analysis
-        
-        # Create subplots
-        n_plots = 3
-        fig, axes = plt.subplots(n_plots, 1, figsize=(14, 4 * n_plots))
-        
-        # Plot 1: Regime sequence with confidence
-        ax1 = axes[0]
-        
+
         # Color map for regimes
         regime_colors = {
             "Crisis": "red",
-            "Bear": "orange", 
+            "Bear": "orange",
             "Sideways": "gray",
             "Bull": "green",
             "Euphoric": "purple"
         }
-        
+
+        # Plot regime sequence as colored bars
+        x_vals = range(len(analysis))
+        for i, (idx, row) in enumerate(analysis.iterrows()):
+            regime_type = row.get('regime_type', f"Regime_{row['predicted_state']}")
+            color = regime_colors.get(regime_type, "blue")
+            alpha = row['confidence'] * 0.7 + 0.3  # Scale alpha by confidence
+
+            ax.bar(i, 1, color=color, alpha=alpha, width=1, edgecolor='none')
+
+        ax.set_title('Analysis - Regime Sequence')
+        ax.set_ylabel('Regime')
+        ax.set_ylim(0, 1)
+
+        # Add compact legend
+        unique_regimes = analysis['regime_type'].unique()
+        legend_elements = [plt.Rectangle((0,0),1,1, facecolor=regime_colors.get(regime, "blue"),
+                                       alpha=0.7, label=regime) for regime in unique_regimes]
+        ax.legend(handles=legend_elements, loc='upper right', fontsize=8)
+
+        return ax.figure
+
+    def _plot_full(self, **kwargs):
+        """Create full standalone plot with subplots."""
+        analysis = self._last_analysis
+
+        # Create subplots
+        n_plots = 3
+        fig, axes = plt.subplots(n_plots, 1, figsize=(14, 4 * n_plots))
+
+        # Plot 1: Regime sequence with confidence
+        ax1 = axes[0]
+
+        # Color map for regimes
+        regime_colors = {
+            "Crisis": "red",
+            "Bear": "orange",
+            "Sideways": "gray",
+            "Bull": "green",
+            "Euphoric": "purple"
+        }
+
         # Plot regime states as colored background
         for i, (idx, row) in enumerate(analysis.iterrows()):
             regime_type = row.get('regime_type', f"Regime_{row['predicted_state']}")
             color = regime_colors.get(regime_type, "blue")
             alpha = row['confidence'] * 0.7 + 0.3  # Scale alpha by confidence
-            
+
             ax1.bar(i, 1, color=color, alpha=alpha, width=1, edgecolor='none')
-        
+
         ax1.set_title('Regime Sequence (colored by type, opacity by confidence)')
         ax1.set_ylabel('Regime')
         ax1.set_ylim(0, 1)
-        
+
         # Add legend
         legend_elements = [plt.Rectangle((0,0),1,1, facecolor=color, alpha=0.7, label=regime)
                           for regime, color in regime_colors.items()
                           if regime in analysis['regime_type'].values]
         ax1.legend(handles=legend_elements, loc='upper right')
-        
+
         # Plot 2: Confidence and days in regime
         ax2 = axes[1]
         ax2_twin = ax2.twinx()
-        
+
         x_vals = range(len(analysis))
         line1 = ax2.plot(x_vals, analysis['confidence'], 'b-', linewidth=2, label='Confidence')
-        
+
         if 'days_in_regime' in analysis.columns:
             line2 = ax2_twin.plot(x_vals, analysis['days_in_regime'], 'r--', linewidth=2, label='Days in Regime')
             ax2_twin.set_ylabel('Days in Regime', color='red')
             ax2_twin.tick_params(axis='y', labelcolor='red')
-        
+
         ax2.set_title('Confidence and Regime Duration')
         ax2.set_ylabel('Confidence', color='blue')
         ax2.set_xlabel('Time')
         ax2.tick_params(axis='y', labelcolor='blue')
         ax2.grid(True, alpha=0.3)
-        
+
         # Combine legends
         lines1, labels1 = ax2.get_legend_handles_labels()
         lines2, labels2 = ax2_twin.get_legend_handles_labels() if 'days_in_regime' in analysis.columns else ([], [])
         ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
-        
+
         # Plot 3: Trading signals (if available)
         ax3 = axes[2]
         if 'position_signal' in analysis.columns:
             signals = analysis['position_signal']
-            
+
             # Color signals by regime type
-            colors = [regime_colors.get(regime_type, "blue") 
+            colors = [regime_colors.get(regime_type, "blue")
                      for regime_type in analysis['regime_type']]
-            
+
             bars = ax3.bar(x_vals, signals, color=colors, alpha=0.7, edgecolor='black', linewidth=0.5)
-            
+
             ax3.axhline(y=0, color='black', linestyle='-', alpha=0.3)
             ax3.set_title('Trading Position Signals')
             ax3.set_ylabel('Position Size')
             ax3.set_xlabel('Time')
             ax3.grid(True, alpha=0.3)
-            
+
             # Add horizontal lines for reference
             ax3.axhline(y=0.5, color='green', linestyle='--', alpha=0.5, label='Strong Bull')
             ax3.axhline(y=-0.5, color='red', linestyle='--', alpha=0.5, label='Strong Bear')
             ax3.legend()
         else:
-            ax3.text(0.5, 0.5, 'No trading signals generated', 
+            ax3.text(0.5, 0.5, 'No trading signals generated',
                     ha='center', va='center', transform=ax3.transAxes)
             ax3.set_title('Trading Position Signals')
-        
+
         plt.tight_layout()
         return fig
     

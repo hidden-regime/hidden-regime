@@ -287,49 +287,77 @@ class FinancialObservationGenerator(BaseObservationGenerator):
         pvt = (price_change_pct * volume).cumsum()
         return pd.Series(pvt, index=data.index, name='pvt')
     
-    def plot(self, **kwargs) -> plt.Figure:
+    def plot(self, ax=None, **kwargs) -> plt.Figure:
         """
         Generate financial-specific visualization of observations.
-        
+
+        Args:
+            ax: Optional matplotlib axes to plot into for pipeline integration
+            **kwargs: Additional plotting arguments
+
         Returns:
             matplotlib Figure with financial observation plots
         """
         if self.last_observations is None:
             return super().plot(**kwargs)
-        
+
+        # If ax is provided, create compact plot for pipeline integration
+        if ax is not None:
+            return self._plot_compact(ax, **kwargs)
+
+        # Otherwise, create full standalone plot
+        return self._plot_full(**kwargs)
+
+    def _plot_compact(self, ax, **kwargs):
+        """Create compact plot for pipeline integration."""
+        # Plot log returns only for compact view
+        if 'log_return' in self.last_observations.columns:
+            returns = self.last_observations['log_return'].dropna()
+            ax.plot(returns.index, returns, label='Log Returns', alpha=0.8, color='green')
+            ax.axhline(y=0, color='red', linestyle='--', alpha=0.5)
+
+        ax.set_title('Observations - Log Returns')
+        ax.set_ylabel('Log Return')
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+
+        return ax.figure
+
+    def _plot_full(self, **kwargs):
+        """Create full standalone plot with subplots."""
         # Create subplots for different types of observations
         fig = plt.figure(figsize=(15, 12))
-        
+
         # 1. Price and moving averages
         ax1 = plt.subplot(4, 1, 1)
         price_col = self.config.price_column
         if price_col in self.last_observations.columns:
-            ax1.plot(self.last_observations.index, self.last_observations[price_col], 
+            ax1.plot(self.last_observations.index, self.last_observations[price_col],
                     label='Price', linewidth=1.5)
-        
+
         # Add moving averages if available
         ma_cols = [col for col in self.last_observations.columns if 'sma' in col.lower()]
         for ma_col in ma_cols:
-            ax1.plot(self.last_observations.index, self.last_observations[ma_col], 
+            ax1.plot(self.last_observations.index, self.last_observations[ma_col],
                     label=ma_col, alpha=0.7)
-        
+
         ax1.set_title('Price and Moving Averages')
         ax1.set_ylabel('Price')
         ax1.legend()
         ax1.grid(True, alpha=0.3)
-        
+
         # 2. Returns
         ax2 = plt.subplot(4, 1, 2)
         if 'log_return' in self.last_observations.columns:
             returns = self.last_observations['log_return'].dropna()
             ax2.plot(returns.index, returns, label='Log Returns', alpha=0.8)
-        
+
         ax2.set_title('Returns')
         ax2.set_ylabel('Log Return')
         ax2.axhline(y=0, color='red', linestyle='--', alpha=0.5)
         ax2.legend()
         ax2.grid(True, alpha=0.3)
-        
+
         # 3. Technical indicators
         ax3 = plt.subplot(4, 1, 3)
         if 'rsi' in self.last_observations.columns:
@@ -338,35 +366,35 @@ class FinancialObservationGenerator(BaseObservationGenerator):
             ax3.axhline(y=70, color='red', linestyle='--', alpha=0.5, label='Overbought')
             ax3.axhline(y=30, color='green', linestyle='--', alpha=0.5, label='Oversold')
             ax3.set_ylim(0, 100)
-        
+
         ax3.set_title('Technical Indicators')
         ax3.set_ylabel('RSI')
         ax3.legend()
         ax3.grid(True, alpha=0.3)
-        
+
         # 4. Volume (if available)
         ax4 = plt.subplot(4, 1, 4)
         volume_col = self.config.volume_column
-        if (self.config.include_volume_features and 
+        if (self.config.include_volume_features and
             volume_col in self.last_observations.columns):
-            
+
             volume = self.last_observations[volume_col]
             ax4.bar(volume.index, volume, alpha=0.6, label='Volume')
-            
+
             if 'volume_sma' in self.last_observations.columns:
                 volume_sma = self.last_observations['volume_sma']
-                ax4.plot(volume_sma.index, volume_sma, color='red', 
+                ax4.plot(volume_sma.index, volume_sma, color='red',
                         label='Volume SMA', linewidth=2)
         else:
             # Plot volatility instead
             if 'volatility' in self.last_observations.columns:
                 volatility = self.last_observations['volatility'].dropna()
                 ax4.plot(volatility.index, volatility, label='Volatility', color='orange')
-        
+
         ax4.set_title('Volume / Volatility')
         ax4.set_xlabel('Date')
         ax4.legend()
         ax4.grid(True, alpha=0.3)
-        
+
         plt.tight_layout()
         return fig
