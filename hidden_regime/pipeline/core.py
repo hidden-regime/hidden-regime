@@ -196,6 +196,34 @@ class Pipeline:
         """
         return self.component_outputs.get(component_name)
     
+    @property
+    def data_output(self) -> pd.DataFrame:
+        """
+        Easily access the data output as a DataFrame
+        """
+        return self.get_component_output('data')
+    
+    @property
+    def model_output(self) -> pd.DataFrame:
+        """
+        Easily access the model output as a DataFrame
+        """
+        return self.get_component_output('model') 
+
+    @property
+    def analysis_output(self) -> pd.DataFrame:
+        """
+        Easily access the analysis output as a DataFrame
+        """
+        return self.get_component_output('analysis') 
+
+    @property
+    def observations_output(self) -> pd.DataFrame:
+        """
+        Easily access the observation output as a DataFrame
+        """        
+        return self.get_component_output('observations')
+        
     def plot(self, components: Optional[list] = None, **kwargs) -> plt.Figure:
         """
         Generate visualization showing outputs from all or specified components.

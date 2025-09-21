@@ -40,7 +40,6 @@ from hidden_regime.config.observation import FinancialObservationConfig
 from hidden_regime.config.data import FinancialDataConfig
 from hidden_regime.config.model import HMMConfig
 
-
 def print_section_header(title, char="=", width=80):
     """Print a formatted section header."""
     print(f"\n{char * width}")
@@ -211,6 +210,149 @@ def create_enhanced_features_visualization(results_dict, ticker="NVDA"):
     return plot_filename
 
 
+def create_individual_feature_plots(results_dict, ticker="AAPL"):
+    """Create individual detailed plots for each enhanced feature."""
+    print("\n🎨 Creating individual feature plots...")
+
+    enhanced_features = ['momentum_strength', 'trend_persistence', 'volatility_context', 'directional_consistency']
+    feature_descriptions = {
+        'momentum_strength': 'Bull/Bear Momentum Detection',
+        'trend_persistence': 'Sideways Regime Identification',
+        'volatility_context': 'Crisis Period Detection',
+        'directional_consistency': 'Return Sign Pattern Analysis'
+    }
+
+    individual_plot_files = []
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Use absolute path for output directory
+    output_dir = os.path.abspath(os.path.join('..', 'output', 'plots'))
+    os.makedirs(output_dir, exist_ok=True)
+    print(f"📁 Individual plots will be saved to: {output_dir}")
+
+    # Get baseline data for reference
+    baseline_results = results_dict.get('baseline')
+    if baseline_results is None:
+        print("❌ Cannot create individual plots without baseline results")
+        return []
+
+    baseline_data = baseline_results['data']
+
+    for feature_name in enhanced_features:
+        # Check if we have results for this feature
+        feature_results = None
+        for key, results in results_dict.items():
+            if results and 'observations' in results:
+                if feature_name in results['observations'].columns:
+                    feature_results = results
+                    break
+
+        if feature_results is None:
+            print(f"⚠️  No data found for {feature_name}, skipping...")
+            continue
+
+        print(f"📊 Creating plot for {feature_name}...")
+
+        # Create 3-panel plot for this feature
+        fig, axes = plt.subplots(3, 1, figsize=(15, 12))
+
+        observations = feature_results['observations']
+        analysis = feature_results['analysis']
+        feature_data = observations[feature_name].dropna()
+
+        if len(feature_data) == 0:
+            print(f"⚠️  No valid data for {feature_name}, skipping...")
+            continue
+
+        # Panel 1: Price with regime overlay
+        ax1 = axes[0]
+        ax1.plot(baseline_data.index, baseline_data['close'], linewidth=1.5, color='blue', alpha=0.8)
+
+        # Add regime coloring if available
+        if 'regime_name' in analysis.columns:
+            regime_colors = {'Bull': 'green', 'Bear': 'red', 'Sideways': 'orange',
+                           'Euphoric': 'purple', 'Crisis': 'black', 'Strong Bull': 'darkgreen',
+                           'Weak Bull': 'lightgreen', 'Strong Bear': 'darkred', 'Weak Bear': 'lightcoral',
+                           'Strong Crisis': 'darkred', 'Weak Crisis': 'pink'}
+
+            for regime in analysis['regime_name'].unique():
+                mask = analysis['regime_name'] == regime
+                regime_periods = analysis.index[mask]
+                if len(regime_periods) > 0:
+                    color = regime_colors.get(regime, 'gray')
+                    for period in regime_periods:
+                        if period in baseline_data.index:
+                            ax1.axvline(x=period, color=color, alpha=0.3, linewidth=0.8)
+
+        ax1.set_title(f'{ticker} Price - {feature_descriptions[feature_name]}', fontsize=14, fontweight='bold')
+        ax1.set_ylabel('Price ($)')
+        ax1.grid(True, alpha=0.3)
+
+        # Panel 2: Feature values over time with statistical bands
+        ax2 = axes[1]
+        ax2.plot(feature_data.index, feature_data.values, linewidth=2, color='red', alpha=0.8, label=feature_name)
+
+        # Add statistical bands
+        mean_val = feature_data.mean()
+        std_val = feature_data.std()
+        ax2.axhline(y=mean_val, color='blue', linestyle='-', alpha=0.6, label=f'Mean ({mean_val:.3f})')
+        ax2.axhline(y=mean_val + std_val, color='gray', linestyle='--', alpha=0.5, label=f'±1 Std')
+        ax2.axhline(y=mean_val - std_val, color='gray', linestyle='--', alpha=0.5)
+        ax2.axhline(y=mean_val + 2*std_val, color='gray', linestyle=':', alpha=0.3, label=f'±2 Std')
+        ax2.axhline(y=mean_val - 2*std_val, color='gray', linestyle=':', alpha=0.3)
+
+        ax2.set_title(f'{feature_name.replace("_", " ").title()} Values Over Time', fontsize=12, fontweight='bold')
+        ax2.set_ylabel('Feature Value')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+
+        # Panel 3: Feature correlation with returns
+        ax3 = axes[2]
+        if 'log_return' in observations.columns:
+            log_returns = observations['log_return'].dropna()
+            # Align feature and returns data
+            common_index = feature_data.index.intersection(log_returns.index)
+            if len(common_index) > 10:
+                aligned_feature = feature_data.reindex(common_index)
+                aligned_returns = log_returns.reindex(common_index)
+
+                # Scatter plot with correlation
+                ax3.scatter(aligned_feature, aligned_returns, alpha=0.6, s=20)
+
+                # Calculate and display correlation
+                correlation = aligned_feature.corr(aligned_returns)
+                ax3.set_title(f'{feature_name.replace("_", " ").title()} vs Log Returns (Correlation: {correlation:.3f})',
+                             fontsize=12, fontweight='bold')
+                ax3.set_xlabel('Feature Value')
+                ax3.set_ylabel('Log Return')
+                ax3.grid(True, alpha=0.3)
+
+                # Add trend line if correlation is significant
+                if abs(correlation) > 0.1:
+                    z = np.polyfit(aligned_feature, aligned_returns, 1)
+                    p = np.poly1d(z)
+                    ax3.plot(aligned_feature, p(aligned_feature), "r--", alpha=0.8, linewidth=2)
+            else:
+                ax3.text(0.5, 0.5, 'Insufficient data for correlation analysis',
+                        ha='center', va='center', transform=ax3.transAxes, fontsize=12)
+                ax3.set_title(f'{feature_name.replace("_", " ").title()} Correlation Analysis', fontsize=12, fontweight='bold')
+        else:
+            ax3.text(0.5, 0.5, 'Log returns not available for correlation',
+                    ha='center', va='center', transform=ax3.transAxes, fontsize=12)
+            ax3.set_title(f'{feature_name.replace("_", " ").title()} Analysis', fontsize=12, fontweight='bold')
+
+        plt.tight_layout()
+
+        # Save individual plot
+        plot_filename = os.path.join(output_dir, f'feature_{feature_name}_{ticker}_{timestamp}.png')
+        plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
+        plt.close()
+
+        individual_plot_files.append(plot_filename)
+        print(f"✅ Individual plot saved: {plot_filename}")
+
+    return individual_plot_files
+
+
 def main():
     """Main execution function demonstrating enhanced features through pipeline architecture."""
 
@@ -225,10 +367,11 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
     """)
 
     # Configuration
-    ticker = "AAPL"
+    ticker = "SPY"
     start_date = "2022-01-01"  # Extended timeline for feature warmup
     end_date = "2024-01-01"
     n_states = 3
+    individual_results = {}
 
     print(f"📈 Analysis Parameters:")
     print(f"   Ticker: {ticker}")
@@ -251,6 +394,8 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
         print("🔄 Executing baseline pipeline...")
         baseline_result = baseline_pipeline.update()
         baseline_results = analyze_pipeline_results(baseline_pipeline, "Baseline")
+        individual_results['baseline'] = analyze_pipeline_results(
+            baseline_pipeline, "Baseline Feature")        
 
     except Exception as e:
         print(f"❌ Baseline pipeline failed: {e}")
@@ -268,7 +413,7 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
         'consistency': FinancialObservationConfig(generators=['directional_consistency'])
     }
 
-    individual_results = {}
+    
 
     for feature_name, obs_config in feature_configs.items():
         print(f"\n🔬 Testing {feature_name} feature...")
@@ -285,7 +430,7 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
             # Update observed_signal in model config to match feature
             feature_signal = obs_config.generators[0]
             # Create new model config with updated observed_signal
-            from hidden_regime.config.model import HMMConfig
+            
             model_config_params = {
                 'n_states': n_states,
                 'observed_signal': feature_signal
@@ -301,6 +446,9 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
         except Exception as e:
             print(f"❌ {feature_name} feature failed: {e}")
             individual_results[feature_name] = None
+
+    # We'll generate individual plots after we have combined results
+    individual_plot_files = []
 
     # =================================================================
     # 3. COMBINED FEATURES: Multiple features together
@@ -349,6 +497,10 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
     all_results.update(individual_results)
     all_results.update(combined_results)
 
+    # Generate individual feature plots for detailed analysis
+    print_section_header("4.1. Individual Feature Visualization")
+    individual_plot_files = create_individual_feature_plots(all_results, ticker)
+
     # Feature statistics comparison
     compare_feature_statistics(all_results)
 
@@ -383,6 +535,8 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
     # Create comprehensive visualization
     plot_filename = create_enhanced_features_visualization(all_results, ticker)
 
+    # Individual plots were already created in Section 2.1
+
     # Generate summary report
     print_section_header("Summary and Key Insights")
     print(f"""
@@ -414,7 +568,9 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
    • Leverage pipeline architecture for systematic comparison
 
 🎨 Generated Files:
-   • Enhanced features visualization: {plot_filename if plot_filename else 'N/A'}
+   • Comprehensive visualization: {plot_filename if plot_filename else 'N/A'}
+   • Individual feature plots: {len(individual_plot_files)} files generated
+     {chr(10).join([f'     - {os.path.basename(f)}' for f in individual_plot_files]) if individual_plot_files else '     - None generated'}
    • Analysis results saved in pipeline components
     """)
 
