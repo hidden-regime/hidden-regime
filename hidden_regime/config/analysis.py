@@ -49,6 +49,10 @@ class FinancialAnalysisConfig(AnalysisConfig):
     
     # Financial interpretation
     regime_labels: Optional[List[str]] = None
+
+    # User override parameters (advanced users only)
+    force_regime_labels: Optional[List[str]] = None  # Override regime labels
+    acknowledge_override: bool = False  # Must be True when using force_regime_labels
     price_column: str = "close"
     
     # Indicator comparisons
@@ -83,6 +87,34 @@ class FinancialAnalysisConfig(AnalysisConfig):
             # Check for unique labels
             if len(set(self.regime_labels)) != len(self.regime_labels):
                 raise ConfigurationError("regime_labels must be unique")
+
+        # Validate user override parameters
+        if self.force_regime_labels is not None:
+            # Must acknowledge override
+            if not self.acknowledge_override:
+                raise ConfigurationError(
+                    "force_regime_labels requires acknowledge_override=True. "
+                    "This acknowledges that you understand you are overriding data-driven regime detection."
+                )
+
+            # Must match n_states
+            if len(self.force_regime_labels) != self.n_states:
+                raise ConfigurationError(
+                    f"force_regime_labels length ({len(self.force_regime_labels)}) must match n_states ({self.n_states})"
+                )
+
+            # Must be unique
+            if len(set(self.force_regime_labels)) != len(self.force_regime_labels):
+                raise ConfigurationError("force_regime_labels must be unique")
+
+            # Warn about risks
+            import warnings
+            warnings.warn(
+                "WARNING: You are overriding data-driven regime detection with custom labels. "
+                "This may result in misleading interpretations if labels don't match actual market behavior. "
+                "Use only when you understand the implications.",
+                UserWarning
+            )
         
         # Validate indicator names
         if self.indicator_comparisons is not None:

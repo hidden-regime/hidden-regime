@@ -121,18 +121,29 @@ class TemporalController:
     def update_as_of(self, as_of_date: str) -> str:
         """
         Update pipeline with data only up to as_of_date.
-        
+
         GUARANTEES: Model can never access data after as_of_date.
-        
+
         Args:
             as_of_date: Date boundary (YYYY-MM-DD format)
-            
+
         Returns:
             Pipeline output (typically markdown report)
         """
-        # Convert as_of_date to proper datetime
+        # Convert as_of_date to proper datetime with timezone handling
         as_of_datetime = pd.to_datetime(as_of_date)
-        
+
+        # Handle timezone compatibility
+        if self.full_dataset.index.tz is not None:
+            # If dataset index is timezone-aware, make as_of_datetime compatible
+            if as_of_datetime.tz is None:
+                # Localize to the same timezone as the dataset
+                as_of_datetime = as_of_datetime.tz_localize(self.full_dataset.index.tz)
+        else:
+            # If dataset index is timezone-naive, ensure as_of_datetime is also naive
+            if as_of_datetime.tz is not None:
+                as_of_datetime = as_of_datetime.tz_localize(None)
+
         # Filter dataset to only include data <= as_of_date
         filtered_data = self.full_dataset[self.full_dataset.index <= as_of_datetime]
         

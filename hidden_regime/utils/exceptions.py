@@ -76,3 +76,25 @@ class HMMInferenceError(HiddenRegimeError):
     """
 
     pass
+
+
+class AnalysisError(HiddenRegimeError):
+    """
+    Raised when analysis fails.
+
+    This includes performance calculation failures, comparison errors,
+    or issues during analysis result generation.
+    """
+
+    pass
+
+
+class ReportGenerationError(HiddenRegimeError):
+    """
+    Raised when report generation fails.
+
+    This includes template errors, visualization failures,
+    or issues during report creation.
+    """
+
+    pass

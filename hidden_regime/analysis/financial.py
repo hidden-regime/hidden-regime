@@ -140,50 +140,366 @@ class FinancialAnalysis(AnalysisComponent):
         This method replaces arbitrary state numbering with regime labels that match
         the actual emission characteristics of each state.
         """
-        # Try to get emission means from model component for data-driven interpretation
-        if model_component is not None and hasattr(model_component, 'emission_means_') and model_component.emission_means_ is not None:
-            # Use data-driven state mapping based on actual emission means
-            try:
-                analysis = apply_regime_mapping_to_analysis(
-                    analysis,
-                    model_component.emission_means_,
-                    self.config.n_states
+        # Check for user-provided regime label override
+        force_regime_labels = getattr(self.config, 'force_regime_labels', None)
+        acknowledge_override = getattr(self.config, 'acknowledge_override', False)
+
+        if force_regime_labels is not None and acknowledge_override:
+            # User override path: Apply custom labels without validation
+            warnings.warn(
+                "Using user-provided regime labels. Data-driven validation is bypassed. "
+                "Ensure labels match actual market behavior for meaningful analysis.",
+                UserWarning
+            )
+
+            # Create direct mapping from state index to user labels
+            state_mapping = {i: label for i, label in enumerate(force_regime_labels)}
+            analysis['regime_name'] = analysis['predicted_state'].map(state_mapping)
+            analysis['regime_type'] = analysis['regime_name']
+
+            # Store the mapping for future reference
+            self._current_state_mapping = state_mapping
+
+            # Add generic characteristics since we can't validate user labels
+            for _, row in analysis.iterrows():
+                regime_name = row['regime_name']
+                # Use neutral characteristics for user-defined regimes
+                analysis.loc[row.name, 'expected_return'] = 0.0
+                analysis.loc[row.name, 'expected_volatility'] = 0.015
+                analysis.loc[row.name, 'expected_duration'] = 10.0
+
+            return analysis
+
+        # STRICT DATA-DRIVEN REQUIREMENT: Model component with emission means must be provided
+        if model_component is None:
+            raise ValidationError(
+                "Model component is required for data-driven regime interpretation. "
+                "Cannot assign meaningful regime labels without model parameters."
+            )
+
+        if not hasattr(model_component, 'emission_means_'):
+            raise ValidationError(
+                "Model component must have 'emission_means_' attribute for regime interpretation. "
+                "Ensure the model has been properly fitted before analysis."
+            )
+
+        if model_component.emission_means_ is None:
+            raise ValidationError(
+                "Model emission_means_ is None. Model must be fitted with valid parameters "
+                "before regime interpretation can proceed."
+            )
+
+        # Validate emission means make sense
+        emission_means = model_component.emission_means_
+        if len(emission_means) != self.config.n_states:
+            raise ValidationError(
+                f"Emission means length ({len(emission_means)}) does not match "
+                f"configured n_states ({self.config.n_states})"
+            )
+
+        # Apply data-driven state mapping based on actual emission means
+        try:
+            analysis = apply_regime_mapping_to_analysis(
+                analysis,
+                emission_means,
+                self.config.n_states
+            )
+
+            # Store the mapping for future reference
+            self._current_state_mapping = map_states_to_financial_regimes(
+                emission_means,
+                self.config.n_states
+            )
+
+            # Validate that the mapping makes financial sense
+            self._validate_regime_mapping(emission_means, self._current_state_mapping)
+
+            return analysis
+
+        except Exception as e:
+            raise ValidationError(
+                f"Data-driven regime mapping failed: {e}. "
+                f"This indicates either insufficient data, inappropriate model configuration, "
+                f"or data that doesn't exhibit clear regime structure. "
+                f"Consider: (1) more training data, (2) different n_states, or (3) manual regime override."
+            ) from e
+
+    def _validate_regime_mapping(self, emission_means: np.ndarray, state_mapping: Dict[int, str]) -> None:
+        """
+        Validate that regime mapping makes financial sense.
+
+        Args:
+            emission_means: Array of emission means in log return space
+            state_mapping: Mapping from state indices to regime names
+
+        Raises:
+            ValidationError: If regime mapping doesn't match financial logic
+        """
+        # Convert log returns to percentage space for validation
+        means_pct = np.exp(emission_means) - 1
+
+        validation_errors = []
+
+        # Check each regime assignment
+        for state_idx, regime_name in state_mapping.items():
+            mean_pct = means_pct[state_idx]
+
+            # Validate Bear regimes have negative returns
+            if "Bear" in regime_name and mean_pct > 0.002:  # More than 0.2% daily
+                validation_errors.append(
+                    f"Bear regime '{regime_name}' (state {state_idx}) has positive return: {mean_pct:.3%} daily. "
+                    f"Bear regimes should have negative expected returns."
                 )
 
-                # Store the mapping for future reference
-                self._current_state_mapping = map_states_to_financial_regimes(
-                    model_component.emission_means_,
-                    self.config.n_states
+            # Validate Bull regimes have positive returns
+            elif "Bull" in regime_name and mean_pct < -0.002:  # Less than -0.2% daily
+                validation_errors.append(
+                    f"Bull regime '{regime_name}' (state {state_idx}) has negative return: {mean_pct:.3%} daily. "
+                    f"Bull regimes should have positive expected returns."
                 )
 
-                return analysis
+            # Validate Crisis regimes have significantly negative returns
+            elif "Crisis" in regime_name and mean_pct > -0.005:  # More than -0.5% daily
+                validation_errors.append(
+                    f"Crisis regime '{regime_name}' (state {state_idx}) has insufficient negative return: {mean_pct:.3%} daily. "
+                    f"Crisis regimes should represent significant market stress."
+                )
 
-            except Exception as e:
-                warnings.warn(f"Data-driven state mapping failed: {e}. Falling back to default mapping.")
+            # Validate Euphoric regimes have significantly positive returns
+            elif "Euphoric" in regime_name and mean_pct < 0.015:  # Less than 1.5% daily
+                validation_errors.append(
+                    f"Euphoric regime '{regime_name}' (state {state_idx}) has insufficient positive return: {mean_pct:.3%} daily. "
+                    f"Euphoric regimes should represent exceptional market performance."
+                )
 
-        # Fallback to default regime labels (but with warning about potential inconsistency)
-        warnings.warn(
-            "Using default state mapping. For accurate regime interpretation, "
-            "ensure model component with emission_means_ is provided.",
-            UserWarning
+        # Check for reasonable spread between regimes
+        if len(means_pct) >= 2:
+            sorted_means = np.sort(means_pct)
+            spread = sorted_means[-1] - sorted_means[0]
+            if spread < 0.002:  # Less than 0.2% daily return difference
+                validation_errors.append(
+                    f"Very small spread between regime returns ({spread:.3%} daily). "
+                    f"Regimes should represent distinct market behaviors. "
+                    f"Consider reducing n_states or using more diverse training data."
+                )
+
+        # Check for data-driven regime detection failure indicators
+        all_positive = all(mean > 0.001 for mean in means_pct)  # All > 0.1% daily
+        all_negative = all(mean < -0.001 for mean in means_pct)  # All < -0.1% daily
+
+        if all_positive and any("Bear" in name or "Crisis" in name for name in state_mapping.values()):
+            validation_errors.append(
+                f"All emission means are positive ({[f'{m:.3%}' for m in means_pct]}), "
+                f"but Bear/Crisis regimes were assigned. This indicates monotonic upward price movement. "
+                f"Consider using fewer states or acknowledging this is a trending market, not regime-switching."
+            )
+
+        if all_negative and any("Bull" in name or "Euphoric" in name for name in state_mapping.values()):
+            validation_errors.append(
+                f"All emission means are negative ({[f'{m:.3%}' for m in means_pct]}), "
+                f"but Bull/Euphoric regimes were assigned. This indicates monotonic downward price movement. "
+                f"Consider using fewer states or acknowledging this is a trending market, not regime-switching."
+            )
+
+        # If validation errors found, fail with detailed explanation
+        if validation_errors:
+            error_msg = (
+                f"Regime mapping validation failed with {len(validation_errors)} errors:\n\n" +
+                "\n".join(f"• {error}" for error in validation_errors) +
+                f"\n\nEmission means: {dict(zip(state_mapping.values(), [f'{m:.3%}' for m in means_pct]))}"
+            )
+            raise ValidationError(error_msg)
+
+    @staticmethod
+    def assess_data_for_regime_detection(raw_data: pd.DataFrame, observed_signal: str = 'log_return') -> Dict[str, Any]:
+        """
+        Assess raw data to determine optimal regime detection approach.
+
+        Args:
+            raw_data: Raw financial data with price and return information
+            observed_signal: Column name for returns (default: 'log_return')
+
+        Returns:
+            Dictionary with data assessment and recommendations
+        """
+        if observed_signal not in raw_data.columns:
+            raise ValidationError(f"Observed signal '{observed_signal}' not found in data columns: {list(raw_data.columns)}")
+
+        returns = raw_data[observed_signal].dropna()
+        if len(returns) < 10:
+            raise ValidationError(f"Insufficient data: only {len(returns)} valid returns available. Need at least 10 observations.")
+
+        # Convert to percentage space for analysis
+        returns_pct = np.exp(returns) - 1
+
+        # Basic statistics
+        mean_return = returns_pct.mean()
+        std_return = returns_pct.std()
+        min_return = returns_pct.min()
+        max_return = returns_pct.max()
+
+        # Trend analysis
+        positive_returns = returns_pct > 0.001  # > 0.1% daily
+        negative_returns = returns_pct < -0.001  # < -0.1% daily
+        neutral_returns = abs(returns_pct) <= 0.001  # ±0.1% daily
+
+        pct_positive = positive_returns.mean()
+        pct_negative = negative_returns.mean()
+        pct_neutral = neutral_returns.mean()
+
+        # Volatility clustering (simple measure)
+        volatility = returns_pct.rolling(5).std().dropna()
+        high_vol_periods = volatility > volatility.quantile(0.75)
+        low_vol_periods = volatility < volatility.quantile(0.25)
+
+        # Regime switching indicators
+        return_spread = max_return - min_return
+        consecutive_trends = FinancialAnalysis._detect_consecutive_trends(returns_pct)
+
+        # Determine regime feasibility
+        assessment = {
+            'data_summary': {
+                'n_observations': len(returns),
+                'mean_daily_return': f"{mean_return:.3%}",
+                'daily_volatility': f"{std_return:.3%}",
+                'return_range': f"{min_return:.3%} to {max_return:.3%}",
+                'return_spread': f"{return_spread:.3%}"
+            },
+            'return_distribution': {
+                'pct_positive_days': f"{pct_positive:.1%}",
+                'pct_negative_days': f"{pct_negative:.1%}",
+                'pct_neutral_days': f"{pct_neutral:.1%}"
+            },
+            'regime_indicators': {
+                'has_distinct_volatility_regimes': high_vol_periods.sum() > len(volatility) * 0.1,
+                'max_consecutive_up_days': consecutive_trends['max_up'],
+                'max_consecutive_down_days': consecutive_trends['max_down'],
+                'return_spread_adequate': return_spread > 0.02  # >2% daily spread
+            }
+        }
+
+        # Generate recommendations
+        recommendations = FinancialAnalysis._generate_regime_recommendations(
+            mean_return, pct_positive, pct_negative, return_spread, consecutive_trends
         )
 
-        # Create default mapping (lowest to highest state indices)
-        state_mapping = {i: label for i, label in enumerate(self.regime_labels)}
+        assessment['recommendations'] = recommendations
 
-        analysis['regime_name'] = analysis['predicted_state'].map(state_mapping)
-        analysis['regime_type'] = analysis['regime_name']  # Same thing
+        return assessment
 
-        # Add default expected characteristics
-        for _, row in analysis.iterrows():
-            regime_name = row['regime_name']
-            characteristics = get_regime_characteristics(regime_name)
+    @staticmethod
+    def _detect_consecutive_trends(returns_pct: pd.Series) -> Dict[str, int]:
+        """Detect consecutive trend periods in returns."""
+        up_days = returns_pct > 0.001
+        down_days = returns_pct < -0.001
 
-            for char_name, char_value in characteristics.items():
-                analysis.loc[row.name, char_name] = char_value
+        # Find consecutive runs
+        up_runs = []
+        down_runs = []
+        current_up = 0
+        current_down = 0
 
-        return analysis
-    
+        for up, down in zip(up_days, down_days):
+            if up:
+                current_up += 1
+                if current_down > 0:
+                    down_runs.append(current_down)
+                    current_down = 0
+            elif down:
+                current_down += 1
+                if current_up > 0:
+                    up_runs.append(current_up)
+                    current_up = 0
+            else:
+                if current_up > 0:
+                    up_runs.append(current_up)
+                    current_up = 0
+                if current_down > 0:
+                    down_runs.append(current_down)
+                    current_down = 0
+
+        # Add final runs
+        if current_up > 0:
+            up_runs.append(current_up)
+        if current_down > 0:
+            down_runs.append(current_down)
+
+        return {
+            'max_up': max(up_runs) if up_runs else 0,
+            'max_down': max(down_runs) if down_runs else 0,
+            'avg_up': np.mean(up_runs) if up_runs else 0,
+            'avg_down': np.mean(down_runs) if down_runs else 0
+        }
+
+    @staticmethod
+    def _generate_regime_recommendations(mean_return: float, pct_positive: float, pct_negative: float,
+                                       return_spread: float, consecutive_trends: Dict[str, int]) -> Dict[str, Any]:
+        """Generate regime detection recommendations based on data characteristics."""
+
+        # Determine if data exhibits regime-switching behavior
+        is_monotonic_up = pct_positive > 0.8 and mean_return > 0.005  # >80% up days, >0.5% daily mean
+        is_monotonic_down = pct_negative > 0.8 and mean_return < -0.005  # >80% down days, <-0.5% daily mean
+        is_sideways = abs(mean_return) < 0.001 and pct_positive < 0.6 and pct_negative < 0.6  # Neutral with mixed days
+
+        long_trends = consecutive_trends['max_up'] > 10 or consecutive_trends['max_down'] > 10
+        small_spread = return_spread < 0.015  # <1.5% daily spread
+
+        recommendations = {
+            'suitable_for_regime_detection': True,
+            'recommended_n_states': 3,
+            'regime_detection_approach': 'standard',
+            'warnings': [],
+            'rationale': []
+        }
+
+        # Analyze suitability
+        if is_monotonic_up:
+            recommendations['suitable_for_regime_detection'] = False
+            recommendations['warnings'].append(
+                "Data shows monotonic upward trend (>80% positive days). "
+                "Regime detection may create artificial distinctions."
+            )
+            recommendations['recommended_n_states'] = 2
+            recommendations['regime_detection_approach'] = 'trend_following'
+
+        elif is_monotonic_down:
+            recommendations['suitable_for_regime_detection'] = False
+            recommendations['warnings'].append(
+                "Data shows monotonic downward trend (>80% negative days). "
+                "Regime detection may create artificial distinctions."
+            )
+            recommendations['recommended_n_states'] = 2
+            recommendations['regime_detection_approach'] = 'trend_following'
+
+        elif small_spread:
+            recommendations['warnings'].append(
+                f"Small return spread ({return_spread:.2%}) may not support distinct regimes. "
+                "Consider using 2 states or more training data."
+            )
+            recommendations['recommended_n_states'] = 2
+
+        elif long_trends:
+            recommendations['warnings'].append(
+                "Long consecutive trend periods detected. Data may be more trending than regime-switching."
+            )
+
+        # Positive indicators for regime detection
+        if is_sideways:
+            recommendations['rationale'].append("Mixed positive/negative days with neutral mean suggests regime-switching behavior.")
+
+        if return_spread > 0.03:  # >3% spread
+            recommendations['rationale'].append("Large return spread supports distinct regime identification.")
+            recommendations['recommended_n_states'] = min(4, recommendations['recommended_n_states'] + 1)
+
+        if 0.3 < pct_positive < 0.7:  # Balanced positive/negative days
+            recommendations['rationale'].append("Balanced distribution of positive/negative days supports regime detection.")
+
+        # Final recommendation
+        if not recommendations['rationale']:
+            recommendations['rationale'].append("Data characteristics are marginal for regime detection.")
+
+        return recommendations
+
     def _add_regime_statistics(self, analysis: pd.DataFrame) -> pd.DataFrame:
         """Add basic regime statistics."""
         # Calculate days in current regime

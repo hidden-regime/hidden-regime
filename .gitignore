@@ -102,6 +102,9 @@ TODOS.md
 *.h5
 examples/output/**
 
+# Log files
+*log.txt
+
 # Model outputs
 checkpoints/
 results/
@@ -111,6 +114,7 @@ results/
 **/*_analysis_*.md
 output/*.md
 output/*.png
+*.gif
 
 # Pip
 requirements.txt

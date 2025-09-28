@@ -247,17 +247,17 @@ class PipelineFactory:
     ) -> Pipeline:
         """
         Create pipeline optimized for research and analysis.
-        
+
         Args:
             ticker: Stock ticker symbol
             n_states: Number of regime states
             comprehensive_analysis: Whether to include comprehensive indicators
-            
+
         Returns:
             Research-focused Pipeline
         """
         indicators = ['rsi', 'macd', 'bollinger_bands', 'moving_average'] if comprehensive_analysis else ['rsi']
-        
+
         return self.create_financial_pipeline(
             ticker=ticker,
             n_states=n_states,
@@ -282,6 +282,118 @@ class PipelineFactory:
                 'save_plots': True
             }
         )
+
+    def create_case_study_pipeline(
+        self,
+        ticker: str = "SPY",
+        n_states: int = 3,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        enable_temporal_isolation: bool = True,
+        online_learning: bool = True,
+        include_indicators: bool = True,
+        **kwargs
+    ) -> Pipeline:
+        """
+        Create pipeline optimized for case study analysis with temporal isolation.
+
+        This pipeline is specifically designed for use with TemporalController
+        to ensure proper temporal isolation during case study evolution.
+
+        Args:
+            ticker: Stock ticker symbol
+            n_states: Number of regime states for HMM
+            start_date: Analysis start date (for data config)
+            end_date: Analysis end date (for data config)
+            enable_temporal_isolation: Whether to configure for temporal isolation
+            online_learning: Whether to enable online learning capabilities
+            include_indicators: Whether to include technical indicators
+            **kwargs: Additional configuration overrides
+
+        Returns:
+            Pipeline optimized for case study analysis
+        """
+        # Create data configuration for case study
+        data_config_params = {
+            'source': 'yfinance',
+            'ticker': ticker,
+            'start_date': start_date,
+            'end_date': end_date
+        }
+        data_config_params.update(kwargs.get('data_config_overrides', {}))
+        data_config = FinancialDataConfig(**data_config_params)
+
+        # Create observation configuration
+        observation_generators = ['log_return']
+        if include_indicators:
+            observation_generators.extend(['rsi', 'macd', 'volatility'])
+
+        observation_config = FinancialObservationConfig.create_default_financial()
+        observation_config.generators = observation_generators
+        observation_config.normalize_features = True
+
+        # Apply observation overrides
+        if 'observation_config_overrides' in kwargs:
+            for key, value in kwargs['observation_config_overrides'].items():
+                setattr(observation_config, key, value)
+
+        # Create model configuration optimized for case studies
+        model_config_params = {
+            'n_states': n_states,
+            'random_seed': 42,  # Reproducible results
+            'tolerance': 1e-6,
+            'max_iterations': 1000
+        }
+
+        # Configure for online learning if requested
+        if online_learning:
+            model_config_params.update({
+                'forgetting_factor': 0.98,  # Gradual forgetting for adaptation
+                'enable_change_detection': True,
+                'initialization_method': 'kmeans'
+            })
+
+        # Apply model overrides
+        if 'model_config_overrides' in kwargs:
+            model_config_params.update(kwargs['model_config_overrides'])
+
+        model_config = HMMConfig.create_balanced().copy(**model_config_params)
+
+        # Create analysis configuration for case studies
+        analysis_config_params = {
+            'n_states': n_states,
+            'calculate_regime_statistics': True,
+            'include_duration_analysis': False,  # Disable to prevent issues during evolution
+            'include_return_analysis': True,
+            'include_volatility_analysis': True,
+            'include_trading_signals': True
+        }
+
+        # Include indicator comparisons if requested
+        if include_indicators:
+            analysis_config_params.update({
+                'indicator_comparisons': ['rsi', 'macd'],
+                'include_indicator_performance': True
+            })
+
+        # Apply analysis overrides
+        if 'analysis_config_overrides' in kwargs:
+            analysis_config_params.update(kwargs['analysis_config_overrides'])
+
+        analysis_config = FinancialAnalysisConfig.create_comprehensive_financial().copy(**analysis_config_params)
+
+        # Create pipeline without report component (case studies generate their own reports)
+        pipeline = self.create_pipeline(
+            data_config=data_config,
+            observation_config=observation_config,
+            model_config=model_config,
+            analysis_config=analysis_config,
+            report_config=None  # No standard reports for case studies
+        )
+
+        self.logger.info(f"Created case study pipeline for {ticker} with {n_states} states")
+
+        return pipeline
     
     def get_factory_info(self) -> Dict[str, Any]:
         """
@@ -297,10 +409,11 @@ class PipelineFactory:
             'registered_components': registered_components,
             'available_methods': [
                 'create_pipeline',
-                'create_financial_pipeline', 
+                'create_financial_pipeline',
                 'create_simple_regime_pipeline',
                 'create_trading_pipeline',
-                'create_research_pipeline'
+                'create_research_pipeline',
+                'create_case_study_pipeline'
             ],
             'supported_domains': ['financial'],
             'extensible': True
