@@ -41,6 +41,14 @@ class CaseStudyConfig:
     force_regime_labels: Optional[List[str]] = None  # Override regime labels (e.g., ['Custom_Low', 'Custom_Mid', 'Custom_High'])
     acknowledge_override: bool = False  # Must be True when using force_regime_labels
 
+    # Trading simulation configuration
+    enable_simulation: bool = True  # Enable trading simulation engine
+    simulation_initial_capital: Optional[float] = None  # Starting capital (auto-calculated if None)
+    simulation_transaction_cost: float = 0.0  # Transaction cost per trade
+    simulation_stop_loss_pct: float = 0.05  # Default 5% stop-loss
+    simulation_max_position_pct: float = 0.1  # Maximum 10% position size
+    simulation_include_technical_indicators: bool = True  # Include TA indicators in simulation
+
     # Visualization configuration
     create_animations: bool = True
     save_individual_frames: bool = False

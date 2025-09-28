@@ -30,11 +30,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Import hidden-regime components
 from hidden_regime.config.case_study import CaseStudyConfig
+from hidden_regime.config.simulation import SimulationConfig
 from hidden_regime.factories.pipeline import pipeline_factory
 from hidden_regime.pipeline.temporal import TemporalController
 from hidden_regime.data.financial import FinancialDataLoader
 from hidden_regime.config.data import FinancialDataConfig
 from hidden_regime.analysis.case_study import CaseStudyAnalyzer
+from hidden_regime.simulation.simulation_orchestrator import SimulationOrchestrator
 from hidden_regime.visualization.animations import RegimeAnimator, create_regime_comparison_gif
 from hidden_regime.visualization.plotting import create_multi_panel_regime_plot
 
@@ -68,6 +70,12 @@ class CaseStudyOrchestrator:
         self.evolution_results = []
         self.performance_evolution = []
         self.final_comparison = None
+        self.simulation_results = None
+
+        # Create simulation configuration if simulation is enabled
+        self.simulation_config = None
+        if config.enable_simulation:
+            self.simulation_config = self._create_simulation_config()
 
     def run_complete_case_study(self) -> Dict[str, Any]:
         """
@@ -98,12 +106,17 @@ class CaseStudyOrchestrator:
             print("\n🎨 Phase 4: Visualization Generation")
             self._generate_visualizations()
 
-            # Phase 5: Comparative Analysis
-            print("\n📊 Phase 5: Comparative Analysis")
+            # Phase 5: Trading Simulation (if enabled)
+            if self.config.enable_simulation:
+                print("\n💰 Phase 5: Trading Simulation")
+                self._run_trading_simulation()
+
+            # Phase 6: Comparative Analysis
+            print("\n📊 Phase 6: Comparative Analysis")
             self._run_comparative_analysis()
 
-            # Phase 6: Report Generation
-            print("\n📝 Phase 6: Report Generation")
+            # Phase 7: Report Generation
+            print("\n📝 Phase 7: Report Generation")
             final_report = self._generate_final_report()
 
             total_time = (datetime.now() - start_time).total_seconds()
@@ -114,6 +127,7 @@ class CaseStudyOrchestrator:
                 'evolution_results': self.evolution_results,
                 'performance_evolution': self.performance_evolution,
                 'final_comparison': self.final_comparison,
+                'simulation_results': self.simulation_results,
                 'final_report': final_report,
                 'execution_time': total_time
             }
@@ -429,6 +443,71 @@ class CaseStudyOrchestrator:
 
         print("   ✅ Visualization generation complete")
 
+    def _create_simulation_config(self) -> SimulationConfig:
+        """Create simulation configuration from case study settings."""
+        # Calculate initial capital if not specified
+        initial_capital = self.config.simulation_initial_capital
+        if initial_capital is None:
+            # Use default calculation: 100 shares * estimated first price
+            initial_capital = 100 * 100  # Conservative estimate, will be adjusted in simulation
+
+        return SimulationConfig(
+            initial_capital=initial_capital,
+            default_shares=100,
+            transaction_cost=self.config.simulation_transaction_cost,
+            enable_shorting=True,
+            max_position_pct=self.config.simulation_max_position_pct,
+            stop_loss_pct=self.config.simulation_stop_loss_pct,
+            signal_generators=['buy_and_hold', 'hmm_regime_following'],
+            hmm_strategy_types=['regime_following'],
+            technical_indicators=['rsi', 'macd', 'sma'] if self.config.simulation_include_technical_indicators else [],
+            save_trade_journal=True,
+            save_daily_signals=True,
+            save_portfolio_history=True
+        )
+
+    def _run_trading_simulation(self):
+        """Run capital-based trading simulation."""
+        if not self.evolution_results or not self.simulation_config:
+            print("   ⚠️  No evolution results or simulation config for trading simulation")
+            return
+
+        print("   Running capital-based trading simulation...")
+
+        try:
+            # Get final price and regime data for simulation
+            final_price_data = self.evolution_results[-1]['data']
+            final_regime_data = self.evolution_results[-1]['regime_data']
+
+            # Initialize simulation orchestrator
+            simulation_orchestrator = SimulationOrchestrator(self.simulation_config)
+
+            # Run simulation
+            self.simulation_results = simulation_orchestrator.run_simulation(
+                price_data=final_price_data,
+                regime_data=final_regime_data,
+                symbol=self.config.ticker
+            )
+
+            # Print simulation summary
+            if self.simulation_results.simulation_success:
+                print(f"   💰 Simulation completed successfully!")
+                print(f"   📈 Total Return: {self.simulation_results.total_return_pct:.2f}%")
+                print(f"   📊 Sharpe Ratio: {self.simulation_results.sharpe_ratio:.3f}")
+                print(f"   🏆 Best Strategy: {self.simulation_results.best_strategy}")
+                print(f"   💼 Final Value: ${self.simulation_results.final_value:,.2f}")
+
+                if self.simulation_results.benchmark_comparison:
+                    benchmark = self.simulation_results.benchmark_comparison
+                    print(f"   📊 vs {benchmark['benchmark_strategy']}: +{benchmark['excess_return']:.2f}% excess return")
+            else:
+                print(f"   ❌ Simulation failed")
+
+        except Exception as e:
+            print(f"   ⚠️  Trading simulation warning: {e}")
+            import traceback
+            print(f"   📝 Simulation error trace: {traceback.format_exc()}")
+
     def _run_comparative_analysis(self):
         """Phase 5: Compare HMM strategy against baselines with proper temporal isolation."""
         if not self.evolution_results:
@@ -500,6 +579,7 @@ class CaseStudyOrchestrator:
             f"- **Frequency**: {config_summary['configuration']['frequency']}",
             f"- **Technical Indicators**: {config_summary['configuration']['indicators']}",
             f"- **Animations Created**: {config_summary['configuration']['include_animations']}",
+            f"- **Trading Simulation**: {'Enabled' if self.config.enable_simulation else 'Disabled'}",
             ""
         ])
 
@@ -532,11 +612,62 @@ class CaseStudyOrchestrator:
                         ""
                     ])
 
+        # Simulation results
+        if self.simulation_results and self.simulation_results.simulation_success:
+            report_content.extend([
+                "## Trading Simulation Results",
+                "",
+                "### Capital-Based Performance",
+                "",
+                f"- **Initial Capital**: ${self.simulation_results.initial_capital:,.2f}",
+                f"- **Final Value**: ${self.simulation_results.final_value:,.2f}",
+                f"- **Total Return**: {self.simulation_results.total_return_pct:.2f}%",
+                f"- **Annualized Return**: {self.simulation_results.annualized_return:.2f}%",
+                f"- **Volatility**: {self.simulation_results.volatility:.2f}%",
+                f"- **Sharpe Ratio**: {self.simulation_results.sharpe_ratio:.3f}",
+                f"- **Sortino Ratio**: {self.simulation_results.sortino_ratio:.3f}",
+                f"- **Maximum Drawdown**: {self.simulation_results.max_drawdown_pct:.2f}%",
+                "",
+                "### Trading Activity",
+                "",
+                f"- **Total Trades**: {self.simulation_results.total_trades}",
+                f"- **Win Rate**: {self.simulation_results.win_rate:.1f}%",
+                f"- **Profit Factor**: {self.simulation_results.profit_factor:.2f}",
+                f"- **Average Trade P&L**: ${self.simulation_results.avg_trade_pnl:.2f}",
+                "",
+                "### Strategy Comparison",
+                "",
+                f"- **Best Strategy**: {self.simulation_results.best_strategy}",
+            ])
+
+            if self.simulation_results.benchmark_comparison:
+                benchmark = self.simulation_results.benchmark_comparison
+                report_content.extend([
+                    f"- **Benchmark**: {benchmark['benchmark_strategy']} ({benchmark['benchmark_return']:.2f}%)",
+                    f"- **Excess Return**: +{benchmark['excess_return']:.2f}%",
+                ])
+
+            # Strategy breakdown
+            if self.simulation_results.strategy_results:
+                report_content.extend([
+                    "",
+                    "#### Individual Strategy Performance",
+                    ""
+                ])
+
+                for strategy_name, strategy_result in self.simulation_results.strategy_results.items():
+                    return_pct = strategy_result.get('total_return_pct', 0)
+                    sharpe = strategy_result.get('sharpe_ratio', 0)
+                    trades = strategy_result.get('total_trades', 0)
+                    report_content.append(f"- **{strategy_name}**: {return_pct:.2f}% return, {sharpe:.3f} Sharpe, {trades} trades")
+
+            report_content.append("")
+
         # Performance comparison
         if self.final_comparison and 'individual_results' in self.final_comparison:
             performance_report = self.case_study_analyzer.generate_performance_report(
                 self.final_comparison,
-                title="Strategy Performance Comparison"
+                title="Strategy Performance Comparison (Percentage-Based)"
             )
             report_content.append(performance_report)
 
@@ -568,16 +699,45 @@ class CaseStudyOrchestrator:
         report_content.extend([
             "## Methodology",
             "",
-            "This case study follows a rigorous 4-phase approach:",
-            "",
-            "1. **Training**: HMM model trained on historical data with proper temporal isolation",
-            f"2. **Evolution**: Daily regime detection over {len(self.evolution_results)} evaluation periods",
-            "3. **Visualization**: Static plots and animated regime evolution",
-            "4. **Analysis**: Performance comparison against buy-and-hold and technical indicators",
+        ])
+
+        if self.config.enable_simulation:
+            report_content.extend([
+                "This case study follows a rigorous 5-phase approach:",
+                "",
+                "1. **Training**: HMM model trained on historical data with proper temporal isolation",
+                f"2. **Evolution**: Daily regime detection over {len(self.evolution_results)} evaluation periods",
+                "3. **Visualization**: Static plots and animated regime evolution",
+                "4. **Simulation**: Capital-based trading simulation with realistic execution",
+                "5. **Analysis**: Performance comparison using both percentage-based and capital-based metrics",
+            ])
+        else:
+            report_content.extend([
+                "This case study follows a rigorous 4-phase approach:",
+                "",
+                "1. **Training**: HMM model trained on historical data with proper temporal isolation",
+                f"2. **Evolution**: Daily regime detection over {len(self.evolution_results)} evaluation periods",
+                "3. **Visualization**: Static plots and animated regime evolution",
+                "4. **Analysis**: Performance comparison against buy-and-hold and technical indicators",
+            ])
+
+        report_content.extend([
             "",
             "All analysis maintains strict temporal boundaries to prevent data leakage.",
-            ""
         ])
+
+        if self.config.enable_simulation:
+            report_content.extend([
+                "",
+                "### Trading Simulation Details",
+                "",
+                "- Capital-based simulation with realistic buy/sell timing",
+                "- Risk management with stop-losses and position limits",
+                "- Multiple signal generators including HMM regime-following and buy-and-hold",
+                "- Comprehensive performance analytics including Sharpe ratio and drawdown analysis",
+            ])
+
+        report_content.append("")
 
         # Save report
         report_text = "\n".join(report_content)
