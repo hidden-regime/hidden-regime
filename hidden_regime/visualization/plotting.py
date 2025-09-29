@@ -320,8 +320,8 @@ def plot_regime_heatmap(
         confidence = row[confidence_column] if confidence_column in row else 1.0
         heatmap_data[i, regime] = confidence
 
-    # Create heatmap
-    im = ax.imshow(heatmap_data.T, aspect='auto', cmap='RdYlGn',
+    # Create heatmap with colorblind-friendly colormap
+    im = ax.imshow(heatmap_data.T, aspect='auto', cmap='viridis',
                    interpolation='nearest', vmin=0, vmax=1)
 
     # Format axes

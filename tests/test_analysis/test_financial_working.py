@@ -19,6 +19,27 @@ from hidden_regime.config.analysis import FinancialAnalysisConfig
 from hidden_regime.utils.exceptions import ValidationError
 
 
+def create_mock_model_component(n_states=3):
+    """Create a mock model component for testing financial analysis."""
+    mock_model = Mock()
+
+    # Create realistic emission means for regime interpretation
+    # Bear (-2%), Sideways (0.1%), Bull (1.5%)
+    if n_states == 3:
+        emission_means = np.array([-0.02, 0.001, 0.015])
+    elif n_states == 4:
+        emission_means = np.array([-0.025, -0.005, 0.005, 0.020])
+    elif n_states == 5:
+        emission_means = np.array([-0.03, -0.01, 0.0, 0.01, 0.025])
+    else:
+        # Generate means spread from -3% to +3%
+        emission_means = np.linspace(-0.03, 0.03, n_states)
+
+    mock_model.emission_means_ = emission_means
+    mock_model.n_states = n_states
+    return mock_model
+
+
 class TestFinancialAnalysisWorking:
     """Working tests for FinancialAnalysis that focus on coverage."""
     
@@ -95,8 +116,11 @@ class TestFinancialAnalysisWorking:
             model_output[prob_cols].sum(axis=1), axis=0
         )
         
+        # Create mock model component for data-driven interpretation
+        mock_model = create_mock_model_component(3)
+
         # Analyze
-        analysis = analyzer.update(model_output)
+        analysis = analyzer.update(model_output, model_component=mock_model)
         
         # Check that analysis was performed
         assert isinstance(analysis, pd.DataFrame)
@@ -132,8 +156,11 @@ class TestFinancialAnalysisWorking:
             'volume': np.random.randint(1000000, 5000000, 50)
         }, index=dates)
         
+        # Create mock model component for data-driven interpretation
+        mock_model = create_mock_model_component(3)
+
         # Analyze with raw data
-        analysis = analyzer.update(model_output, raw_data)
+        analysis = analyzer.update(model_output, raw_data, model_component=mock_model)
         
         # Check that analysis includes additional features
         assert isinstance(analysis, pd.DataFrame)
@@ -194,8 +221,11 @@ class TestFinancialAnalysisWorking:
             'predicted_state': np.random.randint(0, 3, 30),
             'confidence': np.random.uniform(0.5, 1.0, 30)
         }, index=dates)
-        
-        analyzer.update(model_output)
+
+        # Create mock model component for data-driven interpretation
+        mock_model = create_mock_model_component(3)
+
+        analyzer.update(model_output, model_component=mock_model)
         
         # Plot
         fig = analyzer.plot()
@@ -217,8 +247,11 @@ class TestFinancialAnalysisWorking:
             'predicted_state': [0, 0, 1, 1, 1, 2, 2, 0, 1, 2] * 2,
             'confidence': np.random.uniform(0.7, 1.0, 20)
         }, index=dates)
-        
-        analysis = analyzer.update(model_output)
+
+        # Create mock model component for data-driven interpretation
+        mock_model = create_mock_model_component(3)
+
+        analysis = analyzer.update(model_output, model_component=mock_model)
         
         # Check that regime interpretations were added
         assert 'predicted_state' in analysis.columns
@@ -247,8 +280,11 @@ class TestFinancialAnalysisWorking:
             'predicted_state': states,
             'confidence': np.random.uniform(0.6, 0.95, 100)
         }, index=dates)
-        
-        analysis = analyzer.update(model_output)
+
+        # Create mock model component for data-driven interpretation
+        mock_model = create_mock_model_component(3)
+
+        analysis = analyzer.update(model_output, model_component=mock_model)
         
         # Check that analysis completed successfully
         assert isinstance(analysis, pd.DataFrame)
@@ -301,7 +337,10 @@ class TestFinancialAnalysisWorking:
             
             # Should analyze without errors - catch any implementation issues gracefully
             try:
-                analysis = analyzer.update(model_output)
+                # Create mock model component for data-driven interpretation
+                mock_model = create_mock_model_component(config.n_states)
+
+                analysis = analyzer.update(model_output, model_component=mock_model)
                 assert isinstance(analysis, pd.DataFrame)
                 assert len(analysis) == 20
             except KeyError as e:
@@ -352,8 +391,11 @@ class TestFinancialAnalysisCoverage:
             'predicted_state': all_states,
             'confidence': np.random.uniform(0.4, 1.0, 25)
         }, index=dates)
-        
-        analysis = analyzer.update(model_output)
+
+        # Create mock model component for data-driven interpretation
+        mock_model = create_mock_model_component(5)
+
+        analysis = analyzer.update(model_output, model_component=mock_model)
         assert isinstance(analysis, pd.DataFrame)
         assert analysis['predicted_state'].nunique() == 5
     
@@ -367,8 +409,11 @@ class TestFinancialAnalysisCoverage:
             'predicted_state': np.random.randint(0, 3, 15),
             'confidence': np.random.uniform(0.3, 0.6, 15)  # Low confidence
         }, index=dates)
-        
-        analysis = analyzer.update(model_output)
+
+        # Create mock model component for data-driven interpretation
+        mock_model = create_mock_model_component(3)
+
+        analysis = analyzer.update(model_output, model_component=mock_model)
         
         # Should handle low confidence gracefully
         assert isinstance(analysis, pd.DataFrame)
@@ -388,8 +433,11 @@ class TestFinancialAnalysisCoverage:
             'predicted_state': np.random.randint(0, 3, 20),
             'confidence': np.random.uniform(0.5, 1.0, 20)
         }, index=dates)
-        
-        analysis = analyzer.update(model_output)
+
+        # Create mock model component for data-driven interpretation
+        mock_model = create_mock_model_component(3)
+
+        analysis = analyzer.update(model_output, model_component=mock_model)
         
         # Test after analysis
         assert analyzer._last_model_output is not None
@@ -431,8 +479,11 @@ class TestFinancialAnalysisCoverage:
             'volume': np.random.randint(500000, 10000000, 60)
         }, index=dates)
         
+        # Create mock model component for data-driven interpretation
+        mock_model = create_mock_model_component(3)
+
         # Perform comprehensive analysis
-        analysis = analyzer.update(model_output, raw_data)
+        analysis = analyzer.update(model_output, raw_data, model_component=mock_model)
         
         # Verify comprehensive analysis results
         assert isinstance(analysis, pd.DataFrame)

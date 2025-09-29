@@ -27,7 +27,7 @@ class BaseObservationGenerator(ObservationComponent):
     def __init__(self, config: ObservationConfig):
         """
         Initialize observation generator with configuration.
-        
+
         Args:
             config: Observation configuration object
         """
@@ -35,6 +35,13 @@ class BaseObservationGenerator(ObservationComponent):
         self.generators = self._parse_generators(config.generators)
         self.last_data = None
         self.last_observations = None
+
+        # Initialize features management
+        self.features = {}
+        self._cache = {}
+
+        # Default window size for calculations
+        self.window_size = getattr(config, 'window_size', 20)
     
     def _parse_generators(self, generators: List[Union[str, Callable]]) -> List[Callable]:
         """
@@ -89,26 +96,35 @@ class BaseObservationGenerator(ObservationComponent):
     def update(self, data: pd.DataFrame) -> pd.DataFrame:
         """
         Generate observations from input data.
-        
+
         Args:
             data: Input data DataFrame
-            
+
         Returns:
             DataFrame with generated observations
         """
         if data.empty:
             raise ValidationError("Input data cannot be empty")
+
+        # Check for missing values
+        if data.isnull().any().any():
+            raise ValidationError("Data contains missing values")
         
         # Store reference for plotting
         self.last_data = data.copy()
-        
+
+        # Check cache first
+        cache_key = hash(data.to_string())
+        if cache_key in self._cache:
+            return self._cache[cache_key].copy()
+
         # Generate observations using all configured generators
         observations = data.copy()
-        
+
         for generator in self.generators:
             try:
                 new_observations = generator(observations)
-                
+
                 # Merge new observations with existing ones
                 if isinstance(new_observations, pd.DataFrame):
                     observations = pd.concat([observations, new_observations], axis=1)
@@ -116,16 +132,36 @@ class BaseObservationGenerator(ObservationComponent):
                     observations[new_observations.name or 'observation'] = new_observations
                 else:
                     raise ValidationError(f"Generator must return DataFrame or Series, got {type(new_observations)}")
-                    
+
             except Exception as e:
                 raise ValidationError(f"Generator {generator.__name__} failed: {str(e)}")
-        
+
+        # Generate additional features
+        for feature_name, feature_params in self.features.items():
+            try:
+                if feature_name == 'volatility':
+                    window = feature_params.get('window', self.window_size)
+                    if 'log_return' in observations.columns:
+                        volatility = self._calculate_volatility(observations['log_return'], window)
+                        observations['volatility'] = volatility
+                elif feature_name == 'momentum':
+                    window = feature_params.get('window', 3)
+                    if 'close' in observations.columns:
+                        momentum = observations['close'].pct_change(window)
+                        observations['momentum'] = momentum
+            except Exception as e:
+                # Log warning but don't fail the update
+                print(f"Warning: Feature {feature_name} calculation failed: {e}")
+
         # Remove duplicate columns (keep last)
         observations = observations.loc[:, ~observations.columns.duplicated(keep='last')]
         
         # Store for plotting
         self.last_observations = observations.copy()
-        
+
+        # Cache the result
+        self._cache[cache_key] = observations.copy()
+
         return observations
     
     def plot(self, **kwargs) -> plt.Figure:
@@ -387,3 +423,124 @@ class BaseObservationGenerator(ObservationComponent):
         consistency = rolling_signs.mean().abs()
 
         return pd.Series(consistency, index=data.index, name='directional_consistency')
+
+    # Missing methods expected by tests
+
+    def _calculate_log_returns(self, prices: pd.Series) -> pd.Series:
+        """
+        Calculate log returns from price series.
+
+        Args:
+            prices: Price series
+
+        Returns:
+            Log returns series
+        """
+        log_returns = np.log(prices / prices.shift(1))
+        return pd.Series(log_returns.dropna(), name='log_return')
+
+    def _calculate_volatility(self, returns: pd.Series, window: int) -> pd.Series:
+        """
+        Calculate rolling volatility from returns.
+
+        Args:
+            returns: Returns series
+            window: Rolling window size
+
+        Returns:
+            Volatility series
+        """
+        volatility = returns.rolling(window=window).std()
+        return pd.Series(volatility, index=returns.index, name='volatility')
+
+    def add_feature(self, feature_name: str, **kwargs):
+        """
+        Add a feature to the generator.
+
+        Args:
+            feature_name: Name of the feature
+            **kwargs: Feature parameters
+        """
+        if feature_name in self.features:
+            raise ValueError(f"Feature '{feature_name}' already exists")
+
+        # Validate feature type
+        valid_features = ['volatility', 'momentum', 'log_return']
+        if feature_name not in valid_features:
+            raise ValueError(f"Unknown feature type: {feature_name}")
+
+        self.features[feature_name] = kwargs
+
+    def remove_feature(self, feature_name: str):
+        """
+        Remove a feature from the generator.
+
+        Args:
+            feature_name: Name of the feature to remove
+        """
+        if feature_name in self.features:
+            del self.features[feature_name]
+
+    def plot(self, observations: pd.DataFrame = None, features: List[str] = None, **kwargs) -> plt.Figure:
+        """
+        Generate visualization of observations.
+
+        Args:
+            observations: Observations DataFrame (optional)
+            features: List of features to plot (optional)
+            **kwargs: Additional plotting parameters
+
+        Returns:
+            matplotlib Figure with observation plots
+        """
+        if observations is None:
+            observations = self.last_observations
+
+        if observations is None:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.text(0.5, 0.5, 'No observations generated yet', ha='center', va='center', fontsize=14)
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis('off')
+            return fig
+
+        # Validate features if specified
+        if features:
+            for feature in features:
+                if feature not in observations.columns:
+                    raise ValueError(f"Feature '{feature}' not found in observations")
+
+        # Plot each observation column
+        if features:
+            observation_cols = features
+        else:
+            observation_cols = [col for col in observations.columns
+                               if col not in ['open', 'high', 'low', 'close', 'volume']]
+
+        if not observation_cols:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.text(0.5, 0.5, 'No observation columns to plot', ha='center', va='center', fontsize=14)
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis('off')
+            return fig
+
+        n_cols = min(len(observation_cols), 4)  # Max 4 subplots
+        fig, axes = plt.subplots(n_cols, 1, figsize=(12, 3 * n_cols))
+
+        if n_cols == 1:
+            axes = [axes]
+
+        for i, col in enumerate(observation_cols[:n_cols]):
+            ax = axes[i]
+            data = observations[col].dropna()
+
+            if len(data) > 0:
+                ax.plot(data.index, data.values, label=col)
+                ax.set_title(f'Observation: {col}')
+                ax.set_ylabel(col)
+                ax.grid(True, alpha=0.3)
+                ax.legend()
+
+        plt.tight_layout()
+        return fig

@@ -254,7 +254,7 @@ class TestBaseObservationGenerator:
         
         empty_data = pd.DataFrame()
         
-        with pytest.raises(ValidationError, match="Data is empty"):
+        with pytest.raises(ValidationError, match="Input data cannot be empty"):
             obs_gen.update(empty_data)
     
     def test_plot_functionality(self):

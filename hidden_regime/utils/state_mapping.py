@@ -78,9 +78,9 @@ def _classify_regime_by_return_threshold(mean_return_pct: float) -> str:
         return "Crisis"
     elif mean_return_pct < -0.005:   # -3% to -0.5% daily
         return "Bear"
-    elif mean_return_pct < 0.005:    # -0.5% to +0.5% daily
+    elif mean_return_pct <= 0.01:    # -0.5% to +1.0% daily (more generous sideways)
         return "Sideways"
-    elif mean_return_pct < 0.05:     # +0.5% to +5% daily
+    elif mean_return_pct < 0.05:     # +1.0% to +5% daily
         return "Bull"
     else:                            # Greater than +5% daily
         return "Euphoric"

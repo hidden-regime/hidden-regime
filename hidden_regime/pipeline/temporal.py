@@ -210,7 +210,127 @@ class TemporalController:
                     })
                     
         return results
-    
+
+    def step_forward(self, step_days: int = 30) -> Optional[Dict[str, Any]]:
+        """
+        Step forward by specified number of days from current position and run pipeline.
+
+        Args:
+            step_days: Number of days to step forward
+
+        Returns:
+            Dictionary with pipeline results, or None if no more data available
+        """
+        # Get current position from last access log entry
+        if not self.access_log:
+            raise ValueError("Must call update_as_of() first to establish starting position")
+
+        last_entry = self.access_log[-1]
+        current_date = pd.to_datetime(last_entry['as_of_date'])
+
+        # Handle timezone compatibility with the dataset
+        if self.full_dataset.index.tz is not None:
+            # If dataset index is timezone-aware, make current_date compatible
+            if current_date.tz is None:
+                # Localize to the same timezone as the dataset
+                current_date = current_date.tz_localize(self.full_dataset.index.tz)
+        else:
+            # If dataset index is timezone-naive, ensure current_date is also naive
+            if current_date.tz is not None:
+                current_date = current_date.tz_localize(None)
+
+        # Step forward
+        next_date = current_date + pd.Timedelta(days=step_days)
+
+        # Check if we have data for this date
+        if next_date > self.full_dataset.index.max():
+            return None
+
+        # Find the next available date in our dataset
+        available_dates = self.full_dataset.index[self.full_dataset.index >= next_date]
+        if len(available_dates) == 0:
+            return None
+
+        next_available_date = available_dates[0]
+        date_str = next_available_date.strftime('%Y-%m-%d')
+
+        try:
+            # Run pipeline update for this date
+            report = self.update_as_of(date_str)
+
+            # Try to extract structured results from the pipeline
+            results = self._extract_pipeline_results()
+
+            return {
+                'date': date_str,
+                'report': report,
+                'model_results': results
+            }
+
+        except Exception as e:
+            # Log error but return None
+            self.access_log.append({
+                'timestamp': datetime.now(),
+                'as_of_date': date_str,
+                'error': str(e),
+                'status': 'failed'
+            })
+            return None
+
+    def _extract_pipeline_results(self) -> Dict[str, Any]:
+        """
+        Extract structured results from the pipeline components.
+
+        Returns:
+            Dictionary with model results including regime probabilities
+        """
+        results = {}
+
+        try:
+            # Try to get results from the model component
+            if hasattr(self.pipeline, 'model'):
+                model = self.pipeline.model
+
+                if hasattr(model, 'is_fitted') and model.is_fitted:
+                    # Get current data
+                    current_data = self.pipeline.data.get_all_data()
+
+                    if len(current_data) > 0 and len(current_data.dropna()) >= 10:
+                        # Get regime probabilities (forward-backward probabilities)
+                        # predict_proba returns DataFrame, convert to numpy array
+                        regime_probs_df = model.predict_proba(current_data)
+                        if isinstance(regime_probs_df, pd.DataFrame):
+                            # Extract the probability values (last few rows for current state)
+                            regime_probs = regime_probs_df.values
+                            results['regime_probabilities'] = regime_probs.tolist()
+                        else:
+                            results['regime_probabilities'] = regime_probs_df.tolist()
+
+                        # Get most likely regime sequence
+                        regime_states = model.predict(current_data)
+                        results['regime_states'] = regime_states.tolist()
+
+                        # Get model performance metrics if available
+                        if hasattr(model, 'get_performance_metrics'):
+                            performance = model.get_performance_metrics(current_data)
+                            results['performance'] = performance
+
+                        results['n_observations'] = len(current_data)
+                        results['data_start'] = str(current_data.index[0])
+                        results['data_end'] = str(current_data.index[-1])
+                else:
+                    results['model_status'] = 'not_fitted'
+            else:
+                results['model_status'] = 'no_model'
+
+        except Exception as e:
+            # If extraction fails, log but don't fail the entire step
+            results['extraction_error'] = str(e)
+            import traceback
+            results['extraction_traceback'] = traceback.format_exc()
+
+        return results
+
     def get_access_audit(self) -> pd.DataFrame:
         """
         Return complete audit trail for V&V verification.

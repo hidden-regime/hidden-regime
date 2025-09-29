@@ -67,16 +67,29 @@ class FinancialDataLoader(DataComponent):
     def update(self, current_date: Optional[str] = None) -> pd.DataFrame:
         """
         Update data, optionally fetching new data up to current_date.
-        
+
         Args:
             current_date: Optional date to update data up to
-            
+
         Returns:
             Updated DataFrame with any new data
         """
         # For now, we'll reload all data each time
         # In future, this could be optimized to only fetch new data
         self._last_data = self._load_data(end_date_override=current_date)
+        return self._last_data.copy()
+
+    def load_data(self, end_date_override: Optional[str] = None) -> pd.DataFrame:
+        """
+        Load data from configured source.
+
+        Args:
+            end_date_override: Optional override for end date
+
+        Returns:
+            DataFrame with loaded and processed data
+        """
+        self._last_data = self._load_data(end_date_override=end_date_override)
         return self._last_data.copy()
     
     def _load_data(self, end_date_override: Optional[str] = None) -> pd.DataFrame:
@@ -267,10 +280,20 @@ class FinancialDataLoader(DataComponent):
         if data.empty:
             raise DataLoadError(f"No data loaded for {ticker}")
 
-        if len(data) < 5:  # Minimum observations (reduced from 10 for testing)
+        if len(data) < 10:  # Minimum observations (restored to 10 as expected by tests)
             raise DataLoadError(
-                f"Insufficient data for {ticker}: {len(data)} < 5"
+                f"Insufficient data for {ticker}: {len(data)} < 10"
             )
+
+        # Check for reasonable price values first (before checking mandatory columns)
+        price_column = None
+        for col in ['price', 'close', 'Close']:
+            if col in data.columns:
+                price_column = col
+                break
+
+        if price_column and (data[price_column] <= 0).any():
+            raise DataLoadError("Invalid price values")
 
         # Validate mandatory financial pipeline columns exist
         mandatory_columns = ["price", "pct_change", "log_return"]
@@ -280,10 +303,6 @@ class FinancialDataLoader(DataComponent):
                 f"Missing mandatory financial pipeline columns for {ticker}: {missing_columns}. "
                 "These should be automatically calculated during data processing."
             )
-
-        # Check for reasonable price values
-        if (data["price"] <= 0).any():
-            raise DataLoadError(f"Invalid price values found for {ticker}")
 
         # Check for reasonable percentage change values (should be finite)
         if not np.isfinite(data["pct_change"]).all():

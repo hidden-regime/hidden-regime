@@ -137,7 +137,7 @@ class TestRealDataIntegration:
             # Step through monthly intervals
             for month_offset in range(6):
                 try:
-                    results = temporal.step_through_time()
+                    results = temporal.step_forward(step_days=30)  # Step forward by ~1 month
                     if results and 'model_results' in results:
                         model_results = results['model_results']
                         if 'regime_probabilities' in model_results:
@@ -159,6 +159,7 @@ class TestRealDataIntegration:
             # Check regime probabilities are valid across time
             for result in results_timeline:
                 regime_probs = result['current_regime_probs']
+                regime_probs = np.array(regime_probs)  # Convert to numpy array
                 assert len(regime_probs) == 3
                 assert abs(np.sum(regime_probs) - 1.0) < 1e-6
                 assert np.all(regime_probs >= 0)

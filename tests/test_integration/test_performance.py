@@ -11,7 +11,7 @@ import psutil
 import os
 import numpy as np
 import pandas as pd
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 from datetime import datetime
 
 import hidden_regime as hr
@@ -256,9 +256,11 @@ class TestScalabilityTests:
     def test_data_size_scalability(self, num_days):
         """Test performance scaling with different data sizes."""
         mock_data = self.create_scaled_mock_data(num_days)
-        
-        with patch('yfinance.download') as mock_download:
-            mock_download.return_value = mock_data
+
+        with patch('yfinance.Ticker') as mock_ticker_class:
+            mock_ticker = Mock()
+            mock_ticker_class.return_value = mock_ticker
+            mock_ticker.history.return_value = mock_data
             
             start_time = time.time()
             
@@ -275,7 +277,9 @@ class TestScalabilityTests:
             assert isinstance(report_output, str)
             assert len(report_output) > 0
             data_output = pipeline.get_component_output('data')
-            assert len(data_output) == num_days
+            # Account for data processing that removes rows with NaN (first row after pct_change)
+            expected_rows = num_days - 1
+            assert len(data_output) == expected_rows
             
             # Performance should scale reasonably
             # Rough expectation: O(n) to O(n log n) scaling

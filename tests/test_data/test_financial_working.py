@@ -128,7 +128,8 @@ class TestFinancialDataLoaderWorking:
             loader.update()
 
         # Should get proper "Insufficient data" error (bug is fixed)
-        assert "Insufficient data for AAPL: 5 < 10" in str(exc_info.value)
+        # Note: 5 raw rows become 4 processed rows due to NaN removal for pct_change/log_return
+        assert "Insufficient data for AAPL: 4 < 10" in str(exc_info.value)
     
     def test_cache_functionality(self):
         """Test that cache mechanisms are in place."""
