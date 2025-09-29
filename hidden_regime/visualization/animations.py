@@ -21,6 +21,7 @@ from .plotting import (
     get_regime_colors, get_regime_names, format_financial_axis,
     create_regime_legend, setup_financial_plot_style
 )
+from ..utils.formatting import format_strategy_names_dict
 
 
 class RegimeAnimator:
@@ -52,7 +53,8 @@ class RegimeAnimator:
         title: str = "Evolving Regime Analysis",
         save_path: Optional[str] = None,
         fps: int = 2,
-        dpi: int = 100
+        dpi: int = 100,
+        regime_profiles: Optional[Dict[int, Any]] = None
     ) -> animation.FuncAnimation:
         """
         Create animation showing regime detection evolving over time.
@@ -78,12 +80,12 @@ class RegimeAnimator:
         # Determine regime info from first regime data
         if regime_data_sequence:
             n_states = int(regime_data_sequence[0][regime_column].max()) + 1
-            regime_colors = get_regime_colors(n_states, self.color_scheme)
-            regime_names = get_regime_names(n_states)
+            regime_colors = get_regime_colors(n_states, self.color_scheme, regime_profiles)
+            regime_names = get_regime_names(n_states, regime_profiles=regime_profiles)
         else:
             n_states = 3
-            regime_colors = get_regime_colors(3, self.color_scheme)
-            regime_names = get_regime_names(3)
+            regime_colors = get_regime_colors(3, self.color_scheme, regime_profiles)
+            regime_names = get_regime_names(3, regime_profiles=regime_profiles)
 
         def animate(frame):
             try:
@@ -349,7 +351,9 @@ def create_regime_comparison_gif(
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
     axes = axes.flatten()
 
-    strategy_names = list(strategies_data.keys())
+    # Format strategy names consistently
+    formatted_strategies_data = format_strategy_names_dict(strategies_data)
+    strategy_names = list(formatted_strategies_data.keys())
     colors = plt.cm.tab10(np.linspace(0, 1, len(strategy_names)))
 
     def animate(frame):
@@ -366,7 +370,7 @@ def create_regime_comparison_gif(
             drawdowns = []
 
             for i in range(frame + 1):
-                perf = strategies_data[strategy_name][i]
+                perf = formatted_strategies_data[strategy_name][i]
                 cumulative_returns.append(perf.get('cumulative_return', 0))
                 sharpe_ratios.append(perf.get('sharpe_ratio', 0))
                 drawdowns.append(perf.get('max_drawdown', 0))
@@ -402,7 +406,7 @@ def create_regime_comparison_gif(
         axes[1].axhline(y=0, color='black', linestyle='-', alpha=0.5)
 
         # Plot 3: Current performance bar chart
-        current_returns = [strategies_data[name][frame].get('cumulative_return', 0)
+        current_returns = [formatted_strategies_data[name][frame].get('cumulative_return', 0)
                           for name in strategy_names]
         bars = axes[2].bar(strategy_names, current_returns, color=colors, alpha=0.7)
         axes[2].set_title(f'Current Performance - {current_date}')
@@ -411,9 +415,9 @@ def create_regime_comparison_gif(
         axes[2].grid(True, alpha=0.3)
 
         # Plot 4: Risk-return scatter (current position)
-        current_sharpe = [strategies_data[name][frame].get('sharpe_ratio', 0)
+        current_sharpe = [formatted_strategies_data[name][frame].get('sharpe_ratio', 0)
                          for name in strategy_names]
-        current_vol = [strategies_data[name][frame].get('volatility', 0.1)
+        current_vol = [formatted_strategies_data[name][frame].get('volatility', 0.1)
                       for name in strategy_names]
 
         for i, name in enumerate(strategy_names):
@@ -494,7 +498,7 @@ def save_individual_frames(
             # Add regime backgrounds
             if len(window_regime_data) > 0:
                 n_states = int(window_regime_data['predicted_state'].max()) + 1
-                regime_colors = get_regime_colors(n_states)
+                regime_colors = get_regime_colors(n_states, kwargs.get('color_scheme', 'professional'))
 
                 for regime in range(n_states):
                     regime_mask = window_regime_data['predicted_state'] == regime

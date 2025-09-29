@@ -18,6 +18,7 @@ from .plotting import (
     get_regime_colors, get_regime_names, format_financial_axis,
     create_regime_legend, setup_financial_plot_style
 )
+from ..utils.formatting import format_strategy_name
 
 
 def plot_price_with_regimes_and_indicators(
@@ -174,7 +175,8 @@ def plot_hmm_vs_indicators_comparison(
     price_column: str = 'close',
     regime_column: str = 'predicted_state',
     title: str = "HMM vs Technical Indicators Performance",
-    lookback_window: int = 20
+    lookback_window: int = 20,
+    color_scheme: str = "professional"
 ) -> plt.Figure:
     """
     Compare HMM regime detection against technical indicator signals.
@@ -202,7 +204,7 @@ def plot_hmm_vs_indicators_comparison(
 
     # Get regime info
     n_states = int(aligned_data[regime_column].max()) + 1
-    regime_colors = get_regime_colors(n_states)
+    regime_colors = get_regime_colors(n_states, color_scheme)
     regime_names = get_regime_names(n_states)
 
     # Plot 1: Regime-based returns
@@ -330,7 +332,7 @@ def plot_hmm_vs_indicators_comparison(
         axes[3].set_title('Risk-Adjusted Performance (Sharpe Ratio)')
         axes[3].set_ylabel('Sharpe Ratio')
         axes[3].set_xticks(x_pos)
-        axes[3].set_xticklabels(list(strategies.keys()), rotation=45)
+        axes[3].set_xticklabels([format_strategy_name(s) for s in strategies.keys()], rotation=45)
         axes[3].grid(True, alpha=0.3)
         axes[3].axhline(y=0, color='black', linestyle='-', alpha=0.3)
 
@@ -400,9 +402,10 @@ def plot_indicator_performance_dashboard(
 
     # Plot 1: Total Returns
     indicators = list(indicator_metrics.keys())
+    formatted_indicators = [format_strategy_name(ind) for ind in indicators]
     total_returns = [indicator_metrics[ind]['total_return'] * 100 for ind in indicators]
 
-    bars1 = axes[0].bar(indicators, total_returns, alpha=0.7, color='steelblue')
+    bars1 = axes[0].bar(formatted_indicators, total_returns, alpha=0.7, color='steelblue')
     axes[0].set_title('Total Returns by Indicator')
     axes[0].set_ylabel('Total Return (%)')
     axes[0].grid(True, alpha=0.3)
@@ -417,7 +420,7 @@ def plot_indicator_performance_dashboard(
     # Plot 2: Sharpe Ratios
     sharpe_ratios = [indicator_metrics[ind]['sharpe_ratio'] for ind in indicators]
 
-    bars2 = axes[1].bar(indicators, sharpe_ratios, alpha=0.7, color='green')
+    bars2 = axes[1].bar(formatted_indicators, sharpe_ratios, alpha=0.7, color='green')
     axes[1].set_title('Sharpe Ratios by Indicator')
     axes[1].set_ylabel('Sharpe Ratio')
     axes[1].grid(True, alpha=0.3)
@@ -427,7 +430,7 @@ def plot_indicator_performance_dashboard(
     # Plot 3: Max Drawdown
     max_drawdowns = [indicator_metrics[ind]['max_drawdown'] * 100 for ind in indicators]
 
-    bars3 = axes[2].bar(indicators, max_drawdowns, alpha=0.7, color='red')
+    bars3 = axes[2].bar(formatted_indicators, max_drawdowns, alpha=0.7, color='red')
     axes[2].set_title('Maximum Drawdown by Indicator')
     axes[2].set_ylabel('Max Drawdown (%)')
     axes[2].grid(True, alpha=0.3)
@@ -441,7 +444,7 @@ def plot_indicator_performance_dashboard(
 
     # Annotate points
     for i, indicator in enumerate(indicators):
-        axes[3].annotate(indicator, (num_trades[i], win_rates[i]),
+        axes[3].annotate(format_strategy_name(indicator), (num_trades[i], win_rates[i]),
                         xytext=(5, 5), textcoords='offset points', fontsize=8)
 
     axes[3].set_title('Win Rate vs Number of Trades')
@@ -459,7 +462,8 @@ def create_regime_transition_visualization(
     regime_data: pd.DataFrame,
     regime_column: str = 'predicted_state',
     confidence_column: str = 'confidence',
-    title: str = "Regime Transition Analysis"
+    title: str = "Regime Transition Analysis",
+    color_scheme: str = "professional"
 ) -> plt.Figure:
     """
     Create visualization showing regime transitions and their characteristics.
@@ -477,7 +481,7 @@ def create_regime_transition_visualization(
     axes = axes.flatten()
 
     n_states = int(regime_data[regime_column].max()) + 1
-    regime_colors = get_regime_colors(n_states)
+    regime_colors = get_regime_colors(n_states, color_scheme)
     regime_names = get_regime_names(n_states)
 
     # Plot 1: Transition Matrix Heatmap

@@ -619,7 +619,8 @@ def create_regime_timeline_plot(
     regime_data: pd.DataFrame,
     regime_column: str = 'predicted_state',
     confidence_column: str = 'confidence',
-    title: str = "Regime Timeline with Transitions"
+    title: str = "Regime Timeline with Transitions",
+    color_scheme: str = "professional"
 ) -> plt.Figure:
     """
     Create detailed timeline plot showing regime transitions and durations.
@@ -636,7 +637,7 @@ def create_regime_timeline_plot(
     fig, axes = plt.subplots(2, 1, figsize=(15, 10), sharex=True)
 
     n_states = int(regime_data[regime_column].max()) + 1
-    regime_colors = get_regime_colors(n_states)
+    regime_colors = get_regime_colors(n_states, color_scheme)
     regime_names = get_regime_names(n_states)
 
     # Plot 1: Regime timeline with transitions
@@ -731,7 +732,7 @@ def create_multi_asset_regime_comparison(
 
         # Add regime backgrounds
         n_states = int(aligned_data['predicted_state'].max()) + 1
-        regime_colors = get_regime_colors(n_states)
+        regime_colors = get_regime_colors(n_states, self.color_scheme)
         regime_names = get_regime_names(n_states)
 
         for regime in range(n_states):

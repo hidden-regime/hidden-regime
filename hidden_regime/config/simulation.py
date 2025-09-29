@@ -26,11 +26,11 @@ class SimulationConfig(BaseConfig):
     enable_shorting: bool = True  # Whether to allow short selling
     transaction_cost: float = 0.0  # Cost per trade (flat fee)
 
-    # Risk management
-    max_position_pct: float = 0.1  # Maximum 10% of portfolio per position
+    # Risk management (optimized for single-asset dedicated capital)
+    max_position_pct: float = 1.0  # Maximum 100% allocation for single-asset analysis
     max_portfolio_risk: float = 0.02  # Maximum 2% portfolio risk per trade
     stop_loss_pct: float = 0.05  # Default 5% stop-loss
-    max_total_exposure: float = 1.0  # Maximum 100% portfolio exposure
+    max_total_exposure: float = 1.0  # Maximum 100% portfolio exposure (appropriate for single asset)
     max_drawdown_pct: float = 0.2  # Maximum 20% drawdown before reducing size
 
     # Signal generation
@@ -86,7 +86,7 @@ class SimulationConfig(BaseConfig):
             raise ConfigurationError(f"max_drawdown_pct must be between 0 and 1, got {self.max_drawdown_pct}")
 
         # Validate signal generators
-        valid_base_generators = ['buy_and_hold', 'hmm_regime_following', 'hmm_regime_contrarian', 'hmm_confidence_weighted']
+        valid_base_generators = ['buy_and_hold', 'hmm_regime_following', 'hmm_regime_contrarian', 'hmm_confidence_weighted', 'adaptive_financial']
         for generator in self.signal_generators:
             if not generator.startswith('ta_') and generator not in valid_base_generators:
                 raise ConfigurationError(f"Unknown signal generator: {generator}")
@@ -122,9 +122,9 @@ class SimulationConfig(BaseConfig):
 
     @classmethod
     def create_conservative(cls) -> 'SimulationConfig':
-        """Create conservative simulation configuration."""
+        """Create conservative simulation configuration for single-asset analysis."""
         return cls(
-            max_position_pct=0.05,  # 5% max position
+            max_position_pct=0.5,  # 50% max position (conservative for single asset)
             max_portfolio_risk=0.01,  # 1% max risk
             stop_loss_pct=0.03,  # 3% stop-loss
             max_total_exposure=0.5,  # 50% max exposure
@@ -135,12 +135,12 @@ class SimulationConfig(BaseConfig):
 
     @classmethod
     def create_aggressive(cls) -> 'SimulationConfig':
-        """Create aggressive simulation configuration."""
+        """Create aggressive simulation configuration for single-asset analysis."""
         return cls(
-            max_position_pct=0.2,  # 20% max position
+            max_position_pct=1.0,  # 100% max position (full allocation for single asset)
             max_portfolio_risk=0.05,  # 5% max risk
             stop_loss_pct=0.08,  # 8% stop-loss
-            max_total_exposure=1.5,  # 150% max exposure (leverage)
+            max_total_exposure=1.5,  # 150% max exposure (leverage allowed)
             enable_shorting=True,
             signal_generators=['buy_and_hold', 'hmm_regime_following', 'hmm_regime_contrarian'],
             hmm_strategy_types=['regime_following', 'regime_contrarian', 'confidence_weighted'],
@@ -151,9 +151,9 @@ class SimulationConfig(BaseConfig):
 
     @classmethod
     def create_comprehensive(cls) -> 'SimulationConfig':
-        """Create comprehensive simulation configuration for thorough testing."""
+        """Create comprehensive simulation configuration for single-asset thorough testing."""
         return cls(
-            max_position_pct=0.1,  # 10% max position
+            max_position_pct=1.0,  # 100% max position (full allocation for single asset)
             max_portfolio_risk=0.02,  # 2% max risk
             stop_loss_pct=0.05,  # 5% stop-loss
             max_total_exposure=1.0,  # 100% max exposure

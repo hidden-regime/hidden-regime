@@ -90,17 +90,27 @@ def setup_financial_plot_style(style: str = "professional") -> None:
         })
 
 
-def get_regime_colors(n_states: int, color_scheme: str = "professional") -> List[str]:
+def get_regime_colors(n_states: int,
+                     color_scheme: str = "professional",
+                     regime_profiles: Optional[Dict[int, Any]] = None) -> List[str]:
     """
     Get appropriate colors for regime visualization.
 
     Args:
         n_states: Number of regime states
         color_scheme: Color scheme name
+        regime_profiles: Optional RegimeProfile objects from financial characterization
 
     Returns:
         List of color strings for each regime
     """
+    # Use financial characterization if available
+    if regime_profiles:
+        from ..utils.regime_mapping import get_regime_mapping_for_visualization
+        _, colors = get_regime_mapping_for_visualization(regime_profiles, n_states)
+        return colors
+
+    # Fallback to original color scheme logic
     base_colors = REGIME_COLORS.get(color_scheme, REGIME_COLORS['professional'])
 
     if n_states <= len(base_colors):
@@ -116,13 +126,16 @@ def get_regime_colors(n_states: int, color_scheme: str = "professional") -> List
     return base_colors + additional_colors
 
 
-def get_regime_names(n_states: int, custom_names: Optional[List[str]] = None) -> List[str]:
+def get_regime_names(n_states: int,
+                    custom_names: Optional[List[str]] = None,
+                    regime_profiles: Optional[Dict[int, Any]] = None) -> List[str]:
     """
-    Get appropriate regime names based on number of states.
+    Get appropriate regime names based on number of states and financial characterization.
 
     Args:
         n_states: Number of regime states
         custom_names: Optional custom regime names
+        regime_profiles: Optional RegimeProfile objects from financial characterization
 
     Returns:
         List of regime names
@@ -132,6 +145,13 @@ def get_regime_names(n_states: int, custom_names: Optional[List[str]] = None) ->
             raise ValueError(f"Custom names must have {n_states} elements, got {len(custom_names)}")
         return custom_names
 
+    # Use financial characterization if available
+    if regime_profiles:
+        from ..utils.regime_mapping import get_regime_mapping_for_visualization
+        labels, _ = get_regime_mapping_for_visualization(regime_profiles, n_states)
+        return labels
+
+    # Fallback to generic mapping
     if n_states in REGIME_NAMES_MAP:
         return REGIME_NAMES_MAP[n_states]
 
@@ -190,7 +210,8 @@ def plot_returns_with_regimes(
     regime_column: str = 'predicted_state',
     confidence_column: str = 'confidence',
     title: str = "Price Chart with Market Regimes",
-    color_scheme: str = "professional"
+    color_scheme: str = "professional",
+    regime_profiles: Optional[Dict[int, Any]] = None
 ) -> plt.Figure:
     """
     Plot price series with regime background coloring.
@@ -204,6 +225,7 @@ def plot_returns_with_regimes(
         confidence_column: Column name for confidence scores
         title: Plot title
         color_scheme: Color scheme for regimes
+        regime_profiles: Optional RegimeProfile objects for financial characterization
 
     Returns:
         matplotlib Figure
@@ -218,8 +240,8 @@ def plot_returns_with_regimes(
 
     # Get regime info
     n_states = int(aligned_data[regime_column].max()) + 1
-    regime_colors = get_regime_colors(n_states, color_scheme)
-    regime_names = get_regime_names(n_states)
+    regime_colors = get_regime_colors(n_states, color_scheme, regime_profiles)
+    regime_names = get_regime_names(n_states, regime_profiles=regime_profiles)
 
     # Plot price line
     ax.plot(aligned_data.index, aligned_data[price_column],
@@ -263,7 +285,9 @@ def plot_regime_heatmap(
     regime_column: str = 'predicted_state',
     confidence_column: str = 'confidence',
     ax: Optional[plt.Axes] = None,
-    title: str = "Regime Detection Heatmap"
+    title: str = "Regime Detection Heatmap",
+    color_scheme: str = "professional",
+    regime_profiles: Optional[Dict[int, Any]] = None
 ) -> plt.Figure:
     """
     Create heatmap showing regime probabilities over time.
@@ -274,6 +298,7 @@ def plot_regime_heatmap(
         confidence_column: Column name for confidence scores
         ax: Optional matplotlib axes
         title: Plot title
+        regime_profiles: Optional RegimeProfile objects for financial characterization
 
     Returns:
         matplotlib Figure
@@ -285,7 +310,7 @@ def plot_regime_heatmap(
 
     # Create heatmap data
     n_states = int(regime_data[regime_column].max()) + 1
-    regime_names = get_regime_names(n_states)
+    regime_names = get_regime_names(n_states, regime_profiles=regime_profiles)
 
     # Create a matrix for heatmap (time x states)
     heatmap_data = np.zeros((len(regime_data), n_states))
@@ -357,7 +382,7 @@ def plot_regime_statistics(
     aligned_data['returns'] = aligned_data[price_column].pct_change()
 
     n_states = int(aligned_data[regime_column].max()) + 1
-    regime_colors = get_regime_colors(n_states)
+    regime_colors = get_regime_colors(n_states, color_scheme)
     regime_names = get_regime_names(n_states)
 
     # Statistics by regime
@@ -427,7 +452,8 @@ def plot_regime_transitions(
     regime_data: pd.DataFrame,
     regime_column: str = 'predicted_state',
     ax: Optional[plt.Axes] = None,
-    title: str = "Regime Transition Timeline"
+    title: str = "Regime Transition Timeline",
+    color_scheme: str = "professional"
 ) -> plt.Figure:
     """
     Plot regime transitions over time as a timeline.
@@ -447,7 +473,7 @@ def plot_regime_transitions(
         fig = ax.figure
 
     n_states = int(regime_data[regime_column].max()) + 1
-    regime_colors = get_regime_colors(n_states)
+    regime_colors = get_regime_colors(n_states, color_scheme)
     regime_names = get_regime_names(n_states)
 
     # Plot regime timeline
@@ -479,7 +505,8 @@ def create_multi_panel_regime_plot(
     regime_column: str = 'predicted_state',
     confidence_column: str = 'confidence',
     title: str = "Comprehensive Regime Analysis",
-    color_scheme: str = "professional"
+    color_scheme: str = "professional",
+    regime_profiles: Optional[Dict[int, Any]] = None
 ) -> plt.Figure:
     """
     Create comprehensive multi-panel plot with price, regimes, and statistics.
@@ -492,6 +519,7 @@ def create_multi_panel_regime_plot(
         confidence_column: Column name for confidence scores
         title: Overall plot title
         color_scheme: Color scheme for regimes
+        regime_profiles: Optional RegimeProfile objects for financial characterization
 
     Returns:
         matplotlib Figure with multiple subplots
@@ -508,13 +536,16 @@ def create_multi_panel_regime_plot(
                              regime_column=regime_column,
                              confidence_column=confidence_column,
                              title="Price with Market Regimes",
-                             color_scheme=color_scheme)
+                             color_scheme=color_scheme,
+                             regime_profiles=regime_profiles)
 
     # Regime heatmap
     ax2 = fig.add_subplot(gs[1, :])
     plot_regime_heatmap(regime_data, regime_column=regime_column,
                        confidence_column=confidence_column, ax=ax2,
-                       title="Regime Confidence Heatmap")
+                       title="Regime Confidence Heatmap",
+                       color_scheme=color_scheme,
+                       regime_profiles=regime_profiles)
 
     # Regime statistics
     ax3 = fig.add_subplot(gs[2, 0])
@@ -523,8 +554,8 @@ def create_multi_panel_regime_plot(
     # Calculate regime distribution
     regime_counts = regime_data[regime_column].value_counts().sort_index()
     n_states = len(regime_counts)
-    regime_colors = get_regime_colors(n_states, color_scheme)
-    regime_names = get_regime_names(n_states)
+    regime_colors = get_regime_colors(n_states, color_scheme, regime_profiles)
+    regime_names = get_regime_names(n_states, regime_profiles=regime_profiles)
 
     # Pie chart of regime distribution
     ax3.pie(regime_counts.values, labels=[regime_names[i] for i in regime_counts.index],

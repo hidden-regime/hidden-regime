@@ -2,9 +2,9 @@
 """
 Basic Case Study Example
 
-Demonstrates a simple case study using the case study system.
-This example shows how to run a quick analysis on a single stock
-with minimal configuration.
+Demonstrates a simple financial regime analysis using the financial-first architecture.
+This example shows how to run a quick analysis on a single stock with the new
+FinancialRegimeAnalysis unified entry point.
 """
 
 import sys
@@ -14,68 +14,75 @@ from datetime import datetime, timedelta
 # Add the project root to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from hidden_regime.config.case_study import CaseStudyConfig
-from examples.case_study import run_case_study_from_config
+from hidden_regime.financial.config import FinancialRegimeConfig
+from hidden_regime.financial.analysis import FinancialRegimeAnalysis
 
 
 def main():
-    """Run basic case study example."""
-    print("📊 Basic Case Study Example")
-    print("=" * 40)
+    """Run basic financial regime analysis example."""
+    print("📊 Financial Regime Analysis - Basic Example")
+    print("=" * 50)
 
-    # Create a simple case study configuration
-    config = CaseStudyConfig(
+    # Create a quick financial analysis configuration
+    config = FinancialRegimeConfig.create_quick_analysis(
         ticker="AAPL",
-        start_date="2024-06-01",
-        end_date="2024-09-01",
-        n_training=60,  # 60 days of training
-        n_states=3,     # Simple 3-state model
-        frequency="business_days",
-
-        # Simplified settings for basic example
-        include_technical_indicators=True,  # Enable comprehensive technical analysis
-        create_animations=True,   # Enable animations to see regime evolution
-        save_individual_frames=False,
-        generate_comprehensive_report=True,
-
-        # Quick analysis
-        animation_fps=3,
-        color_scheme="colorblind_safe",  # Use colorblind-friendly colors
-        output_directory="./output/basic_case_study"
+        days_back=90,  # 3 months of analysis
+        n_regimes=3,   # Simple 3-regime model
+        initial_capital=50000.0  # $50k for simulation
     )
+
+    # Note: Can't modify frozen dataclass, but output_directory is auto-generated
+    print(f"Auto-generated output directory: {config.output_directory}")
 
     print(f"Configuration created for {config.ticker}")
     print(f"Analysis period: {config.start_date} to {config.end_date}")
-    print(f"Training days: {config.n_training}")
-    print(f"Model states: {config.n_states}")
+    print(f"Training days: {config.training_days}")
+    print(f"Number of regimes: {config.n_regimes}")
+    print(f"Initial capital: ${config.initial_capital:,.2f}")
 
     try:
-        # Run the case study
-        print(f"\n🚀 Starting basic case study...")
-        results = run_case_study_from_config(config)
+        # Run the financial analysis
+        print(f"\n🚀 Starting financial regime analysis...")
+        start_time = datetime.now()
+
+        # Create and run analysis
+        analysis = FinancialRegimeAnalysis(config)
+        results = analysis.run_complete_analysis()
+
+        execution_time = (datetime.now() - start_time).total_seconds()
 
         # Display results summary
-        print(f"\n✅ Case study completed!")
-        print(f"Execution time: {results.get('execution_time', 0):.1f} seconds")
+        print(f"\n✅ Financial regime analysis completed!")
+        print(f"Execution time: {execution_time:.1f} seconds")
         print(f"Output directory: {config.output_directory}")
 
-        # Show final comparison if available
-        if ('final_comparison' in results and
-            results['final_comparison'] is not None and
-            'comparison_summary' in results['final_comparison']):
-            summary = results['final_comparison']['comparison_summary']
-            if 'strategy_ranking' in summary:
-                print(f"\nStrategy Performance:")
-                for i, (strategy, sharpe) in enumerate(summary['strategy_ranking'][:3]):
-                    print(f"  {i+1}. {strategy}: Sharpe {sharpe:.3f}")
-        else:
-            print(f"\nNote: No performance comparison available (likely due to data issues)")
+        # Show regime analysis results
+        if results.analysis_success:
+            current_regime = results.current_regime_info
+            print(f"\n🎯 Current Market Regime:")
+            print(f"   Regime: {current_regime['regime_type']}")
+            print(f"   Confidence: {current_regime['confidence']:.1%}")
+            print(f"   Expected Return: {current_regime['expected_return']:.1%}")
+            print(f"   Volatility: {current_regime['volatility']:.1%}")
 
-        print(f"\n📁 Check the output directory for detailed results:")
-        print(f"   {config.output_directory}")
+        # Show simulation results if available
+        if results.simulation_results is not None:
+            sim = results.simulation_results
+            print(f"\n💰 Trading Simulation Results:")
+            print(f"   Total Return: {sim.total_return_pct:.2f}%")
+            print(f"   Sharpe Ratio: {sim.sharpe_ratio:.3f}")
+            print(f"   Max Drawdown: {sim.max_drawdown_pct:.2f}%")
+            print(f"   Total Trades: {sim.total_trades}")
+            print(f"   Best Strategy: {sim.best_strategy}")
+
+        print(f"\n📁 Generated files in {config.output_directory}:")
+        print(f"   📊 Regime analysis charts")
+        print(f"   📈 Performance comparison plots")
+        print(f"   💾 Trade journal and data exports")
+        print(f"   📝 Comprehensive analysis report")
 
     except Exception as e:
-        print(f"\n❌ Case study failed: {e}")
+        print(f"\n❌ Financial analysis failed: {e}")
         import traceback
         traceback.print_exc()
 
