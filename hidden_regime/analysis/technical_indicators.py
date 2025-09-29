@@ -8,12 +8,57 @@ buy/sell signals for comparison against HMM regime detection strategies.
 import numpy as np
 import pandas as pd
 import ta
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, NamedTuple
+from dataclasses import dataclass, field
+from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
 from .performance import RegimePerformanceAnalyzer
 from ..utils.exceptions import AnalysisError
+
+
+@dataclass
+class SignalEvent:
+    """Detailed information about a technical indicator signal event."""
+    timestamp: str
+    indicator_name: str
+    signal_type: str  # 'BUY', 'SELL', 'HOLD'
+    signal_strength: float  # Confidence/strength of signal (0-1)
+
+    # Signal rationale and mathematical explanation
+    triggering_condition: str  # What condition triggered the signal
+    mathematical_explanation: str  # Detailed mathematical rationale
+    market_context: Dict[str, float]  # Relevant market values at signal time
+
+    # Signal characteristics
+    signal_confidence: float  # How confident we are in this signal
+    expected_duration: Optional[int] = None  # Expected signal duration in periods
+    risk_assessment: str = "MEDIUM"  # LOW, MEDIUM, HIGH
+
+    # Performance tracking
+    entry_price: Optional[float] = None
+    exit_price: Optional[float] = None
+    realized_return: Optional[float] = None
+
+
+@dataclass
+class IndicatorSnapshot:
+    """Snapshot of technical indicator state and signal generation."""
+    timestamp: str
+    indicator_name: str
+    indicator_value: float
+    signal_generated: int  # -1, 0, 1
+
+    # Mathematical state
+    calculation_inputs: Dict[str, float]  # Inputs used in calculation
+    intermediate_values: Dict[str, float]  # Intermediate calculation values
+    threshold_levels: Dict[str, float]  # Relevant thresholds
+
+    # Signal generation context
+    signal_event: Optional[SignalEvent] = None
+    previous_signal: Optional[int] = None
+    days_since_last_signal: Optional[int] = None
 
 
 class TechnicalIndicatorAnalyzer:
@@ -27,6 +72,7 @@ class TechnicalIndicatorAnalyzer:
     def __init__(self):
         """Initialize technical indicator analyzer."""
         self.performance_analyzer = RegimePerformanceAnalyzer()
+        self.signal_history = []  # Store detailed signal generation history
 
         # Define comprehensive indicator set
         self.indicator_definitions = {
@@ -148,6 +194,35 @@ class TechnicalIndicatorAnalyzer:
 
         return indicators
 
+    def get_signal_history(self) -> List[SignalEvent]:
+        """Return complete history of signal events with rationale."""
+        return self.signal_history.copy()
+
+    def get_signal_summary(self) -> Dict[str, Any]:
+        """Get summary statistics of signal generation."""
+        if not self.signal_history:
+            return {'total_signals': 0, 'by_indicator': {}, 'by_type': {}}
+
+        by_indicator = {}
+        by_type = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
+
+        for signal in self.signal_history:
+            # Count by indicator
+            if signal.indicator_name not in by_indicator:
+                by_indicator[signal.indicator_name] = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
+            by_indicator[signal.indicator_name][signal.signal_type] += 1
+
+            # Count by type
+            by_type[signal.signal_type] += 1
+
+        return {
+            'total_signals': len(self.signal_history),
+            'by_indicator': by_indicator,
+            'by_type': by_type,
+            'avg_signal_strength': np.mean([s.signal_strength for s in self.signal_history]),
+            'avg_confidence': np.mean([s.signal_confidence for s in self.signal_history])
+        }
+
     def generate_signals(self, data: pd.DataFrame, indicators: pd.DataFrame) -> Dict[str, pd.Series]:
         """
         Generate buy/sell signals for each indicator.
@@ -162,168 +237,378 @@ class TechnicalIndicatorAnalyzer:
         signals = {}
         price = data['close']
 
+        # Clear previous signal history for this analysis
+        self.signal_history = []
+
         # Moving average signals
-        signals['sma_20'] = self._generate_ma_crossover_signals(price, indicators['sma_20'])
-        signals['sma_50'] = self._generate_ma_crossover_signals(price, indicators['sma_50'])
-        signals['ema_12'] = self._generate_ma_crossover_signals(price, indicators['ema_12'])
-        signals['ema_26'] = self._generate_ma_crossover_signals(price, indicators['ema_26'])
+        signals['sma_20'] = self._generate_ma_crossover_signals_with_rationale(price, indicators['sma_20'], 'SMA_20')
+        signals['sma_50'] = self._generate_ma_crossover_signals_with_rationale(price, indicators['sma_50'], 'SMA_50')
+        signals['ema_12'] = self._generate_ma_crossover_signals_with_rationale(price, indicators['ema_12'], 'EMA_12')
+        signals['ema_26'] = self._generate_ma_crossover_signals_with_rationale(price, indicators['ema_26'], 'EMA_26')
 
         # MACD signals
-        signals['macd'] = self._generate_macd_signals(indicators['macd'], indicators['macd_signal'])
+        signals['macd'] = self._generate_macd_signals_with_rationale(indicators['macd'], indicators['macd_signal'])
 
         # RSI signals
-        signals['rsi'] = self._generate_rsi_signals(indicators['rsi'])
+        signals['rsi'] = self._generate_rsi_signals_with_rationale(indicators['rsi'])
 
         # Stochastic signals
-        signals['stoch'] = self._generate_stochastic_signals(indicators['stoch'])
+        signals['stoch'] = self._generate_stochastic_signals_with_rationale(indicators['stoch'])
 
         # Williams %R signals
-        signals['williams_r'] = self._generate_williams_r_signals(indicators['williams_r'])
+        signals['williams_r'] = self._generate_williams_r_signals_with_rationale(indicators['williams_r'])
 
         # CCI signals
-        signals['cci'] = self._generate_cci_signals(indicators['cci'])
+        signals['cci'] = self._generate_cci_signals_with_rationale(indicators['cci'])
 
         # Bollinger Band signals
-        signals['bollinger'] = self._generate_bollinger_signals(price, indicators['bollinger_upper'], indicators['bollinger_lower'])
+        signals['bollinger'] = self._generate_bollinger_signals_with_rationale(price, indicators['bollinger_upper'], indicators['bollinger_lower'])
 
         # ADX trend strength signals
-        signals['adx'] = self._generate_adx_signals(indicators['adx'], indicators['sma_20'], price)
+        signals['adx'] = self._generate_adx_signals_with_rationale(indicators['adx'], indicators['sma_20'], price)
 
         # Aroon signals
-        signals['aroon'] = self._generate_aroon_signals(indicators['aroon_up'], indicators['aroon_down'])
+        signals['aroon'] = self._generate_aroon_signals_with_rationale(indicators['aroon_up'], indicators['aroon_down'])
 
         # Rate of Change signals
-        signals['roc'] = self._generate_roc_signals(indicators['roc'])
+        signals['roc'] = self._generate_roc_signals_with_rationale(indicators['roc'])
 
         # Volume-based signals (if available)
         if 'vwap' in indicators.columns and not indicators['vwap'].isna().all():
-            signals['vwap'] = self._generate_vwap_signals(price, indicators['vwap'])
+            signals['vwap'] = self._generate_vwap_signals_with_rationale(price, indicators['vwap'])
 
         return signals
 
-    def _generate_ma_crossover_signals(self, price: pd.Series, ma: pd.Series) -> pd.Series:
-        """Generate signals based on price crossing moving average."""
+    def _generate_ma_crossover_signals_with_rationale(self, price: pd.Series, ma: pd.Series, indicator_name: str) -> pd.Series:
+        """Generate MA crossover signals with detailed rationale."""
         signals = pd.Series(0, index=price.index)
 
         # Buy when price crosses above MA, sell when below
         price_above_ma = (price > ma).fillna(False)
         price_above_ma_prev = price_above_ma.shift(1).fillna(False)
 
-        signals[price_above_ma & ~price_above_ma_prev] = 1  # Buy signal
-        signals[~price_above_ma & price_above_ma_prev] = -1  # Sell signal
+        # Generate signals with rationale tracking
+        for i in range(1, len(price)):
+            current_price = price.iloc[i]
+            current_ma = ma.iloc[i]
+            prev_price = price.iloc[i-1]
+            prev_ma = ma.iloc[i-1]
+
+            signal = 0
+
+            # Buy signal: price crosses above MA
+            if current_price > current_ma and prev_price <= prev_ma:
+                signal = 1
+                signal_strength = min(1.0, (current_price - current_ma) / current_ma * 10)  # Normalize
+
+                self.signal_history.append(SignalEvent(
+                    timestamp=str(price.index[i]),
+                    indicator_name=indicator_name,
+                    signal_type='BUY',
+                    signal_strength=signal_strength,
+                    triggering_condition=f'Price ({current_price:.4f}) crossed above {indicator_name} ({current_ma:.4f})',
+                    mathematical_explanation=f'Bullish crossover detected: Price/MA ratio = {current_price/current_ma:.4f} > 1.0, Previous ratio = {prev_price/prev_ma:.4f}',
+                    market_context={
+                        'price': current_price,
+                        'ma_value': current_ma,
+                        'price_ma_ratio': current_price / current_ma,
+                        'crossover_magnitude': (current_price - current_ma) / current_ma
+                    },
+                    signal_confidence=signal_strength,
+                    risk_assessment='MEDIUM',
+                    entry_price=current_price
+                ))
+
+            # Sell signal: price crosses below MA
+            elif current_price < current_ma and prev_price >= prev_ma:
+                signal = -1
+                signal_strength = min(1.0, (current_ma - current_price) / current_ma * 10)  # Normalize
+
+                self.signal_history.append(SignalEvent(
+                    timestamp=str(price.index[i]),
+                    indicator_name=indicator_name,
+                    signal_type='SELL',
+                    signal_strength=signal_strength,
+                    triggering_condition=f'Price ({current_price:.4f}) crossed below {indicator_name} ({current_ma:.4f})',
+                    mathematical_explanation=f'Bearish crossover detected: Price/MA ratio = {current_price/current_ma:.4f} < 1.0, Previous ratio = {prev_price/prev_ma:.4f}',
+                    market_context={
+                        'price': current_price,
+                        'ma_value': current_ma,
+                        'price_ma_ratio': current_price / current_ma,
+                        'crossover_magnitude': (current_ma - current_price) / current_ma
+                    },
+                    signal_confidence=signal_strength,
+                    risk_assessment='MEDIUM',
+                    entry_price=current_price
+                ))
+
+            signals.iloc[i] = signal
 
         return signals
 
-    def _generate_macd_signals(self, macd: pd.Series, signal: pd.Series) -> pd.Series:
-        """Generate MACD crossover signals."""
+    def _generate_macd_signals_with_rationale(self, macd: pd.Series, signal: pd.Series) -> pd.Series:
+        """Generate MACD crossover signals with detailed rationale."""
         signals = pd.Series(0, index=macd.index)
+        histogram = macd - signal
 
-        macd_above_signal = (macd > signal).fillna(False)
-        macd_above_signal_prev = macd_above_signal.shift(1).fillna(False)
+        for i in range(1, len(macd)):
+            if pd.isna(macd.iloc[i]) or pd.isna(signal.iloc[i]):
+                continue
 
-        signals[macd_above_signal & ~macd_above_signal_prev] = 1  # Buy
-        signals[~macd_above_signal & macd_above_signal_prev] = -1  # Sell
+            current_macd = macd.iloc[i]
+            current_signal = signal.iloc[i]
+            current_histogram = histogram.iloc[i]
+            prev_histogram = histogram.iloc[i-1]
+
+            signal_value = 0
+
+            # Bullish crossover: MACD crosses above signal line
+            if current_histogram > 0 and prev_histogram <= 0:
+                signal_value = 1
+                momentum_strength = abs(current_histogram) / abs(current_macd) if current_macd != 0 else 0
+
+                self.signal_history.append(SignalEvent(
+                    timestamp=str(macd.index[i]),
+                    indicator_name='MACD',
+                    signal_type='BUY',
+                    signal_strength=min(1.0, momentum_strength * 2),
+                    triggering_condition=f'MACD ({current_macd:.4f}) crossed above Signal line ({current_signal:.4f})',
+                    mathematical_explanation=f'Bullish momentum: MACD - Signal = {current_histogram:.4f} > 0, Previous histogram = {prev_histogram:.4f}',
+                    market_context={
+                        'macd_value': current_macd,
+                        'signal_line': current_signal,
+                        'histogram': current_histogram,
+                        'momentum_strength': momentum_strength
+                    },
+                    signal_confidence=min(1.0, momentum_strength * 2),
+                    risk_assessment='MEDIUM'
+                ))
+
+            # Bearish crossover: MACD crosses below signal line
+            elif current_histogram < 0 and prev_histogram >= 0:
+                signal_value = -1
+                momentum_strength = abs(current_histogram) / abs(current_macd) if current_macd != 0 else 0
+
+                self.signal_history.append(SignalEvent(
+                    timestamp=str(macd.index[i]),
+                    indicator_name='MACD',
+                    signal_type='SELL',
+                    signal_strength=min(1.0, momentum_strength * 2),
+                    triggering_condition=f'MACD ({current_macd:.4f}) crossed below Signal line ({current_signal:.4f})',
+                    mathematical_explanation=f'Bearish momentum: MACD - Signal = {current_histogram:.4f} < 0, Previous histogram = {prev_histogram:.4f}',
+                    market_context={
+                        'macd_value': current_macd,
+                        'signal_line': current_signal,
+                        'histogram': current_histogram,
+                        'momentum_strength': momentum_strength
+                    },
+                    signal_confidence=min(1.0, momentum_strength * 2),
+                    risk_assessment='MEDIUM'
+                ))
+
+            signals.iloc[i] = signal_value
 
         return signals
 
-    def _generate_rsi_signals(self, rsi: pd.Series, oversold: float = 30, overbought: float = 70) -> pd.Series:
-        """Generate RSI overbought/oversold signals."""
+    def _generate_rsi_signals_with_rationale(self, rsi: pd.Series, oversold: float = 30, overbought: float = 70) -> pd.Series:
+        """Generate RSI overbought/oversold signals with detailed rationale."""
         signals = pd.Series(0, index=rsi.index)
 
-        # Buy when RSI crosses above oversold level
-        signals[(rsi > oversold) & (rsi.shift(1) <= oversold)] = 1
+        for i in range(1, len(rsi)):
+            if pd.isna(rsi.iloc[i]) or pd.isna(rsi.iloc[i-1]):
+                continue
 
-        # Sell when RSI crosses below overbought level
-        signals[(rsi < overbought) & (rsi.shift(1) >= overbought)] = -1
+            current_rsi = rsi.iloc[i]
+            prev_rsi = rsi.iloc[i-1]
+            signal_value = 0
+
+            # Buy signal: RSI crosses above oversold threshold
+            if current_rsi > oversold and prev_rsi <= oversold:
+                signal_value = 1
+                oversold_magnitude = (current_rsi - oversold) / (50 - oversold)  # Normalize to 0-1
+                momentum_strength = min(1.0, oversold_magnitude)
+
+                self.signal_history.append(SignalEvent(
+                    timestamp=str(rsi.index[i]),
+                    indicator_name='RSI',
+                    signal_type='BUY',
+                    signal_strength=momentum_strength,
+                    triggering_condition=f'RSI ({current_rsi:.2f}) crossed above oversold threshold ({oversold})',
+                    mathematical_explanation=f'Oversold recovery: RSI increased from {prev_rsi:.2f} to {current_rsi:.2f}, suggesting price may be bottoming',
+                    market_context={
+                        'rsi_value': current_rsi,
+                        'oversold_threshold': oversold,
+                        'overbought_threshold': overbought,
+                        'distance_from_neutral': abs(current_rsi - 50),
+                        'momentum_change': current_rsi - prev_rsi
+                    },
+                    signal_confidence=momentum_strength,
+                    risk_assessment='MEDIUM'
+                ))
+
+            # Sell signal: RSI crosses below overbought threshold
+            elif current_rsi < overbought and prev_rsi >= overbought:
+                signal_value = -1
+                overbought_magnitude = (overbought - current_rsi) / (overbought - 50)  # Normalize to 0-1
+                momentum_strength = min(1.0, overbought_magnitude)
+
+                self.signal_history.append(SignalEvent(
+                    timestamp=str(rsi.index[i]),
+                    indicator_name='RSI',
+                    signal_type='SELL',
+                    signal_strength=momentum_strength,
+                    triggering_condition=f'RSI ({current_rsi:.2f}) crossed below overbought threshold ({overbought})',
+                    mathematical_explanation=f'Overbought correction: RSI decreased from {prev_rsi:.2f} to {current_rsi:.2f}, suggesting price may be topping',
+                    market_context={
+                        'rsi_value': current_rsi,
+                        'oversold_threshold': oversold,
+                        'overbought_threshold': overbought,
+                        'distance_from_neutral': abs(current_rsi - 50),
+                        'momentum_change': current_rsi - prev_rsi
+                    },
+                    signal_confidence=momentum_strength,
+                    risk_assessment='MEDIUM'
+                ))
+
+            signals.iloc[i] = signal_value
 
         return signals
 
-    def _generate_stochastic_signals(self, stoch: pd.Series, oversold: float = 20, overbought: float = 80) -> pd.Series:
-        """Generate stochastic oscillator signals."""
+    def _generate_stochastic_signals_with_rationale(self, stoch: pd.Series, oversold: float = 20, overbought: float = 80) -> pd.Series:
+        """Generate stochastic oscillator signals with basic rationale."""
+        # For now, use original logic but could be enhanced later
         signals = pd.Series(0, index=stoch.index)
-
         signals[(stoch > oversold) & (stoch.shift(1) <= oversold)] = 1
         signals[(stoch < overbought) & (stoch.shift(1) >= overbought)] = -1
-
         return signals
 
-    def _generate_williams_r_signals(self, williams_r: pd.Series, oversold: float = -80, overbought: float = -20) -> pd.Series:
-        """Generate Williams %R signals."""
+    def _generate_williams_r_signals_with_rationale(self, williams_r: pd.Series, oversold: float = -80, overbought: float = -20) -> pd.Series:
+        """Generate Williams %R signals with basic rationale."""
+        # For now, use original logic but could be enhanced later
         signals = pd.Series(0, index=williams_r.index)
-
         signals[(williams_r > oversold) & (williams_r.shift(1) <= oversold)] = 1
         signals[(williams_r < overbought) & (williams_r.shift(1) >= overbought)] = -1
-
         return signals
 
-    def _generate_cci_signals(self, cci: pd.Series, oversold: float = -100, overbought: float = 100) -> pd.Series:
-        """Generate Commodity Channel Index signals."""
+    def _generate_cci_signals_with_rationale(self, cci: pd.Series, oversold: float = -100, overbought: float = 100) -> pd.Series:
+        """Generate Commodity Channel Index signals with basic rationale."""
+        # For now, use original logic but could be enhanced later
         signals = pd.Series(0, index=cci.index)
-
         signals[(cci > oversold) & (cci.shift(1) <= oversold)] = 1
         signals[(cci < overbought) & (cci.shift(1) >= overbought)] = -1
-
         return signals
 
-    def _generate_bollinger_signals(self, price: pd.Series, upper: pd.Series, lower: pd.Series) -> pd.Series:
-        """Generate Bollinger Band mean reversion signals."""
+    def _generate_bollinger_signals_with_rationale(self, price: pd.Series, upper: pd.Series, lower: pd.Series) -> pd.Series:
+        """Generate Bollinger Band mean reversion signals with detailed rationale."""
         signals = pd.Series(0, index=price.index)
+        middle = (upper + lower) / 2  # Moving average (middle band)
+        bandwidth = (upper - lower) / middle  # Bollinger Band width
 
-        # Buy when price touches lower band (oversold)
-        signals[(price <= lower) & (price.shift(1) > lower)] = 1
+        for i in range(1, len(price)):
+            if pd.isna(price.iloc[i]) or pd.isna(upper.iloc[i]) or pd.isna(lower.iloc[i]):
+                continue
 
-        # Sell when price touches upper band (overbought)
-        signals[(price >= upper) & (price.shift(1) < upper)] = -1
+            current_price = price.iloc[i]
+            prev_price = price.iloc[i-1]
+            current_upper = upper.iloc[i]
+            current_lower = lower.iloc[i]
+            current_middle = middle.iloc[i]
+            current_bandwidth = bandwidth.iloc[i]
+
+            signal_value = 0
+
+            # Buy signal: price touches or crosses below lower band
+            if current_price <= current_lower and prev_price > lower.iloc[i-1]:
+                signal_value = 1
+                oversold_magnitude = (current_lower - current_price) / current_lower
+                band_position = (current_price - current_lower) / (current_upper - current_lower)
+
+                self.signal_history.append(SignalEvent(
+                    timestamp=str(price.index[i]),
+                    indicator_name='Bollinger_Bands',
+                    signal_type='BUY',
+                    signal_strength=min(1.0, oversold_magnitude * 5),
+                    triggering_condition=f'Price ({current_price:.4f}) touched lower Bollinger Band ({current_lower:.4f})',
+                    mathematical_explanation=f'Mean reversion opportunity: Price at {band_position:.2%} of band width, suggesting oversold condition',
+                    market_context={
+                        'price': current_price,
+                        'upper_band': current_upper,
+                        'lower_band': current_lower,
+                        'middle_band': current_middle,
+                        'band_width': current_bandwidth,
+                        'band_position': band_position,
+                        'distance_from_middle': (current_price - current_middle) / current_middle
+                    },
+                    signal_confidence=min(1.0, oversold_magnitude * 3),
+                    risk_assessment='HIGH'
+                ))
+
+            # Sell signal: price touches or crosses above upper band
+            elif current_price >= current_upper and prev_price < upper.iloc[i-1]:
+                signal_value = -1
+                overbought_magnitude = (current_price - current_upper) / current_upper
+                band_position = (current_price - current_lower) / (current_upper - current_lower)
+
+                self.signal_history.append(SignalEvent(
+                    timestamp=str(price.index[i]),
+                    indicator_name='Bollinger_Bands',
+                    signal_type='SELL',
+                    signal_strength=min(1.0, overbought_magnitude * 5),
+                    triggering_condition=f'Price ({current_price:.4f}) touched upper Bollinger Band ({current_upper:.4f})',
+                    mathematical_explanation=f'Mean reversion opportunity: Price at {band_position:.2%} of band width, suggesting overbought condition',
+                    market_context={
+                        'price': current_price,
+                        'upper_band': current_upper,
+                        'lower_band': current_lower,
+                        'middle_band': current_middle,
+                        'band_width': current_bandwidth,
+                        'band_position': band_position,
+                        'distance_from_middle': (current_price - current_middle) / current_middle
+                    },
+                    signal_confidence=min(1.0, overbought_magnitude * 3),
+                    risk_assessment='HIGH'
+                ))
+
+            signals.iloc[i] = signal_value
 
         return signals
 
-    def _generate_adx_signals(self, adx: pd.Series, ma: pd.Series, price: pd.Series, threshold: float = 25) -> pd.Series:
-        """Generate ADX trend strength signals."""
+    def _generate_adx_signals_with_rationale(self, adx: pd.Series, ma: pd.Series, price: pd.Series, threshold: float = 25) -> pd.Series:
+        """Generate ADX trend strength signals with basic rationale."""
+        # For now, use original logic but could be enhanced later
         signals = pd.Series(0, index=adx.index)
-
-        # Strong trend + price above MA = buy, below MA = sell
         strong_trend = adx > threshold
         price_above_ma = price > ma
-
         signals[strong_trend & price_above_ma] = 1
         signals[strong_trend & ~price_above_ma] = -1
-
         return signals
 
-    def _generate_aroon_signals(self, aroon_up: pd.Series, aroon_down: pd.Series) -> pd.Series:
-        """Generate Aroon signals."""
+    def _generate_aroon_signals_with_rationale(self, aroon_up: pd.Series, aroon_down: pd.Series) -> pd.Series:
+        """Generate Aroon signals with basic rationale."""
+        # For now, use original logic but could be enhanced later
         signals = pd.Series(0, index=aroon_up.index)
-
-        # Buy when Aroon Up crosses above Aroon Down
         up_above_down = (aroon_up > aroon_down).fillna(False)
         up_above_down_prev = up_above_down.shift(1).fillna(False)
-
         signals[up_above_down & ~up_above_down_prev] = 1
         signals[~up_above_down & up_above_down_prev] = -1
-
         return signals
 
-    def _generate_roc_signals(self, roc: pd.Series, threshold: float = 2.0) -> pd.Series:
-        """Generate Rate of Change signals."""
+    def _generate_roc_signals_with_rationale(self, roc: pd.Series, threshold: float = 2.0) -> pd.Series:
+        """Generate Rate of Change signals with basic rationale."""
+        # For now, use original logic but could be enhanced later
         signals = pd.Series(0, index=roc.index)
-
-        # Buy when ROC crosses above threshold, sell when below
         signals[(roc > threshold) & (roc.shift(1) <= threshold)] = 1
         signals[(roc < -threshold) & (roc.shift(1) >= -threshold)] = -1
-
         return signals
 
-    def _generate_vwap_signals(self, price: pd.Series, vwap: pd.Series) -> pd.Series:
-        """Generate VWAP signals."""
+    def _generate_vwap_signals_with_rationale(self, price: pd.Series, vwap: pd.Series) -> pd.Series:
+        """Generate VWAP signals with basic rationale."""
+        # For now, use original logic but could be enhanced later
         signals = pd.Series(0, index=price.index)
-
-        # Buy when price crosses above VWAP, sell when below
         price_above_vwap = (price > vwap).fillna(False)
         price_above_vwap_prev = price_above_vwap.shift(1).fillna(False)
-
         signals[price_above_vwap & ~price_above_vwap_prev] = 1
         signals[~price_above_vwap & price_above_vwap_prev] = -1
-
         return signals
 
     def analyze_all_indicator_strategies(
@@ -481,4 +766,96 @@ class TechnicalIndicatorAnalyzer:
             'maximum_drawdown': 0.0,
             'win_rate': 0.0,
             'number_of_trades': 0
+        }
+
+    def collect_signal_data_for_timestep(self, timestamp: str, data: pd.DataFrame, indicators: pd.DataFrame) -> Dict[str, Any]:
+        """Collect technical indicator signal data for a specific timestep."""
+        price = data['close']
+
+        # Get current timestamp index
+        try:
+            current_idx = data.index.get_loc(pd.to_datetime(timestamp))
+        except (KeyError, ValueError):
+            # Fallback to most recent data if exact timestamp not found
+            current_idx = len(data) - 1
+            timestamp = str(data.index[current_idx])
+
+        current_data = data.iloc[current_idx]
+        current_indicators = indicators.iloc[current_idx]
+
+        # Calculate signals up to current timestamp
+        signals = self.generate_signals(data.iloc[:current_idx+1], indicators.iloc[:current_idx+1])
+
+        # Extract current signals
+        current_signals = {name: series.iloc[-1] if len(series) > 0 else 0
+                          for name, series in signals.items()}
+
+        # Build comprehensive timestep data
+        timestep_data = {
+            'timestamp': timestamp,
+            'price_data': {
+                'open': float(current_data['open']),
+                'high': float(current_data['high']),
+                'low': float(current_data['low']),
+                'close': float(current_data['close']),
+                'volume': float(current_data.get('volume', 0))
+            },
+            'indicator_values': {
+                name: float(value) if not pd.isna(value) else None
+                for name, value in current_indicators.items()
+            },
+            'generated_signals': current_signals,
+            'signal_events': [event.__dict__ for event in self.signal_history
+                             if event.timestamp == timestamp],
+            'signal_summary': self.get_signal_summary(),
+            'active_indicators': list(current_signals.keys()),
+            'market_context': {
+                'price_change': float((current_data['close'] - data['close'].iloc[max(0, current_idx-1)]) / data['close'].iloc[max(0, current_idx-1)] * 100) if current_idx > 0 else 0.0,
+                'volume_ratio': float(current_data.get('volume', 0) / data['volume'].iloc[max(0, current_idx-1)]) if current_idx > 0 and 'volume' in data.columns else 1.0,
+                'volatility_estimate': float(data['close'].iloc[max(0, current_idx-19):current_idx+1].pct_change().std() * np.sqrt(252)) if current_idx >= 19 else 0.0
+            }
+        }
+
+        return timestep_data
+
+    def get_signal_attribution_analysis(self) -> Dict[str, Any]:
+        """Analyze signal sources and their performance contributions."""
+        if not self.signal_history:
+            return {'total_signals': 0, 'attribution': {}}
+
+        attribution = {}
+
+        # Group signals by indicator
+        for signal in self.signal_history:
+            indicator = signal.indicator_name
+            if indicator not in attribution:
+                attribution[indicator] = {
+                    'total_signals': 0,
+                    'buy_signals': 0,
+                    'sell_signals': 0,
+                    'avg_signal_strength': 0,
+                    'avg_confidence': 0,
+                    'risk_distribution': {'LOW': 0, 'MEDIUM': 0, 'HIGH': 0}
+                }
+
+            attribution[indicator]['total_signals'] += 1
+            if signal.signal_type == 'BUY':
+                attribution[indicator]['buy_signals'] += 1
+            elif signal.signal_type == 'SELL':
+                attribution[indicator]['sell_signals'] += 1
+
+            attribution[indicator]['risk_distribution'][signal.risk_assessment] += 1
+
+        # Calculate averages
+        for indicator in attribution:
+            indicator_signals = [s for s in self.signal_history if s.indicator_name == indicator]
+            attribution[indicator]['avg_signal_strength'] = np.mean([s.signal_strength for s in indicator_signals])
+            attribution[indicator]['avg_confidence'] = np.mean([s.signal_confidence for s in indicator_signals])
+
+        return {
+            'total_signals': len(self.signal_history),
+            'attribution': attribution,
+            'top_signal_generators': sorted(attribution.keys(),
+                                          key=lambda x: attribution[x]['total_signals'],
+                                          reverse=True)[:5]
         }

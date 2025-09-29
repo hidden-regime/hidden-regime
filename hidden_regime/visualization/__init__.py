@@ -29,6 +29,9 @@ from .advanced_plots import (
     create_regime_timeline_plot,
     create_multi_asset_regime_comparison,
 )
+from .data_collection_plots import (
+    DataCollectionVisualizationSuite,
+)
 
 __all__ = [
     # Core plotting functions
@@ -52,4 +55,6 @@ __all__ = [
     # Utility plotting functions
     "create_regime_timeline_plot",
     "create_multi_asset_regime_comparison",
+    # Data collection visualization
+    "DataCollectionVisualizationSuite",
 ]

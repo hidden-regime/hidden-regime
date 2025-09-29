@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from .interfaces import DataComponent
+from ..data.collectors import ModelDataCollector
 
 
 class TemporalDataStub(DataComponent):
@@ -99,21 +100,27 @@ class TemporalController:
     - Reproducible backtests: Exact simulation of real-time trading conditions
     """
     
-    def __init__(self, pipeline: 'Pipeline', full_dataset: pd.DataFrame):
+    def __init__(self, pipeline: 'Pipeline', full_dataset: pd.DataFrame, enable_data_collection: bool = True):
         """
         Initialize temporal controller with pipeline and full dataset.
-        
+
         Args:
             pipeline: Pipeline object to control
             full_dataset: Complete dataset for temporal slicing
+            enable_data_collection: Whether to enable comprehensive data collection
         """
         from .core import Pipeline  # Import here to avoid circular imports
-        
+
         self.pipeline = pipeline
         self.full_dataset = full_dataset.sort_index()  # Ensure chronological order
         self.access_log: List[Dict[str, Any]] = []  # Complete audit trail
         self.original_data = None  # Store original data component
-        
+
+        # Data collection infrastructure
+        self.enable_data_collection = enable_data_collection
+        self.data_collector = ModelDataCollector(max_history=1000) if enable_data_collection else None
+        self.temporal_snapshots: List[Dict[str, Any]] = []  # Store temporal analysis results
+
         # Validate dataset has proper time index
         if not isinstance(self.full_dataset.index, pd.DatetimeIndex):
             raise ValueError("Dataset must have DatetimeIndex for temporal control")
@@ -171,10 +178,15 @@ class TemporalController:
         try:
             # Run pipeline update with temporally isolated data
             result = self.pipeline.update()
+
+            # Collect data for this timestep if enabled
+            if self.enable_data_collection and self.data_collector:
+                self._collect_timestep_data(as_of_date, filtered_data)
+
         finally:
             # Always restore original data component (exception safety)
             self.pipeline.data = self.original_data
-        
+
         return result
     
     def step_through_time(self, start_date: str, end_date: str, 
@@ -210,6 +222,44 @@ class TemporalController:
                     })
                     
         return results
+
+    def _collect_timestep_data(self, as_of_date: str, filtered_data: pd.DataFrame) -> None:
+        """Collect comprehensive data for the current timestep."""
+        try:
+            # Collect from all pipeline components
+            timestep_snapshot = self.data_collector.collect_timestep_data(
+                timestamp=as_of_date,
+                pipeline=self.pipeline,
+                data=filtered_data
+            )
+
+            # Add temporal-specific context
+            temporal_context = {
+                'temporal_boundary': as_of_date,
+                'data_coverage': len(filtered_data) / len(self.full_dataset),
+                'total_observations': len(filtered_data),
+                'temporal_position': len(self.access_log),  # Which step in the temporal sequence
+                'days_from_start': (pd.to_datetime(as_of_date) - self.full_dataset.index.min()).days
+            }
+
+            # Add to timestep snapshot
+            timestep_snapshot.temporal_context = temporal_context
+
+            # Store in temporal snapshots list
+            self.temporal_snapshots.append({
+                'timestamp': as_of_date,
+                'snapshot': timestep_snapshot,
+                'temporal_context': temporal_context
+            })
+
+        except Exception as e:
+            # Log collection errors but don't fail the temporal analysis
+            self.access_log.append({
+                'timestamp': datetime.now(),
+                'as_of_date': as_of_date,
+                'data_collection_error': str(e),
+                'status': 'data_collection_failed'
+            })
 
     def step_forward(self, step_days: int = 30) -> Optional[Dict[str, Any]]:
         """
@@ -261,11 +311,20 @@ class TemporalController:
             # Try to extract structured results from the pipeline
             results = self._extract_pipeline_results()
 
-            return {
+            # Enhanced results with temporal data collection
+            step_results = {
                 'date': date_str,
                 'report': report,
                 'model_results': results
             }
+
+            # Add temporal snapshot data if collection is enabled
+            if self.enable_data_collection and self.temporal_snapshots:
+                latest_snapshot = self.temporal_snapshots[-1]
+                step_results['data_snapshot'] = latest_snapshot
+                step_results['parameter_evolution'] = self._get_parameter_evolution_summary()
+
+            return step_results
 
         except Exception as e:
             # Log error but return None
@@ -331,6 +390,123 @@ class TemporalController:
 
         return results
 
+    def _get_parameter_evolution_summary(self) -> Dict[str, Any]:
+        """Get summary of parameter evolution across temporal steps."""
+        if not self.temporal_snapshots:
+            return {'error': 'No temporal snapshots available'}
+
+        evolution_summary = {
+            'total_timesteps': len(self.temporal_snapshots),
+            'date_range': {
+                'start': self.temporal_snapshots[0]['timestamp'],
+                'end': self.temporal_snapshots[-1]['timestamp']
+            },
+            'hmm_parameter_drift': {},
+            'regime_stability': {},
+            'signal_generation_trends': {}
+        }
+
+        # Track HMM parameter changes
+        hmm_params = []
+        for snapshot_data in self.temporal_snapshots:
+            snapshot = snapshot_data['snapshot']
+            if hasattr(snapshot, 'hmm_state') and snapshot.hmm_state:
+                hmm_params.append({
+                    'timestamp': snapshot_data['timestamp'],
+                    'transition_matrix': snapshot.hmm_state.transition_matrix,
+                    'emission_means': snapshot.hmm_state.emission_means,
+                    'emission_stds': snapshot.hmm_state.emission_stds
+                })
+
+        if hmm_params:
+            evolution_summary['hmm_parameter_drift'] = self._analyze_parameter_drift(hmm_params)
+
+        # Track signal generation trends
+        signal_counts = []
+        for snapshot_data in self.temporal_snapshots:
+            snapshot = snapshot_data['snapshot']
+            if hasattr(snapshot, 'technical_indicators') and snapshot.technical_indicators:
+                signal_counts.append({
+                    'timestamp': snapshot_data['timestamp'],
+                    'total_signals': len(snapshot.technical_indicators.get('signal_events', [])),
+                    'signal_summary': snapshot.technical_indicators.get('signal_summary', {})
+                })
+
+        if signal_counts:
+            evolution_summary['signal_generation_trends'] = self._analyze_signal_trends(signal_counts)
+
+        return evolution_summary
+
+    def _analyze_parameter_drift(self, hmm_params: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Analyze how HMM parameters drift over time."""
+        if len(hmm_params) < 2:
+            return {'insufficient_data': True}
+
+        # Calculate parameter stability metrics
+        transition_matrices = [p['transition_matrix'] for p in hmm_params]
+        emission_means = [p['emission_means'] for p in hmm_params]
+        emission_stds = [p['emission_stds'] for p in hmm_params]
+
+        # Calculate drift metrics
+        transition_stability = np.std([np.array(tm).flatten() for tm in transition_matrices], axis=0)
+        mean_stability = np.std(emission_means, axis=0) if emission_means else []
+        std_stability = np.std(emission_stds, axis=0) if emission_stds else []
+
+        return {
+            'transition_matrix_stability': float(np.mean(transition_stability)) if len(transition_stability) > 0 else 0.0,
+            'emission_means_stability': float(np.mean(mean_stability)) if len(mean_stability) > 0 else 0.0,
+            'emission_stds_stability': float(np.mean(std_stability)) if len(std_stability) > 0 else 0.0,
+            'parameter_snapshots': len(hmm_params),
+            'drift_trend': 'increasing' if len(hmm_params) > 5 else 'insufficient_data'
+        }
+
+    def _analyze_signal_trends(self, signal_counts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Analyze trends in signal generation over time."""
+        if not signal_counts:
+            return {'insufficient_data': True}
+
+        total_signals = [sc['total_signals'] for sc in signal_counts]
+
+        return {
+            'total_signal_count': sum(total_signals),
+            'avg_signals_per_timestep': np.mean(total_signals),
+            'signal_frequency_trend': 'increasing' if len(total_signals) > 2 and total_signals[-1] > total_signals[0] else 'stable',
+            'max_signals_in_timestep': max(total_signals) if total_signals else 0,
+            'timesteps_analyzed': len(signal_counts)
+        }
+
+    def get_temporal_data_summary(self) -> Dict[str, Any]:
+        """Get comprehensive summary of temporal data collection."""
+        if not self.enable_data_collection:
+            return {'data_collection_disabled': True}
+
+        summary = {
+            'collection_enabled': self.enable_data_collection,
+            'total_timesteps': len(self.temporal_snapshots),
+            'temporal_range': {},
+            'data_quality': {},
+            'parameter_evolution': self._get_parameter_evolution_summary(),
+            'audit_trail_length': len(self.access_log)
+        }
+
+        if self.temporal_snapshots:
+            summary['temporal_range'] = {
+                'start': self.temporal_snapshots[0]['timestamp'],
+                'end': self.temporal_snapshots[-1]['timestamp'],
+                'total_days': (pd.to_datetime(self.temporal_snapshots[-1]['timestamp']) -
+                             pd.to_datetime(self.temporal_snapshots[0]['timestamp'])).days
+            }
+
+            # Data quality metrics
+            successful_collections = len([s for s in self.temporal_snapshots if 'snapshot' in s])
+            summary['data_quality'] = {
+                'collection_success_rate': successful_collections / len(self.temporal_snapshots),
+                'total_snapshots': len(self.temporal_snapshots),
+                'successful_collections': successful_collections
+            }
+
+        return summary
+
     def get_access_audit(self) -> pd.DataFrame:
         """
         Return complete audit trail for V&V verification.
@@ -376,7 +552,38 @@ class TemporalController:
         }
         
         return verification
-    
+
+    def export_temporal_data(self, format: str = 'json') -> Dict[str, Any]:
+        """Export temporal data collection in specified format."""
+        if not self.enable_data_collection:
+            return {'error': 'Data collection not enabled'}
+
+        export_data = {
+            'metadata': {
+                'export_timestamp': datetime.now().isoformat(),
+                'total_timesteps': len(self.temporal_snapshots),
+                'data_collection_enabled': self.enable_data_collection
+            },
+            'temporal_snapshots': [],
+            'parameter_evolution': self._get_parameter_evolution_summary(),
+            'audit_trail': self.access_log
+        }
+
+        # Convert snapshots to exportable format
+        for snapshot_data in self.temporal_snapshots:
+            if 'snapshot' in snapshot_data:
+                snapshot = snapshot_data['snapshot']
+                export_snapshot = {
+                    'timestamp': snapshot_data['timestamp'],
+                    'temporal_context': snapshot_data.get('temporal_context', {}),
+                    'hmm_state': snapshot.hmm_state.__dict__ if snapshot.hmm_state else None,
+                    'technical_indicators': snapshot.technical_indicators,
+                    'regime_analysis': snapshot.regime_analysis.__dict__ if snapshot.regime_analysis else None
+                }
+                export_data['temporal_snapshots'].append(export_snapshot)
+
+        return export_data
+
     def plot_temporal_access(self, **kwargs) -> plt.Figure:
         """
         Visualize temporal access pattern for V&V verification.
@@ -423,10 +630,63 @@ class TemporalController:
         
         plt.tight_layout()
         return fig
-    
+
+    def plot_parameter_evolution(self, **kwargs) -> plt.Figure:
+        """Plot evolution of model parameters over time."""
+        if not self.temporal_snapshots:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.text(0.5, 0.5, 'No temporal data available for plotting',
+                   ha='center', va='center', fontsize=14)
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis('off')
+            return fig
+
+        # Extract parameter data for plotting
+        timestamps = []
+        transition_stability = []
+        emission_means_stability = []
+
+        for snapshot_data in self.temporal_snapshots:
+            if 'snapshot' in snapshot_data:
+                snapshot = snapshot_data['snapshot']
+                if hasattr(snapshot, 'hmm_state') and snapshot.hmm_state:
+                    timestamps.append(pd.to_datetime(snapshot_data['timestamp']))
+                    # Calculate parameter stability metrics for this timestep
+                    # This is a simplified example - could be enhanced
+                    transition_stability.append(np.std(np.array(snapshot.hmm_state.transition_matrix).flatten()))
+                    emission_means_stability.append(np.std(snapshot.hmm_state.emission_means))
+
+        if not timestamps:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.text(0.5, 0.5, 'No HMM parameter data available',
+                   ha='center', va='center', fontsize=14)
+            ax.axis('off')
+            return fig
+
+        fig, axes = plt.subplots(2, 1, figsize=(12, 8))
+
+        # Plot transition matrix stability
+        axes[0].plot(timestamps, transition_stability, 'b-o', markersize=4)
+        axes[0].set_title('Transition Matrix Parameter Stability Over Time')
+        axes[0].set_ylabel('Standard Deviation')
+        axes[0].grid(True, alpha=0.3)
+
+        # Plot emission means stability
+        axes[1].plot(timestamps, emission_means_stability, 'r-o', markersize=4)
+        axes[1].set_title('Emission Means Parameter Stability Over Time')
+        axes[1].set_ylabel('Standard Deviation')
+        axes[1].set_xlabel('Date')
+        axes[1].grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        return fig
+
     def reset_audit_log(self) -> None:
         """Reset the audit log (useful for testing)."""
         self.access_log = []
+        if self.enable_data_collection:
+            self.temporal_snapshots = []
     
     def get_summary_stats(self) -> Dict[str, Any]:
         """

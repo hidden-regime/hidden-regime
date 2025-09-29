@@ -69,6 +69,9 @@ class HiddenMarkovModel(ModelComponent):
             "iterations": 0,
             "converged": False,
             "training_time": 0.0,
+            "parameter_snapshots": [],  # Track parameter evolution during training
+            "convergence_metrics": [],  # Track convergence progress
+            "fit_timestamps": []  # Track when model was fitted
         }
         
         # Online learning state
@@ -508,13 +511,32 @@ class HiddenMarkovModel(ModelComponent):
                     returns, self.initial_probs_, self.transition_matrix_, emission_params
                 )
                 
+                # Store parameter snapshot for tracking evolution
+                if iteration % 5 == 0 or iteration == 0:  # Store every 5th iteration to save memory
+                    self.training_history_['parameter_snapshots'].append({
+                        'iteration': iteration,
+                        'log_likelihood': log_likelihood,
+                        'transition_matrix': self.transition_matrix_.copy(),
+                        'emission_means': self.emission_means_.copy(),
+                        'emission_stds': self.emission_stds_.copy(),
+                        'initial_probs': self.initial_probs_.copy()
+                    })
+
                 # Check convergence
                 if iteration > 0:
                     improvement = log_likelihood - prev_log_likelihood
+                    convergence_metric = {
+                        'iteration': iteration,
+                        'improvement': improvement,
+                        'log_likelihood': log_likelihood,
+                        'relative_improvement': improvement / abs(prev_log_likelihood) if prev_log_likelihood != 0 else float('inf')
+                    }
+                    self.training_history_['convergence_metrics'].append(convergence_metric)
+
                     if improvement < self.config.tolerance:
                         self.training_history_['converged'] = True
                         break
-                
+
                 # M-step: Update parameters using sophisticated Baum-Welch
                 self.initial_probs_, self.transition_matrix_, new_emission_params = \
                     self._algorithms.baum_welch_update(returns, gamma, xi, regularization=self.config.min_variance)
@@ -547,6 +569,7 @@ class HiddenMarkovModel(ModelComponent):
         
         self.training_history_['iterations'] = iteration + 1
         self.training_history_['training_time'] = (datetime.now() - start_time).total_seconds()
+        self.training_history_['fit_timestamps'].append(datetime.now().isoformat())
     
     def _forward_backward(self, returns: np.ndarray) -> np.ndarray:
         """Simplified forward-backward algorithm returning state probabilities."""
@@ -1091,4 +1114,138 @@ class HiddenMarkovModel(ModelComponent):
             'training_history': self.training_history_,
             'emission_means': self.emission_means_.tolist() if self.emission_means_ is not None else None,
             'emission_stds': self.emission_stds_.tolist() if self.emission_stds_ is not None else None,
+        }
+
+    def get_detailed_state(self) -> Dict[str, Any]:
+        """
+        Get detailed model state for data collection.
+
+        Returns comprehensive information about current model parameters,
+        training history, and state for analysis and explanation generation.
+        """
+        if not self.is_fitted:
+            return {"is_fitted": False, "message": "Model not fitted"}
+
+        state = {
+            "is_fitted": True,
+            "n_states": self.n_states,
+            "parameters": {
+                "transition_matrix": self.transition_matrix_.tolist() if self.transition_matrix_ is not None else None,
+                "emission_means": self.emission_means_.tolist() if self.emission_means_ is not None else None,
+                "emission_stds": self.emission_stds_.tolist() if self.emission_stds_ is not None else None,
+                "initial_probs": self.initial_probs_.tolist() if self.initial_probs_ is not None else None
+            },
+            "training_history": self.training_history_.copy(),
+            "model_complexity": {
+                "n_parameters": self.n_states ** 2 + 2 * self.n_states - 1,
+                "transition_parameters": self.n_states ** 2 - self.n_states,  # Off-diagonal elements
+                "emission_parameters": 2 * self.n_states  # Means and stds
+            }
+        }
+
+        # Add parameter statistics
+        if self.transition_matrix_ is not None:
+            state["parameter_statistics"] = {
+                "transition_matrix_determinant": float(np.linalg.det(self.transition_matrix_)),
+                "transition_matrix_trace": float(np.trace(self.transition_matrix_)),
+                "transition_matrix_frobenius_norm": float(np.linalg.norm(self.transition_matrix_, 'fro')),
+                "diagonal_persistence": self.transition_matrix_.diagonal().tolist(),
+                "off_diagonal_sum": float(np.sum(self.transition_matrix_) - np.trace(self.transition_matrix_))
+            }
+
+        # Add regime characteristics
+        if self.emission_means_ is not None and self.emission_stds_ is not None:
+            state["regime_characteristics"] = []
+            for i in range(self.n_states):
+                regime_info = {
+                    "state_id": i,
+                    "mean_return_daily": float(self.emission_means_[i]),
+                    "std_return_daily": float(self.emission_stds_[i]),
+                    "mean_return_annual": float(self.emission_means_[i] * 252),  # Annualized
+                    "volatility_annual": float(self.emission_stds_[i] * np.sqrt(252)),  # Annualized
+                    "sharpe_ratio": float(self.emission_means_[i] / self.emission_stds_[i]) if self.emission_stds_[i] > 0 else 0.0,
+                    "expected_duration": 1.0 / (1.0 - self.transition_matrix_[i, i]) if self.transition_matrix_[i, i] < 1.0 else float('inf')
+                }
+                state["regime_characteristics"].append(regime_info)
+
+        return state
+
+    def get_parameter_evolution_summary(self) -> Dict[str, Any]:
+        """
+        Get summary of how parameters evolved during training.
+
+        Returns analysis of parameter stability and convergence patterns
+        for model explanation and debugging.
+        """
+        if not self.training_history_['parameter_snapshots']:
+            return {"message": "No parameter evolution data available"}
+
+        snapshots = self.training_history_['parameter_snapshots']
+        convergence_metrics = self.training_history_['convergence_metrics']
+
+        # Calculate parameter stability metrics
+        stability_metrics = {}
+
+        if len(snapshots) > 1:
+            # Transition matrix stability
+            transition_changes = []
+            emission_mean_changes = []
+            emission_std_changes = []
+
+            for i in range(1, len(snapshots)):
+                prev_trans = np.array(snapshots[i-1]['transition_matrix'])
+                curr_trans = np.array(snapshots[i]['transition_matrix'])
+                transition_changes.append(np.linalg.norm(curr_trans - prev_trans))
+
+                prev_means = np.array(snapshots[i-1]['emission_means'])
+                curr_means = np.array(snapshots[i]['emission_means'])
+                emission_mean_changes.append(np.linalg.norm(curr_means - prev_means))
+
+                prev_stds = np.array(snapshots[i-1]['emission_stds'])
+                curr_stds = np.array(snapshots[i]['emission_stds'])
+                emission_std_changes.append(np.linalg.norm(curr_stds - prev_stds))
+
+            stability_metrics = {
+                "transition_matrix_stability": {
+                    "mean_change": float(np.mean(transition_changes)),
+                    "max_change": float(np.max(transition_changes)),
+                    "final_change": float(transition_changes[-1]) if transition_changes else 0.0
+                },
+                "emission_means_stability": {
+                    "mean_change": float(np.mean(emission_mean_changes)),
+                    "max_change": float(np.max(emission_mean_changes)),
+                    "final_change": float(emission_mean_changes[-1]) if emission_mean_changes else 0.0
+                },
+                "emission_stds_stability": {
+                    "mean_change": float(np.mean(emission_std_changes)),
+                    "max_change": float(np.max(emission_std_changes)),
+                    "final_change": float(emission_std_changes[-1]) if emission_std_changes else 0.0
+                }
+            }
+
+        # Convergence analysis
+        convergence_analysis = {}
+        if convergence_metrics:
+            improvements = [m['improvement'] for m in convergence_metrics]
+            relative_improvements = [m['relative_improvement'] for m in convergence_metrics if np.isfinite(m['relative_improvement'])]
+
+            convergence_analysis = {
+                "total_iterations": len(convergence_metrics),
+                "converged": self.training_history_['converged'],
+                "final_improvement": float(improvements[-1]) if improvements else 0.0,
+                "mean_improvement": float(np.mean(improvements)) if improvements else 0.0,
+                "improvement_trend": "decreasing" if len(improvements) > 1 and improvements[-1] < improvements[0] else "stable",
+                "relative_improvement_final": float(relative_improvements[-1]) if relative_improvements else 0.0
+            }
+
+        return {
+            "n_snapshots": len(snapshots),
+            "n_convergence_metrics": len(convergence_metrics),
+            "stability_metrics": stability_metrics,
+            "convergence_analysis": convergence_analysis,
+            "training_summary": {
+                "total_training_time": self.training_history_['training_time'],
+                "final_log_likelihood": snapshots[-1]['log_likelihood'] if snapshots else None,
+                "log_likelihood_improvement": snapshots[-1]['log_likelihood'] - snapshots[0]['log_likelihood'] if len(snapshots) > 1 else None
+            }
         }
