@@ -307,7 +307,6 @@ class PipelineFactory:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         enable_temporal_isolation: bool = True,
-        online_learning: bool = True,
         include_indicators: bool = True,
         **kwargs,
     ) -> Pipeline:
@@ -323,7 +322,6 @@ class PipelineFactory:
             start_date: Analysis start date (for data config)
             end_date: Analysis end date (for data config)
             enable_temporal_isolation: Whether to configure for temporal isolation
-            online_learning: Whether to enable online learning capabilities
             include_indicators: Whether to include technical indicators
             **kwargs: Additional configuration overrides
 
@@ -361,16 +359,6 @@ class PipelineFactory:
             "tolerance": 1e-6,
             "max_iterations": 1000,
         }
-
-        # Configure for online learning if requested
-        if online_learning:
-            model_config_params.update(
-                {
-                    "forgetting_factor": 0.98,  # Gradual forgetting for adaptation
-                    "enable_change_detection": True,
-                    "initialization_method": "kmeans",
-                }
-            )
 
         # Apply model overrides
         if "model_config_overrides" in kwargs:

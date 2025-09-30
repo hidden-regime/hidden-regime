@@ -9,7 +9,7 @@ Key Features:
 - Pipeline-based architecture: Data → Observation → Model → Analysis → Report
 - Temporal data isolation for rigorous backtesting V&V
 - Configuration-driven component design for extensibility
-- Hidden Markov Models with online learning capabilities
+- Hidden Markov Models for regime detection and classification
 - Financial analysis with technical indicator integration
 - Complete audit trails for regulatory compliance
 

@@ -1,427 +1,293 @@
 # Hidden Regime
 
-**Market regime detection using Hidden Markov Models with Bayesian uncertainty quantification.**
+**Market regime detection using Hidden Markov Models for quantitative finance.**
 
-🚀 **Production-ready data pipeline and HMM implementation** 🚀
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Hidden Regime is a Python package for detecting and analyzing market regimes using Hidden Markov Models (HMMs). It provides a complete pipeline for regime-based trading analysis, from data loading through model training to trading simulation and reporting.
 
 ## Features
 
-### ✅ Data Pipeline (Complete)
-- **Multi-source data loading** with yfinance integration and extensible architecture
-- **Comprehensive data validation** with 6-layer quality assessment system
-- **Advanced preprocessing** with outlier detection, missing value handling, and feature engineering
-- **Intelligent caching** with rate limiting and automatic retry logic
-- **Quality scoring system** providing quantitative data quality assessment (0.0-1.0 scale)
-- **Multi-asset support** with timestamp alignment and batch processing
+- **Hidden Markov Models**: 2-5 state HMMs with Baum-Welch training and Viterbi inference
+- **Financial Data Pipeline**: Robust data loading with yfinance integration and comprehensive validation
+- **Pipeline Architecture**: Modular Data → Observation → Model → Analysis → Report flow
+- **Technical Indicator Comparison**: Compare HMM regime detection against traditional indicators (using `ta` library)
+- **Trading Simulation**: Backtest regime-based strategies with risk management and performance analytics
+- **Case Studies**: Temporal analysis framework for evaluating models over time
+- **Visualization**: Comprehensive plotting for regimes, indicators, and performance metrics
+- **Data Collection**: Track simulation decisions and model evolution for detailed analysis
+- **Reporting**: Generate markdown reports with analysis results and recommendations
 
-### ✅ Hidden Markov Models (Complete)
-- **3-state regime detection** optimized for Bear, Sideways, Bull market identification
-- **Baum-Welch EM training** with numerical stability enhancements
-- **Viterbi state inference** for most likely regime sequences
-- **Real-time regime tracking** with online state probability updates
-- **Model persistence** with save/load functionality (JSON/Pickle formats)
-- **Comprehensive regime analysis** with duration statistics and interpretations
-
-### 📋 Planned Advanced Features
-- Online HMM learning with streaming market data
-- Regime-based trading signal generation
-- Fat-tailed emission models for crisis detection
-- Duration modeling for regime persistence analysis
-
-## Quick Start
-
-### Installation
+## Installation
 
 ```bash
 pip install hidden-regime
 ```
 
-### Basic Usage
+## Quick Start
+
+### Basic Regime Detection
 
 ```python
 import hidden_regime as hr
 
-# Load and validate stock data
-data = hr.load_stock_data('AAPL', '2024-01-01', '2024-12-31')
-validation_result = hr.validate_data(data, 'AAPL')
+# Create a simple regime detection pipeline
+pipeline = hr.create_simple_regime_pipeline('AAPL', n_states=3)
 
-print(f"Data quality score: {validation_result.quality_score:.2f}")
-print(f"Data is valid: {validation_result.is_valid}")
-
-# Basic info
-print(f"Loaded {len(data)} days of data")
-print(f"Columns: {list(data.columns)}")
+# Run analysis
+result = pipeline.update()
+print(result)
 ```
 
-### HMM Regime Detection
+### Financial Analysis Pipeline
 
 ```python
 import hidden_regime as hr
 
-# Load market data
-data = hr.load_stock_data('AAPL', '2023-01-01', '2024-01-01')
-
-# Quick regime detection
-states = hr.detect_regimes(data['log_return'], n_states=3)
-print(f"Detected {len(set(states))} distinct regimes")
-
-# Comprehensive regime analysis
-analysis = hr.analyze_regime_transitions(
-    data['log_return'], 
-    data['date'], 
-    n_states=3
+# Create pipeline with financial analysis
+pipeline = hr.create_financial_pipeline(
+    ticker='SPY',
+    n_states=3,
+    start_date='2023-01-01',
+    end_date='2024-01-01'
 )
 
-# Display regime characteristics
-for state in range(3):
-    stats = analysis['regime_statistics']['regime_stats'][state]
-    interpretation = analysis['regime_interpretations'][str(state)]
-    print(f"{interpretation}: {stats['frequency']:.1%} frequency, "
-          f"{stats['avg_duration']:.1f} day duration")
+# Update and get results
+result = pipeline.update()
 ```
 
-### Advanced HMM Usage
+### Direct HMM Usage
 
 ```python
-from hidden_regime import HiddenMarkovModel, HMMConfig
+from hidden_regime.models import HiddenMarkovModel, HMMConfig
+from hidden_regime.data import FinancialDataLoader
 
-# Configure HMM for conservative market analysis
+# Load data
+loader = FinancialDataLoader()
+data = loader.load('AAPL', '2023-01-01', '2024-01-01')
+
+# Train HMM
 config = HMMConfig.for_market_data(conservative=True)
+hmm = HiddenMarkovModel(config=config)
+hmm.fit(data['log_return'].values)
 
-# Train model
-hmm = HiddenMarkovModel(n_states=3, config=config)
-hmm.fit(data['log_return'], verbose=True)
-
-# Real-time regime tracking
-for new_return in recent_returns:
-    regime_info = hmm.update_with_observation(new_return)
-    print(f"Current regime: {regime_info['regime_interpretation']} "
-          f"(confidence: {regime_info['confidence']:.2%})")
-
-# Save/load model
-hmm.save('aapl_regime_model.pkl')
-loaded_hmm = HiddenMarkovModel.load('aapl_regime_model.pkl')
+# Analyze regimes
+analysis = hmm.analyze_regimes(data['log_return'].values)
+print(f"Detected {hmm.n_states} regimes")
 ```
 
-### Advanced Data Processing
+## Core Concepts
 
-```python
-from hidden_regime import DataLoader, DataValidator, DataPreprocessor
-from hidden_regime import DataConfig, ValidationConfig, PreprocessingConfig
+### Market Regimes
 
-# Custom configuration for strict validation
-config = ValidationConfig(
-    outlier_method='zscore',
-    outlier_threshold=2.0,
-    max_daily_return=0.1
-)
+Financial markets exhibit distinct behavioral phases:
 
-# Load and process multiple stocks
-loader = DataLoader()
-validator = DataValidator(config)
-preprocessor = DataPreprocessor()
+| Regime | Characteristics | Typical Duration |
+|--------|-----------------|------------------|
+| **Bull** | Positive returns, moderate volatility | Weeks to months |
+| **Bear** | Negative returns, high volatility | Days to weeks |
+| **Sideways** | Near-zero returns, low volatility | Days to weeks |
+| **Crisis** | Very negative returns, extreme volatility | Days |
 
-# Multi-stock analysis
-tickers = ['AAPL', 'GOOGL', 'MSFT']
-data_dict = loader.load_multiple_stocks(tickers, '2024-01-01', '2024-12-31')
+Hidden Regime uses HMMs to automatically detect these regimes from price data.
 
-# Process and validate each stock
-results = {}
-for ticker, data in data_dict.items():
-    processed_data = preprocessor.process_data(data, ticker)
-    validation = validator.validate_data(processed_data, ticker)
-    results[ticker] = {
-        'data': processed_data,
-        'quality_score': validation.quality_score,
-        'is_valid': validation.is_valid
-    }
+### Pipeline Architecture
 
-for ticker, result in results.items():
-    print(f"{ticker}: Quality {result['quality_score']:.2f}, Valid: {result['is_valid']}")
 ```
-
-## Data Pipeline Features
-
-### Data Loading
-- **Multi-source support**: Currently yfinance, extensible for Alpha Vantage, custom APIs
-- **Intelligent caching**: In-memory caching with configurable expiry (default 24h)  
-- **Rate limiting**: Configurable requests per minute with exponential backoff
-- **Error handling**: Comprehensive retry logic with graceful degradation
-
-### Data Validation
-- **6-layer validation system**: Structure, Date, Price, Return, Missing Data, Outlier Detection
-- **Quality scoring**: Penalty-based scoring system (0.0-1.0 scale)
-- **Configurable thresholds**: Customizable validation rules for different use cases
-- **Detailed reporting**: Issues, warnings, recommendations, and quantitative metrics
-
-### Data Preprocessing  
-- **Missing value handling**: Linear interpolation, forward/backward fill strategies
-- **Outlier treatment**: Winsorization using IQR, Z-score, or Isolation Forest methods
-- **Feature engineering**: Volatility calculation, technical indicators, smoothing
-- **Multi-asset alignment**: Timestamp synchronization for portfolio analysis
-
-### Quality Score System
-
-**Scoring Formula:**
-```
-score = 1.0 - (issues × 0.2) - (warnings × 0.05) - (missing_data_pct × 2.0) - (outlier_pct × 1.0)
-```
-
-The quality score (0.0-1.0) is calculated using a **penalty-based system** across **six validation layers**:
-
-#### Validation Layers
-1. **Structure Validation**: Required columns, data types, basic format checks
-2. **Date Validation**: Date formats, chronological order, coverage gaps
-3. **Price Validation**: Non-positive prices, extreme price changes, data types
-4. **Return Validation**: Infinite returns, extreme daily returns, volatility checks
-5. **Missing Data**: Overall missing percentage, column-specific gaps, consecutive missing values
-6. **Outlier Detection**: Statistical outliers using IQR, Z-score, or Isolation Forest methods
-
-#### Critical Issues (−0.2 points each)
-- Missing required columns (`date`, `price`)
-- Empty DataFrame or no valid data
-- Invalid date formats or non-positive prices
-- Excessive missing data (>10% of total data)
-- Too many consecutive missing values (>5 by default)
-- More than 20% missing data in any single column
-- Date range too short (<7 days) or unrealistic
-
-#### Warning Conditions (−0.05 points each)
-- Dates not in chronological order
-- Large gaps in time series (>14 days)
-- Very high volatility (>10% daily) or very low (<0.5% daily)
-- Moderate outliers detected (5-10% of data)
-- High percentage of zero-volume trading days (>10%)
-- Low date coverage (<80% of business days)
-- Very low prices (below configured minimum)
-
-#### Metric-Based Penalties
-- **Missing Data**: Heavy penalty of −2.0 × percentage (e.g., 5% missing = −0.1 points)
-- **Outliers**: Moderate penalty of −1.0 × percentage (e.g., 3% outliers = −0.03 points)
-- **Extreme Returns**: Minor penalty of −0.1 per occurrence of returns exceeding threshold
-
-#### Quality Score Interpretation
-| Score | Quality | Description | Typical Characteristics |
-|-------|---------|-------------|------------------------|
-| 0.90-1.00 | **Excellent** | Ready for all applications | No issues, minimal warnings, <2% missing data |
-| 0.70-0.89 | **Good** | Suitable for most analysis | 1-2 minor warnings, <5% missing data, good coverage |
-| 0.50-0.69 | **Moderate** | Usable with preprocessing | Some issues or warnings, 5-10% missing data |
-| 0.30-0.49 | **Poor** | Requires extensive cleaning | Multiple issues, >10% missing, significant outliers |
-| 0.00-0.29 | **Very Poor** | Likely unusable | Major structural problems, consider alternative sources |
-
-#### Practical Examples
-
-**Perfect Quality (Score: 1.00)**
-```
-✓ Complete OHLC data with volume
-✓ No missing values, proper chronological order
-✓ Reasonable price movements and volatility
-✓ No outliers or extreme returns detected
-```
-
-**Good Quality (Score: 0.85)**
-```
-✓ Complete required data
-⚠ 1-2 days with large price gaps (holidays)
-⚠ Moderate volatility during earnings periods
-✓ <3% missing volume data (filled with median)
-```
-
-**Moderate Quality (Score: 0.60)**
-```
-✓ Core price data complete
-⚠ Several outlier returns during volatile periods
-⚠ 8% missing volume data
-⚠ 3-day gap in data (market closure)
-✗ 1 extreme return event exceeding 50% threshold
-```
-
-**Poor Quality (Score: 0.25)**
-```
-✗ 15% missing price data
-✗ Multiple extreme returns and outliers
-✗ Chronological order issues
-✗ Very high volatility (15% daily average)
-⚠ Low date coverage (60% of business days)
-```
-
-## Configuration
-
-### Data Loading Configuration
-```python
-from hidden_regime import DataConfig
-
-config = DataConfig(
-    use_ohlc_average=True,           # Use OHLC average vs close price
-    include_volume=True,             # Include volume data
-    max_missing_data_pct=0.05,      # 5% max missing data tolerance
-    min_observations=30,             # Minimum required data points
-    cache_enabled=True,              # Enable caching
-    requests_per_minute=60,          # API rate limiting
-    retry_attempts=3                 # Retry failed requests
-)
-```
-
-### Validation Configuration  
-```python
-from hidden_regime import ValidationConfig
-
-config = ValidationConfig(
-    outlier_method='iqr',            # 'iqr', 'zscore', 'isolation_forest'
-    outlier_threshold=3.0,           # Z-score threshold  
-    max_daily_return=0.5,            # 50% max daily return
-    max_consecutive_missing=5,       # Max consecutive missing values
-    interpolation_method='linear'    # Missing value interpolation
-)
-```
-
-#### Configuration Impact on Quality Scoring
-
-**Conservative Settings (Higher Quality Standards):**
-```python
-config = ValidationConfig(
-    outlier_threshold=2.0,           # Stricter outlier detection
-    max_daily_return=0.1,            # 10% max daily return (vs 50% default)
-    max_consecutive_missing=3        # Fewer missing values allowed
-)
-# Result: Lower scores for same data, higher quality bar
-```
-
-**Lenient Settings (Lower Quality Standards):**
-```python  
-config = ValidationConfig(
-    outlier_threshold=4.0,           # More tolerant of outliers
-    max_daily_return=1.0,            # 100% max daily return allowed
-    max_consecutive_missing=10       # More missing data tolerance
-)
-# Result: Higher scores for same data, lower quality bar
-```
-
-**Real-World Examples:**
-
-| Setting | Conservative | Default | Lenient | Impact on Score |
-|---------|-------------|---------|---------|-----------------|
-| **Outlier Threshold** | 2.0 | 3.0 | 4.0 | ±0.03 per 3% outliers |
-| **Max Daily Return** | 10% | 50% | 100% | ±0.05 per extreme return |
-| **Max Missing** | 3 days | 5 days | 10 days | −0.2 if exceeded |
-| **Outlier Method** | zscore | iqr | isolation_forest | Method-dependent detection |
-
-**Recommended Settings by Use Case:**
-- **HMM Training**: Conservative settings for clean training data
-- **Exploratory Analysis**: Default settings for balanced validation
-- **Crisis Period Data**: Lenient settings to handle extreme market events
-- **High-Frequency Data**: Stricter missing data limits, moderate outlier tolerance
-
-### Preprocessing Configuration
-```python
-from hidden_regime import PreprocessingConfig
-
-config = PreprocessingConfig(
-    return_method='log',             # 'log' or 'simple' returns
-    calculate_volatility=True,       # Add volatility features
-    volatility_window=20,            # Volatility calculation window
-    apply_smoothing=False,           # Apply data smoothing
-    align_timestamps=True            # Multi-asset timestamp alignment
-)
+Data Loading → Observation Generation → Model Training → Analysis → Reporting
+     ↓                  ↓                      ↓            ↓           ↓
+  yfinance        Log Returns              HMM Fit     Regime Stats   Markdown
+  Validation      Features              State Inference  Performance   Plots
 ```
 
 ## Examples
 
-Run the comprehensive demos:
+The `examples/` directory contains working demonstrations:
 
-**Data Pipeline Demo:**
-```bash
-python examples/data_pipeline_demo.py
-```
+### Getting Started
+- **`00_basic_regime_detection.py`** - 3-state HMM with synthetic data
+- **`01_real_market_analysis.py`** - Real stock data analysis
 
-**Basic HMM Demo:**
-```bash
-python examples/basic_hmm_demo.py
-```
+### Core Use Cases (v1.0.0 Requirements)
+1. **2-state HMM**: See `00_basic_regime_detection.py` (modify `n_states=2`)
+2. **3-state HMM**: See `00_basic_regime_detection.py` or `01_real_market_analysis.py`
+3. **Current regime analysis**: See `01_real_market_analysis.py`
+4. **Pipeline example**: All examples use the pipeline architecture
+5. **Simple case study**: See `case_study_basic.py`
+6. **Comprehensive case study**: See `case_study_comprehensive.py` (HMM vs indicators)
 
-**HMM Trading Strategy:**
-```bash
-python examples/hmm_trading_strategy.py
-```
+### Advanced Examples
+- **`02_regime_comparison_analysis.py`** - Compare different regime models
+- **`03_trading_strategy_demo.py`** - Regime-based trading strategies
+- **`04_multi_stock_comparative_study.py`** - Multi-asset analysis
+- **`05_advanced_analysis_showcase.py`** - Advanced visualization and analysis
 
-**Portfolio Analysis:**
+### Running Examples
+
 ```bash
-python examples/portfolio_analysis_example.py
+# Navigate to project directory
+cd /path/to/hidden-regime
+
+# Run basic example
+python examples/00_basic_regime_detection.py
+
+# Run with real market data
+python examples/01_real_market_analysis.py
+
+# Run comprehensive case study
+python examples/case_study_comprehensive.py
 ```
 
 ## Documentation
 
-- **[Data Pipeline Guide](hidden_regime/data/README.md)**: Comprehensive documentation of the data pipeline
-- **API Reference**: Complete API documentation with examples
-- **Configuration Guide**: Detailed configuration options and use cases  
-- **Troubleshooting**: Common issues and solutions
+- **[Data Pipeline](hidden_regime/data/README.md)**: Data loading, validation, and preprocessing
+- **[Models](hidden_regime/models/README.md)**: HMM implementation and algorithms
+- **Examples**: See `examples/` directory for working code
+
+## Configuration
+
+Hidden Regime uses dataclass-based configuration for flexibility:
+
+```python
+from hidden_regime.config import HMMConfig, FinancialDataConfig
+
+# Configure HMM
+hmm_config = HMMConfig(
+    n_states=3,
+    max_iterations=100,
+    tolerance=1e-6,
+    initialization_method='kmeans',
+    random_seed=42
+)
+
+# Configure data loading
+data_config = FinancialDataConfig(
+    ticker='AAPL',
+    start_date='2023-01-01',
+    end_date='2024-01-01',
+    use_ohlc_average=True
+)
+
+# Create pipeline with custom configs
+from hidden_regime.factories import pipeline_factory
+
+pipeline = pipeline_factory.create_pipeline(
+    data_config=data_config,
+    model_config=hmm_config,
+    # ... other configs
+)
+```
 
 ## Testing
 
-The package includes comprehensive tests with 87 test cases covering:
-- Data loading from multiple sources
-- Validation across all quality dimensions  
-- Preprocessing with various configurations
-- Edge cases and error conditions
+Run the test suite:
 
-Run tests:
 ```bash
 pytest tests/ -v
 ```
 
+Run with coverage:
+
+```bash
+pytest --cov=hidden_regime --cov-report=html tests/
+```
+
 ## Dependencies
 
-- **pandas** >= 1.3.0: Data manipulation and analysis
-- **numpy** >= 1.20.0: Numerical computing
-- **scipy** >= 1.7.0: Scientific computing and statistics
-- **yfinance** >= 0.2.0: Financial data provider
-- **matplotlib** >= 3.4.0: Plotting and visualization
+- **pandas** >= 2.0.0 - Data manipulation
+- **numpy** >= 2.0.0 - Numerical computing
+- **scipy** >= 1.7.0 - Scientific computing
+- **yfinance** >= 0.2.0 - Financial data
+- **matplotlib** >= 3.4.0 - Visualization
+- **ta** >= 0.10.2 - Technical indicators
+
+## Project Structure
+
+```
+hidden_regime/
+├── analysis/       # Regime analysis and indicator comparison
+├── config/         # Configuration dataclasses
+├── data/          # Data loading and validation
+├── factories/     # Pipeline and component factories
+├── financial/     # Financial-specific utilities
+├── models/        # HMM implementation
+├── observations/  # Observation generation
+├── pipeline/      # Core pipeline architecture
+├── reports/       # Report generation
+├── simulation/    # Trading simulation
+├── utils/         # Utility functions
+└── visualization/ # Plotting and charts
+```
+
+## Use Cases
+
+### Regime-Based Trading
+
+Detect market regimes and adjust trading strategies accordingly:
+
+```python
+pipeline = hr.create_trading_pipeline('SPY', n_states=4, risk_adjustment=True)
+result = pipeline.update()
+
+# Use result to inform trading decisions
+```
+
+### Research and Analysis
+
+Analyze historical regime behavior across multiple assets:
+
+```python
+pipeline = hr.create_research_pipeline('BTC-USD', comprehensive_analysis=True)
+result = pipeline.update()
+```
+
+### Backtesting
+
+Test regime-based strategies over time:
+
+```python
+from hidden_regime.pipeline import TemporalController
+
+pipeline = hr.create_financial_pipeline('AAPL')
+data = pipeline.data.get_all_data()
+
+controller = hr.create_temporal_controller(pipeline, data)
+results = controller.step_through_time('2023-01-01', '2024-01-01')
+```
 
 ## Contributing
 
-We welcome contributions! Please see our [contribution guidelines](CONTRIBUTING.md) for details.
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Roadmap
+## Citation
 
-### Phase 1: Data Pipeline ✅ (Complete)
-- Multi-source data loading
-- Comprehensive validation framework  
-- Advanced preprocessing capabilities
-- Quality scoring and reporting
+If you use Hidden Regime in your research, please cite:
 
-### Phase 2: Hidden Markov Models ✅ (Complete)
-- 3-state Hidden Markov Model implementation
-- Baum-Welch EM parameter estimation with numerical stability
-- Viterbi algorithm for optimal state inference
-- Forward-Backward algorithm for state probabilities
-- Real-time regime detection and tracking
-- Model persistence and serialization
-- Comprehensive regime analysis and interpretation
-
-### Phase 3: Advanced Features 📋 (Planned)
-- Online learning with streaming data updates
-- Bayesian uncertainty quantification with MCMC sampling
-- Automatic model selection (2-6 states)
-- Fat-tailed emission models for crisis detection
-- Multi-asset regime correlation analysis
-
-### Phase 4: AI Integration 🎯 (Future)
-- Model Context Protocol (MCP) server implementation
-- Integration with LLM-based financial analysis
-- Advanced trading signal generation
-- Risk management and portfolio optimization
+```bibtex
+@software{hidden_regime,
+  title = {Hidden Regime: Market Regime Detection using Hidden Markov Models},
+  author = {aoaustin},
+  year = {2025},
+  url = {https://github.com/hidden-regime/hidden-regime}
+}
+```
 
 ## Support
 
-- **Documentation**: Comprehensive guides and API reference
-- **Examples**: Working demonstrations and tutorials
+- **Documentation**: See module READMEs in `hidden_regime/*/README.md`
+- **Examples**: Working code in `examples/` directory
 - **Issues**: Report bugs and request features on GitHub
-- **Community**: Join discussions and share experiences
+- **Website**: [hiddenregime.com](https://hiddenregime.com)
+
+## Acknowledgments
+
+Built with inspiration from academic research in regime-switching models and modern quantitative finance practices.
 
 ---
 
-**Hidden Regime** - Transforming market regime detection through advanced statistical modeling and AI integration.
+**Hidden Regime** - Quantitative market regime detection for systematic trading.

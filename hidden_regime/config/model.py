@@ -1,8 +1,7 @@
 """
 Model configuration classes for pipeline model components.
 
-Provides configuration for various model types including Hidden Markov Models,
-MCMC methods, and other regime detection approaches with comprehensive
+Provides configuration for Hidden Markov Models with comprehensive
 parameter sets for training and inference.
 """
 
@@ -52,8 +51,8 @@ class HMMConfig(ModelConfig):
     """
     Configuration for Hidden Markov Model components.
 
-    Comprehensive configuration covering batch training, online learning,
-    stability mechanisms, and all HMM-specific parameters.
+    Comprehensive configuration covering batch training, stability mechanisms,
+    and all HMM-specific parameters.
     """
 
     # Core HMM parameters
@@ -69,7 +68,7 @@ class HMMConfig(ModelConfig):
     early_stopping: bool = True
     log_likelihood_threshold: float = -1e10
 
-    # Online learning parameters
+    # Adaptation parameters (reserved for future use)
     forgetting_factor: float = 0.98
     adaptation_rate: float = 0.05
     min_observations_for_update: int = 10
@@ -116,7 +115,7 @@ class HMMConfig(ModelConfig):
                 f"min_variance must be positive, got {self.min_variance}"
             )
 
-        # Validate online learning parameters
+        # Validate adaptation parameters
         if not 0.8 <= self.forgetting_factor <= 1.0:
             raise ConfigurationError(
                 f"forgetting_factor must be between 0.8 and 1.0, got {self.forgetting_factor}"

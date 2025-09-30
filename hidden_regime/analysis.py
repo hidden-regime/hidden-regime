@@ -61,8 +61,7 @@ class RegimeAnalyzer:
             states = model.predict(returns.values)
             probabilities = model.predict_proba(returns.values)
 
-            # Update model with latest observation for current state
-            model.update_with_observation(returns.iloc[-1])
+            # Get current regime info from predictions
             current_regime_info = model.get_current_regime_info()
 
             # Calculate regime statistics

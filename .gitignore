@@ -108,16 +108,12 @@ examples/output/**
 # Model outputs
 checkpoints/
 results/
+output/
 *.png
 **/*_report_*.md
 **/*_report.md
 **/*_analysis_*.md
-output/*.md
-output/*.png
 *.gif
-
-# Pip
-requirements.txt
 
 # Setuptools
 _version.py

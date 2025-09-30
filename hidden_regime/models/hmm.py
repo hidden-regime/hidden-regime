@@ -2,7 +2,7 @@
 Hidden Markov Model component for pipeline architecture.
 
 Provides HiddenMarkovModel that implements ModelComponent interface for
-regime detection using sophisticated HMM algorithms with online learning.
+regime detection using sophisticated HMM algorithms.
 """
 
 import warnings
@@ -39,7 +39,7 @@ class HiddenMarkovModel(ModelComponent):
     Hidden Markov Model component for regime detection in pipeline architecture.
 
     Implements ModelComponent interface to provide HMM-based regime detection
-    with training, prediction, and online learning capabilities.
+    with training and prediction capabilities.
     """
 
     def __init__(self, config: HMMConfig):
@@ -75,11 +75,6 @@ class HiddenMarkovModel(ModelComponent):
             "convergence_metrics": [],  # Track convergence progress
             "fit_timestamps": [],  # Track when model was fitted
         }
-
-        # Online learning state
-        self._current_state_probs: Optional[np.ndarray] = None
-        self._last_observation: Optional[float] = None
-        self._sufficient_stats = None
 
         # Algorithm implementation
         if HMM_UTILS_AVAILABLE:
@@ -289,10 +284,6 @@ class HiddenMarkovModel(ModelComponent):
 
         # Always predict on the given observations
         predictions = self.predict(observations)
-
-        # If online learning is enabled, update parameters
-        if hasattr(self.config, "adaptation_rate") and self.config.adaptation_rate > 0:
-            self._online_update(observations)
 
         return predictions
 
@@ -787,15 +778,6 @@ class HiddenMarkovModel(ModelComponent):
 
         return states
 
-    def _online_update(
-        self, observations: pd.DataFrame, learning_rate: float = 0.1
-    ) -> None:
-        """Placeholder for online learning updates."""
-        # This would implement online parameter updates with learning_rate
-        # For now, just update the last observation
-        if self.config.observed_signal in observations.columns:
-            self._last_observation = observations[self.config.observed_signal].iloc[-1]
-
     def _validate_returns_simple(self, returns: np.ndarray) -> None:
         """Simple validation of returns data."""
         if len(returns) < 10:
@@ -1083,23 +1065,6 @@ class HiddenMarkovModel(ModelComponent):
         model.initial_probs_ = model_data["initial_probs_"]
         model.training_history_ = model_data["training_history_"]
         return model
-
-    def partial_fit(
-        self, observations: pd.DataFrame, learning_rate: float = 0.1
-    ) -> None:
-        """
-        Incrementally fit the model.
-
-        Args:
-            observations: New observation data
-            learning_rate: Learning rate for incremental updates (0.0 to 1.0)
-        """
-        if not self.is_fitted:
-            # If not fitted yet, do full fit
-            self.fit(observations)
-        else:
-            # Do online update
-            self._online_update(observations, learning_rate=learning_rate)
 
     def aic(self, observations: pd.DataFrame) -> float:
         """Calculate Akaike Information Criterion."""
