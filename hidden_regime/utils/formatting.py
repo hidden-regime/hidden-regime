@@ -17,17 +17,17 @@ def format_strategy_name(strategy_name: str) -> str:
         Formatted strategy name for display (e.g., 'Ta Rsi', 'Hmm Regime Following')
     """
     # Handle technical indicators
-    if strategy_name.startswith('ta_'):
+    if strategy_name.startswith("ta_"):
         indicator_name = strategy_name[3:]  # Remove 'ta_' prefix
         return f"Ta {indicator_name.replace('_', ' ').title()}"
 
     # Handle HMM strategies
-    if strategy_name.startswith('hmm_'):
+    if strategy_name.startswith("hmm_"):
         strategy_type = strategy_name[4:]  # Remove 'hmm_' prefix
         return f"Hmm {strategy_type.replace('_', ' ').title()}"
 
     # Handle other strategies
-    return strategy_name.replace('_', ' ').title()
+    return strategy_name.replace("_", " ").title()
 
 
 def format_strategy_names_dict(strategies_dict: dict) -> dict:

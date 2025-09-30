@@ -11,12 +11,11 @@ from .exceptions import (
     HiddenRegimeError,
     ValidationError,
 )
-
 from .state_mapping import (
-    percent_change_to_log_return,
+    get_regime_characteristics,
     log_return_to_percent_change,
     map_states_to_financial_regimes,
-    get_regime_characteristics,
+    percent_change_to_log_return,
 )
 
 __all__ = [

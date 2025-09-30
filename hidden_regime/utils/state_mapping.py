@@ -5,15 +5,14 @@ Provides functions to map HMM states to financial regimes based on actual
 emission parameters rather than arbitrary state numbering.
 """
 
-import numpy as np
 import warnings
-from typing import Dict, List, Tuple, Any
+from typing import Any, Dict, List, Tuple
+
+import numpy as np
 
 
 def map_states_to_financial_regimes(
-    emission_means: np.ndarray,
-    n_states: int,
-    validate: bool = True
+    emission_means: np.ndarray, n_states: int, validate: bool = True
 ) -> Dict[int, str]:
     """
     Map HMM states to financial regimes based on actual emission characteristics.
@@ -38,7 +37,9 @@ def map_states_to_financial_regimes(
         >>> print(mapping)  # {0: 'Bear', 1: 'Sideways', 2: 'Euphoric'}
     """
     if len(emission_means) != n_states:
-        raise ValueError(f"emission_means length ({len(emission_means)}) must match n_states ({n_states})")
+        raise ValueError(
+            f"emission_means length ({len(emission_means)}) must match n_states ({n_states})"
+        )
 
     # Convert log returns to percentages for threshold-based classification
     means_pct = np.exp(emission_means) - 1
@@ -54,7 +55,9 @@ def map_states_to_financial_regimes(
 
     # Validate the mapping makes financial sense
     if validate:
-        validation_warnings = _validate_threshold_based_mapping(final_mapping, means_pct)
+        validation_warnings = _validate_threshold_based_mapping(
+            final_mapping, means_pct
+        )
         for warning in validation_warnings:
             warnings.warn(warning, UserWarning)
 
@@ -74,20 +77,20 @@ def _classify_regime_by_return_threshold(mean_return_pct: float) -> str:
     Returns:
         Regime name based on return threshold
     """
-    if mean_return_pct < -0.03:      # Less than -3% daily
+    if mean_return_pct < -0.03:  # Less than -3% daily
         return "Crisis"
-    elif mean_return_pct < -0.005:   # -3% to -0.5% daily
+    elif mean_return_pct < -0.005:  # -3% to -0.5% daily
         return "Bear"
-    elif mean_return_pct <= 0.01:    # -0.5% to +1.0% daily (more generous sideways)
+    elif mean_return_pct <= 0.01:  # -0.5% to +1.0% daily (more generous sideways)
         return "Sideways"
-    elif mean_return_pct < 0.05:     # +1.0% to +5% daily
+    elif mean_return_pct < 0.05:  # +1.0% to +5% daily
         return "Bull"
-    else:                            # Greater than +5% daily
+    else:  # Greater than +5% daily
         return "Euphoric"
 
 
 def _resolve_duplicate_regime_names(
-    regime_classifications: List[Tuple[int, str, float]]
+    regime_classifications: List[Tuple[int, str, float]],
 ) -> Dict[int, str]:
     """
     Resolve cases where multiple states get the same regime name.
@@ -137,8 +140,7 @@ def _resolve_duplicate_regime_names(
 
 
 def _validate_threshold_based_mapping(
-    mapping: Dict[int, str],
-    means_pct: np.ndarray
+    mapping: Dict[int, str], means_pct: np.ndarray
 ) -> List[str]:
     """
     Validate that threshold-based mapping makes financial sense.
@@ -186,7 +188,7 @@ def _validate_threshold_based_mapping(
     # Check for large gaps between regimes
     sorted_returns = sorted(means_pct)
     for i in range(1, len(sorted_returns)):
-        gap = sorted_returns[i] - sorted_returns[i-1]
+        gap = sorted_returns[i] - sorted_returns[i - 1]
         if gap > 0.05:  # >5% gap between adjacent regimes
             warnings_list.append(
                 f"Large gap between regimes: {gap:.2%} daily return difference. "
@@ -197,9 +199,7 @@ def _validate_threshold_based_mapping(
 
 
 def validate_financial_mapping(
-    mapping: Dict[int, str],
-    sorted_means: np.ndarray,
-    sorted_indices: np.ndarray
+    mapping: Dict[int, str], sorted_means: np.ndarray, sorted_indices: np.ndarray
 ) -> List[str]:
     """
     Validate that the state mapping makes financial sense.
@@ -268,35 +268,38 @@ def get_regime_characteristics(regime_name: str) -> Dict[str, float]:
         "Crisis": {
             "expected_return": -0.005,  # -0.5% daily
             "expected_volatility": 0.040,  # 4.0% daily volatility
-            "expected_duration": 5.0  # 5 days average
+            "expected_duration": 5.0,  # 5 days average
         },
         "Bear": {
             "expected_return": -0.002,  # -0.2% daily
             "expected_volatility": 0.025,  # 2.5% daily volatility
-            "expected_duration": 8.0  # 8 days average
+            "expected_duration": 8.0,  # 8 days average
         },
         "Sideways": {
             "expected_return": 0.0001,  # 0.01% daily
             "expected_volatility": 0.012,  # 1.2% daily volatility
-            "expected_duration": 15.0  # 15 days average
+            "expected_duration": 15.0,  # 15 days average
         },
         "Bull": {
             "expected_return": 0.001,  # 0.1% daily
             "expected_volatility": 0.018,  # 1.8% daily volatility
-            "expected_duration": 12.0  # 12 days average
+            "expected_duration": 12.0,  # 12 days average
         },
         "Euphoric": {
             "expected_return": 0.003,  # 0.3% daily
             "expected_volatility": 0.022,  # 2.2% daily volatility
-            "expected_duration": 6.0  # 6 days average (unsustainable)
-        }
+            "expected_duration": 6.0,  # 6 days average (unsustainable)
+        },
     }
 
-    return characteristics.get(regime_name, {
-        "expected_return": 0.0,
-        "expected_volatility": 0.015,
-        "expected_duration": 10.0
-    })
+    return characteristics.get(
+        regime_name,
+        {
+            "expected_return": 0.0,
+            "expected_volatility": 0.015,
+            "expected_duration": 10.0,
+        },
+    )
 
 
 def create_consistent_regime_labels(n_states: int) -> List[str]:
@@ -372,9 +375,7 @@ def log_return_to_percent_change(log_return: float) -> float:
 
 
 def apply_regime_mapping_to_analysis(
-    analysis: "pd.DataFrame",
-    emission_means: np.ndarray,
-    n_states: int
+    analysis: "pd.DataFrame", emission_means: np.ndarray, n_states: int
 ) -> "pd.DataFrame":
     """
     Apply flexible threshold-based regime mapping to analysis results.
@@ -394,14 +395,14 @@ def apply_regime_mapping_to_analysis(
 
     # Apply mapping to create regime names
     analysis = analysis.copy()
-    analysis['regime_name'] = analysis['predicted_state'].map(state_mapping)
-    analysis['regime_type'] = analysis['regime_name']  # They're the same now
+    analysis["regime_name"] = analysis["predicted_state"].map(state_mapping)
+    analysis["regime_type"] = analysis["regime_name"]  # They're the same now
 
     # Add expected characteristics based on actual regime characteristics
     means_pct = np.exp(emission_means) - 1  # Convert to percentage space
 
     for state_idx in range(n_states):
-        state_mask = analysis['predicted_state'] == state_idx
+        state_mask = analysis["predicted_state"] == state_idx
         if state_mask.any():
             regime_name = state_mapping[state_idx]
             actual_return_pct = means_pct[state_idx]
@@ -419,9 +420,7 @@ def apply_regime_mapping_to_analysis(
 
 
 def _get_actual_regime_characteristics(
-    regime_name: str,
-    actual_return_pct: float,
-    actual_return_log: float
+    regime_name: str, actual_return_pct: float, actual_return_log: float
 ) -> Dict[str, float]:
     """
     Get regime characteristics based on actual observed parameters.
@@ -438,9 +437,11 @@ def _get_actual_regime_characteristics(
     characteristics = {
         "expected_return": actual_return_log,  # For model compatibility (log space)
         "expected_return_pct": actual_return_pct,  # For user display (percentage)
-        "expected_volatility": _estimate_volatility_from_regime_type(regime_name, actual_return_pct),
+        "expected_volatility": _estimate_volatility_from_regime_type(
+            regime_name, actual_return_pct
+        ),
         "expected_duration": _estimate_duration_from_regime_type(regime_name),
-        "regime_strength": _classify_regime_strength(actual_return_pct)
+        "regime_strength": _classify_regime_strength(actual_return_pct),
     }
 
     return characteristics
@@ -469,15 +470,15 @@ def _estimate_volatility_from_regime_type(regime_name: str, return_pct: float) -
 def _estimate_duration_from_regime_type(regime_name: str) -> float:
     """Estimate typical duration for regime type."""
     if "Crisis" in regime_name:
-        return 4.0   # Crisis regimes are brief
+        return 4.0  # Crisis regimes are brief
     elif "Bear" in regime_name:
-        return 8.0   # Bear regimes moderate duration
+        return 8.0  # Bear regimes moderate duration
     elif "Sideways" in regime_name:
         return 15.0  # Sideways regimes tend to persist
     elif "Bull" in regime_name:
         return 12.0  # Bull regimes moderate duration
     elif "Euphoric" in regime_name:
-        return 5.0   # Euphoric regimes are unsustainable
+        return 5.0  # Euphoric regimes are unsustainable
     else:
         return 10.0  # Default duration
 

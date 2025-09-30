@@ -7,15 +7,15 @@ This example shows how to run a quick analysis on a single stock with the new
 FinancialRegimeAnalysis unified entry point.
 """
 
-import sys
 import os
+import sys
 from datetime import datetime, timedelta
 
 # Add the project root to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from hidden_regime.financial.config import FinancialRegimeConfig
 from hidden_regime.financial.analysis import FinancialRegimeAnalysis
+from hidden_regime.financial.config import FinancialRegimeConfig
 
 
 def main():
@@ -27,8 +27,8 @@ def main():
     config = FinancialRegimeConfig.create_quick_analysis(
         ticker="AAPL",
         days_back=90,  # 3 months of analysis
-        n_regimes=3,   # Simple 3-regime model
-        initial_capital=50000.0  # $50k for simulation
+        n_regimes=3,  # Simple 3-regime model
+        initial_capital=50000.0,  # $50k for simulation
     )
 
     # Note: Can't modify frozen dataclass, but output_directory is auto-generated
@@ -84,6 +84,7 @@ def main():
     except Exception as e:
         print(f"\n❌ Financial analysis failed: {e}")
         import traceback
+
         traceback.print_exc()
 
 

@@ -5,14 +5,16 @@ Provides stop-loss calculation, position sizing limits, and portfolio-level
 risk controls as specified in simulation.md.
 """
 
-import numpy as np
-from typing import Dict, Optional, Tuple
 from dataclasses import dataclass
+from typing import Dict, Optional, Tuple
+
+import numpy as np
 
 
 @dataclass
 class RiskLimits:
     """Risk limits configuration."""
+
     max_position_pct: float = 0.1  # Maximum 10% of portfolio per position
     max_portfolio_risk: float = 0.02  # Maximum 2% portfolio risk per trade
     stop_loss_pct: float = 0.05  # 5% stop-loss by default
@@ -38,7 +40,9 @@ class RiskManager:
         self.risk_limits = risk_limits or RiskLimits()
         self.strategy_risk_multipliers: Dict[str, float] = {}
 
-    def set_strategy_risk_multiplier(self, strategy_name: str, multiplier: float) -> None:
+    def set_strategy_risk_multiplier(
+        self, strategy_name: str, multiplier: float
+    ) -> None:
         """
         Set risk multiplier for specific strategy.
 
@@ -48,7 +52,9 @@ class RiskManager:
         """
         self.strategy_risk_multipliers[strategy_name] = multiplier
 
-    def get_max_position_value(self, total_portfolio_value: float, strategy_name: str) -> float:
+    def get_max_position_value(
+        self, total_portfolio_value: float, strategy_name: str
+    ) -> float:
         """
         Calculate maximum position value for a strategy.
 
@@ -67,9 +73,13 @@ class RiskManager:
         adjusted_limit = base_limit * multiplier
 
         # Ensure we don't exceed absolute limits
-        return min(adjusted_limit, total_portfolio_value * self.risk_limits.max_total_exposure)
+        return min(
+            adjusted_limit, total_portfolio_value * self.risk_limits.max_total_exposure
+        )
 
-    def calculate_stop_loss(self, entry_price: float, strategy_name: str) -> Optional[float]:
+    def calculate_stop_loss(
+        self, entry_price: float, strategy_name: str
+    ) -> Optional[float]:
         """
         Calculate stop-loss price for a position.
 
@@ -81,17 +91,17 @@ class RiskManager:
             Stop-loss price (None if stop-loss disabled for strategy)
         """
         # Check if strategy has stop-loss disabled
-        if strategy_name in ['buy_and_hold']:
+        if strategy_name in ["buy_and_hold"]:
             return None
 
         # Calculate stop-loss based on percentage
         stop_loss_pct = self.risk_limits.stop_loss_pct
 
         # Apply strategy-specific adjustments
-        if strategy_name.startswith('hmm_'):
+        if strategy_name.startswith("hmm_"):
             # HMM strategies might need tighter stops due to regime changes
             stop_loss_pct *= 0.8
-        elif strategy_name.startswith('ta_'):
+        elif strategy_name.startswith("ta_"):
             # Technical indicators might need looser stops for noise
             stop_loss_pct *= 1.2
 
@@ -138,10 +148,7 @@ class RiskManager:
         return 1.0 - reduction_factor
 
     def validate_trade(
-        self,
-        position_value: float,
-        portfolio_value: float,
-        strategy_name: str
+        self, position_value: float, portfolio_value: float, strategy_name: str
     ) -> Tuple[bool, str]:
         """
         Validate if a trade meets risk management criteria.
@@ -157,7 +164,10 @@ class RiskManager:
         # Check position size limit
         max_position = self.get_max_position_value(portfolio_value, strategy_name)
         if position_value > max_position:
-            return False, f"Position size ${position_value:.0f} exceeds limit ${max_position:.0f}"
+            return (
+                False,
+                f"Position size ${position_value:.0f} exceeds limit ${max_position:.0f}",
+            )
 
         # Check portfolio exposure
         position_pct = position_value / portfolio_value if portfolio_value > 0 else 0
@@ -177,14 +187,16 @@ class StopLossManager:
 
     def __init__(self):
         """Initialize stop-loss manager."""
-        self.trailing_stops: Dict[str, float] = {}  # position_key -> trailing_stop_price
+        self.trailing_stops: Dict[str, float] = (
+            {}
+        )  # position_key -> trailing_stop_price
 
     def update_trailing_stop(
         self,
         position_key: str,
         current_price: float,
         entry_price: float,
-        trailing_pct: float = 0.05
+        trailing_pct: float = 0.05,
     ) -> Optional[float]:
         """
         Update trailing stop-loss for a position.
@@ -234,10 +246,7 @@ class StopLossManager:
         self.trailing_stops.pop(position_key, None)
 
     def calculate_volatility_stop(
-        self,
-        price_history: list,
-        multiplier: float = 2.0,
-        lookback: int = 20
+        self, price_history: list, multiplier: float = 2.0, lookback: int = 20
     ) -> float:
         """
         Calculate volatility-based stop-loss.
@@ -254,7 +263,10 @@ class StopLossManager:
             return 0.05  # Default 5% if insufficient data
 
         recent_prices = price_history[-lookback:]
-        returns = [recent_prices[i] / recent_prices[i-1] - 1 for i in range(1, len(recent_prices))]
+        returns = [
+            recent_prices[i] / recent_prices[i - 1] - 1
+            for i in range(1, len(recent_prices))
+        ]
 
         if not returns:
             return 0.05

@@ -15,11 +15,11 @@ Key Features:
 
 Quick Start:
     >>> import hidden_regime as hr
-    
+
     # Simple regime detection
     >>> pipeline = hr.create_simple_regime_pipeline('AAPL')
     >>> result = pipeline.update()
-    
+
     # Financial analysis with trading insights
     >>> pipeline = hr.create_trading_pipeline('SPY', n_states=4)
     >>> result = pipeline.update()
@@ -39,81 +39,78 @@ __url__ = "https://hiddenregime.com"
 __license__ = "MIT"
 __copyright__ = "Copyright 2025 Hidden Regime"
 
-# Core pipeline architecture
-from .pipeline import (
-    Pipeline,
-    TemporalController,
-    TemporalDataStub,
-    PipelineComponent,
-    DataComponent,
-    ObservationComponent,
-    ModelComponent,
-    AnalysisComponent,
-    ReportComponent,
-)
-
 # Configuration system
 from .config import (
+    AnalysisConfig,
     BaseConfig,
     DataConfig,
-    FinancialDataConfig,
-    ObservationConfig,
-    FinancialObservationConfig,
-    ModelConfig,
-    HMMConfig,
-    AnalysisConfig,
     FinancialAnalysisConfig,
+    FinancialDataConfig,
+    FinancialObservationConfig,
+    HMMConfig,
+    ModelConfig,
+    ObservationConfig,
     ReportConfig,
 )
 
 # Factory patterns
 from .factories import (
-    PipelineFactory,
     ComponentFactory,
-    pipeline_factory,
+    PipelineFactory,
     component_factory,
+    pipeline_factory,
+)
+
+# Core pipeline architecture
+from .pipeline import (
+    AnalysisComponent,
+    DataComponent,
+    ModelComponent,
+    ObservationComponent,
+    Pipeline,
+    PipelineComponent,
+    ReportComponent,
+    TemporalController,
+    TemporalDataStub,
 )
 
 # Exception handling
 from .utils.exceptions import (
-    HiddenRegimeError,
+    ConfigurationError,
     DataLoadError,
     DataQualityError,
-    ValidationError,
-    ConfigurationError,
-    HMMTrainingError,
+    HiddenRegimeError,
     HMMInferenceError,
+    HMMTrainingError,
+    ValidationError,
 )
 
 # Financial utilities
 from .utils.state_mapping import (
-    percent_change_to_log_return,
+    get_regime_characteristics,
     log_return_to_percent_change,
     map_states_to_financial_regimes,
-    get_regime_characteristics,
+    percent_change_to_log_return,
 )
+
 
 # Convenience functions using pipeline factory
 def create_pipeline(
-    data_config,
-    observation_config,
-    model_config,
-    analysis_config,
-    report_config=None
+    data_config, observation_config, model_config, analysis_config, report_config=None
 ):
     """
     Create pipeline from configuration objects.
-    
+
     Args:
         data_config: Data component configuration
         observation_config: Observation component configuration
         model_config: Model component configuration
         analysis_config: Analysis component configuration
         report_config: Optional report component configuration
-        
+
     Returns:
         Configured Pipeline instance
-        
+
     Example:
         >>> import hidden_regime as hr
         >>> data_cfg = hr.FinancialDataConfig(ticker='AAPL')
@@ -127,8 +124,9 @@ def create_pipeline(
         observation_config=observation_config,
         model_config=model_config,
         analysis_config=analysis_config,
-        report_config=report_config
+        report_config=report_config,
     )
+
 
 def create_financial_pipeline(
     ticker="SPY",
@@ -141,11 +139,11 @@ def create_financial_pipeline(
     max_iterations=None,
     forgetting_factor=None,
     random_seed=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Create pipeline optimized for financial analysis.
-    
+
     Args:
         ticker: Stock ticker symbol
         n_states: Number of regime states for HMM
@@ -153,10 +151,10 @@ def create_financial_pipeline(
         end_date: Data end date (YYYY-MM-DD)
         include_report: Whether to include report generation
         **kwargs: Additional configuration overrides
-        
+
     Returns:
         Configured financial Pipeline instance
-        
+
     Example:
         >>> import hidden_regime as hr
         >>> pipeline = hr.create_financial_pipeline('AAPL', n_states=4)
@@ -172,20 +170,21 @@ def create_financial_pipeline(
         max_iterations=max_iterations,
         forgetting_factor=forgetting_factor,
         random_seed=random_seed,
-        **kwargs
+        **kwargs,
     )
+
 
 def create_simple_regime_pipeline(ticker="SPY", n_states=3):
     """
     Create simple regime detection pipeline with minimal configuration.
-    
+
     Args:
         ticker: Stock ticker symbol
         n_states: Number of regime states
-        
+
     Returns:
         Simple regime detection Pipeline
-        
+
     Example:
         >>> import hidden_regime as hr
         >>> pipeline = hr.create_simple_regime_pipeline('NVDA')
@@ -193,72 +192,66 @@ def create_simple_regime_pipeline(ticker="SPY", n_states=3):
         >>> print(result)  # Shows current regime analysis
     """
     return pipeline_factory.create_simple_regime_pipeline(
-        ticker=ticker,
-        n_states=n_states
+        ticker=ticker, n_states=n_states
     )
+
 
 def create_trading_pipeline(ticker="SPY", n_states=4, risk_adjustment=True):
     """
     Create pipeline optimized for trading analysis.
-    
+
     Args:
         ticker: Stock ticker symbol
         n_states: Number of regime states
         risk_adjustment: Whether to include risk adjustment
-        
+
     Returns:
         Trading-focused Pipeline
-        
+
     Example:
         >>> import hidden_regime as hr
         >>> pipeline = hr.create_trading_pipeline('QQQ', n_states=4)
         >>> result = pipeline.update()
     """
     return pipeline_factory.create_trading_pipeline(
-        ticker=ticker,
-        n_states=n_states,
-        risk_adjustment=risk_adjustment
+        ticker=ticker, n_states=n_states, risk_adjustment=risk_adjustment
     )
 
-def create_research_pipeline(
-    ticker="SPY",
-    n_states=3,
-    comprehensive_analysis=True
-):
+
+def create_research_pipeline(ticker="SPY", n_states=3, comprehensive_analysis=True):
     """
     Create pipeline optimized for research and analysis.
-    
+
     Args:
         ticker: Stock ticker symbol
         n_states: Number of regime states
         comprehensive_analysis: Whether to include comprehensive indicators
-        
+
     Returns:
         Research-focused Pipeline
-        
+
     Example:
         >>> import hidden_regime as hr
         >>> pipeline = hr.create_research_pipeline('BTC-USD', comprehensive_analysis=True)
         >>> result = pipeline.update()
     """
     return pipeline_factory.create_research_pipeline(
-        ticker=ticker,
-        n_states=n_states,
-        comprehensive_analysis=comprehensive_analysis
+        ticker=ticker, n_states=n_states, comprehensive_analysis=comprehensive_analysis
     )
+
 
 # Temporal V&V functions
 def create_temporal_controller(pipeline, full_dataset):
     """
     Create temporal controller for backtesting with V&V isolation.
-    
+
     Args:
         pipeline: Pipeline instance to control
         full_dataset: Complete dataset for temporal slicing
-        
+
     Returns:
         TemporalController instance
-        
+
     Example:
         >>> import hidden_regime as hr
         >>> pipeline = hr.create_simple_regime_pipeline('AAPL')
@@ -268,27 +261,28 @@ def create_temporal_controller(pipeline, full_dataset):
     """
     return TemporalController(pipeline, full_dataset)
 
+
 # Legacy compatibility functions (simplified)
 def detect_regimes(ticker, n_states=3, start_date=None, end_date=None):
     """
     Legacy compatibility function for simple regime detection.
-    
+
     Args:
         ticker: Stock ticker symbol
         n_states: Number of regimes to detect
         start_date: Start date for analysis
         end_date: End date for analysis
-        
+
     Returns:
         Analysis result string
-        
+
     Example:
         >>> import hidden_regime as hr
         >>> result = hr.detect_regimes('AAPL', n_states=3)
         >>> print(result)
     """
     pipeline = create_simple_regime_pipeline(ticker, n_states)
-    
+
     # Update data config if dates provided
     if start_date or end_date:
         data_config = pipeline.data.config
@@ -296,24 +290,23 @@ def detect_regimes(ticker, n_states=3, start_date=None, end_date=None):
             data_config.start_date = start_date
         if end_date:
             data_config.end_date = end_date
-    
+
     return pipeline.update()
+
 
 # Main API exports
 __all__ = [
     # Core pipeline architecture
     "Pipeline",
-    "TemporalController", 
+    "TemporalController",
     "TemporalDataStub",
-    
     # Component interfaces
     "PipelineComponent",
     "DataComponent",
     "ObservationComponent",
-    "ModelComponent", 
+    "ModelComponent",
     "AnalysisComponent",
     "ReportComponent",
-    
     # Configuration system
     "BaseConfig",
     "DataConfig",
@@ -325,13 +318,11 @@ __all__ = [
     "AnalysisConfig",
     "FinancialAnalysisConfig",
     "ReportConfig",
-    
     # Factory patterns
     "PipelineFactory",
     "ComponentFactory",
     "pipeline_factory",
     "component_factory",
-    
     # Exception handling
     "HiddenRegimeError",
     "DataLoadError",
@@ -340,23 +331,19 @@ __all__ = [
     "ConfigurationError",
     "HMMTrainingError",
     "HMMInferenceError",
-
     # Financial utilities
     "percent_change_to_log_return",
     "log_return_to_percent_change",
     "map_states_to_financial_regimes",
     "get_regime_characteristics",
-
     # Pipeline creation functions
     "create_pipeline",
     "create_financial_pipeline",
     "create_simple_regime_pipeline",
     "create_trading_pipeline",
     "create_research_pipeline",
-    
     # Temporal V&V functions
     "create_temporal_controller",
-    
     # Legacy compatibility
     "detect_regimes",
 ]

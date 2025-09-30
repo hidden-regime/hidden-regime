@@ -6,8 +6,8 @@ for interpreting model outputs with domain knowledge and generating insights.
 """
 
 from .financial import FinancialAnalysis
-from .performance import RegimePerformanceAnalyzer
 from .indicator_comparison import IndicatorPerformanceComparator
+from .performance import RegimePerformanceAnalyzer
 
 __all__ = [
     "FinancialAnalysis",

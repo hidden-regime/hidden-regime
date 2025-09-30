@@ -6,8 +6,8 @@ from configuration objects, enabling easy extensibility and consistent
 component instantiation.
 """
 
-from .pipeline import PipelineFactory, pipeline_factory
 from .components import ComponentFactory, component_factory
+from .pipeline import PipelineFactory, pipeline_factory
 
 __all__ = [
     "PipelineFactory",

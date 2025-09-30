@@ -8,10 +8,11 @@ thorough analysis and educational explanations.
 
 import json
 import time
-from datetime import datetime, timezone
-from typing import Dict, List, Any, Optional, Union
-from dataclasses import dataclass, asdict
 from collections import deque
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Union
+
 import numpy as np
 import pandas as pd
 
@@ -19,6 +20,7 @@ import pandas as pd
 @dataclass
 class HMMStateSnapshot:
     """Snapshot of HMM model state at a specific timestep."""
+
     timestamp: str
     data_end_date: str
     transition_matrix: List[List[float]]
@@ -39,6 +41,7 @@ class HMMStateSnapshot:
 @dataclass
 class TechnicalIndicatorSnapshot:
     """Snapshot of technical indicators and signals at a specific timestep."""
+
     timestamp: str
     data_end_date: str
     indicators: Dict[str, float]  # Raw indicator values
@@ -51,6 +54,7 @@ class TechnicalIndicatorSnapshot:
 @dataclass
 class RegimeAnalysisSnapshot:
     """Snapshot of regime analysis and interpretation."""
+
     timestamp: str
     data_end_date: str
     current_regime: str
@@ -64,6 +68,7 @@ class RegimeAnalysisSnapshot:
 @dataclass
 class TimestepSnapshot:
     """Complete snapshot of all model data at a specific timestep."""
+
     timestamp: str
     data_end_date: str
     hmm_state: Optional[HMMStateSnapshot]
@@ -81,11 +86,13 @@ class ModelDataCollector:
     for analysis, visualization, and educational explanation generation.
     """
 
-    def __init__(self,
-                 max_history: int = 1000,
-                 collection_level: str = "detailed",
-                 auto_export: bool = False,
-                 export_path: Optional[str] = None):
+    def __init__(
+        self,
+        max_history: int = 1000,
+        collection_level: str = "detailed",
+        auto_export: bool = False,
+        export_path: Optional[str] = None,
+    ):
         """
         Initialize model data collector.
 
@@ -107,16 +114,15 @@ class ModelDataCollector:
             "successful_collections": 0,
             "failed_collections": 0,
             "start_time": datetime.now(timezone.utc).isoformat(),
-            "last_collection": None
+            "last_collection": None,
         }
 
         # Previous state for computing deltas
         self._previous_hmm_state: Optional[HMMStateSnapshot] = None
 
-    def collect_timestep_data(self,
-                             pipeline,
-                             data_end_date: str,
-                             execution_start_time: float) -> TimestepSnapshot:
+    def collect_timestep_data(
+        self, pipeline, data_end_date: str, execution_start_time: float
+    ) -> TimestepSnapshot:
         """
         Collect comprehensive data for a single timestep.
 
@@ -136,10 +142,14 @@ class ModelDataCollector:
             hmm_snapshot = self._collect_hmm_state(pipeline, timestamp, data_end_date)
 
             # Collect technical indicator data
-            indicator_snapshot = self._collect_indicator_state(pipeline, timestamp, data_end_date)
+            indicator_snapshot = self._collect_indicator_state(
+                pipeline, timestamp, data_end_date
+            )
 
             # Collect regime analysis data
-            regime_snapshot = self._collect_regime_analysis(pipeline, timestamp, data_end_date)
+            regime_snapshot = self._collect_regime_analysis(
+                pipeline, timestamp, data_end_date
+            )
 
             # Calculate execution time
             execution_time = time.time() - execution_start_time
@@ -155,7 +165,7 @@ class ModelDataCollector:
                 technical_indicators=indicator_snapshot,
                 regime_analysis=regime_snapshot,
                 execution_time=execution_time,
-                data_quality_metrics=quality_metrics
+                data_quality_metrics=quality_metrics,
             )
 
             # Add to history
@@ -182,13 +192,17 @@ class ModelDataCollector:
                 technical_indicators=None,
                 regime_analysis=None,
                 execution_time=time.time() - execution_start_time,
-                data_quality_metrics={"collection_error": str(e)}
+                data_quality_metrics={"collection_error": str(e)},
             )
 
-    def _collect_hmm_state(self, pipeline, timestamp: str, data_end_date: str) -> Optional[HMMStateSnapshot]:
+    def _collect_hmm_state(
+        self, pipeline, timestamp: str, data_end_date: str
+    ) -> Optional[HMMStateSnapshot]:
         """Collect HMM model state and parameters."""
         try:
-            if not hasattr(pipeline, 'model') or not hasattr(pipeline.model, 'is_fitted'):
+            if not hasattr(pipeline, "model") or not hasattr(
+                pipeline.model, "is_fitted"
+            ):
                 return None
 
             model = pipeline.model
@@ -205,25 +219,37 @@ class ModelDataCollector:
             if self._previous_hmm_state is not None:
                 prev_trans = np.array(self._previous_hmm_state.transition_matrix)
                 current_trans = model.transition_matrix_
-                parameter_changes["transition_matrix_l2_delta"] = float(np.linalg.norm(current_trans - prev_trans))
+                parameter_changes["transition_matrix_l2_delta"] = float(
+                    np.linalg.norm(current_trans - prev_trans)
+                )
 
                 prev_means = np.array(self._previous_hmm_state.emission_means)
                 current_means = model.emission_means_
-                parameter_changes["emission_means_l2_delta"] = float(np.linalg.norm(current_means - prev_means))
+                parameter_changes["emission_means_l2_delta"] = float(
+                    np.linalg.norm(current_means - prev_means)
+                )
 
                 prev_stds = np.array(self._previous_hmm_state.emission_stds)
                 current_stds = model.emission_stds_
-                parameter_changes["emission_stds_l2_delta"] = float(np.linalg.norm(current_stds - prev_stds))
+                parameter_changes["emission_stds_l2_delta"] = float(
+                    np.linalg.norm(current_stds - prev_stds)
+                )
 
             # Get regime probabilities and states
             regime_probs_df = model.predict_proba(current_data)
-            regime_probs = regime_probs_df.values if isinstance(regime_probs_df, pd.DataFrame) else regime_probs_df
+            regime_probs = (
+                regime_probs_df.values
+                if isinstance(regime_probs_df, pd.DataFrame)
+                else regime_probs_df
+            )
 
             most_likely_states = model.predict(current_data)
-            current_regime_probs = regime_probs[-1].tolist() if len(regime_probs) > 0 else []
+            current_regime_probs = (
+                regime_probs[-1].tolist() if len(regime_probs) > 0 else []
+            )
 
             # Get training history
-            training_history = getattr(model, 'training_history_', {})
+            training_history = getattr(model, "training_history_", {})
 
             snapshot = HMMStateSnapshot(
                 timestamp=timestamp,
@@ -236,11 +262,11 @@ class ModelDataCollector:
                 most_likely_states=most_likely_states.tolist(),
                 current_regime_probs=current_regime_probs,
                 log_likelihood=float(model.score(current_data)),
-                training_iterations=training_history.get('iterations', 0),
-                converged=training_history.get('converged', False),
-                training_time=training_history.get('training_time', 0.0),
+                training_iterations=training_history.get("iterations", 0),
+                converged=training_history.get("converged", False),
+                training_time=training_history.get("training_time", 0.0),
                 n_observations=len(current_data),
-                parameter_changes=parameter_changes
+                parameter_changes=parameter_changes,
             )
 
             # Store for next comparison
@@ -252,11 +278,13 @@ class ModelDataCollector:
             # Return None on any error
             return None
 
-    def _collect_indicator_state(self, pipeline, timestamp: str, data_end_date: str) -> Optional[TechnicalIndicatorSnapshot]:
+    def _collect_indicator_state(
+        self, pipeline, timestamp: str, data_end_date: str
+    ) -> Optional[TechnicalIndicatorSnapshot]:
         """Collect technical indicator values and signals."""
         try:
             # Check if analysis component has indicator data
-            if not hasattr(pipeline, 'analysis'):
+            if not hasattr(pipeline, "analysis"):
                 return None
 
             analysis = pipeline.analysis
@@ -279,16 +307,18 @@ class ModelDataCollector:
                 signals=signals,
                 signal_rationale=signal_rationale,
                 signal_confidence=signal_confidence,
-                threshold_crossings=threshold_crossings
+                threshold_crossings=threshold_crossings,
             )
 
         except Exception as e:
             return None
 
-    def _collect_regime_analysis(self, pipeline, timestamp: str, data_end_date: str) -> Optional[RegimeAnalysisSnapshot]:
+    def _collect_regime_analysis(
+        self, pipeline, timestamp: str, data_end_date: str
+    ) -> Optional[RegimeAnalysisSnapshot]:
         """Collect regime analysis and interpretation."""
         try:
-            if not hasattr(pipeline, 'analysis') or not hasattr(pipeline, 'model'):
+            if not hasattr(pipeline, "analysis") or not hasattr(pipeline, "model"):
                 return None
 
             model = pipeline.model
@@ -301,14 +331,30 @@ class ModelDataCollector:
 
             # Get current regime information
             regime_probs_df = model.predict_proba(current_data)
-            regime_probs = regime_probs_df.values if isinstance(regime_probs_df, pd.DataFrame) else regime_probs_df
-            current_regime_probs = regime_probs[-1] if len(regime_probs) > 0 else np.array([])
+            regime_probs = (
+                regime_probs_df.values
+                if isinstance(regime_probs_df, pd.DataFrame)
+                else regime_probs_df
+            )
+            current_regime_probs = (
+                regime_probs[-1] if len(regime_probs) > 0 else np.array([])
+            )
 
             # Map to regime names (basic implementation)
             regime_names = ["Bear", "Sideways", "Bull"]
-            current_regime_idx = np.argmax(current_regime_probs) if len(current_regime_probs) > 0 else 0
-            current_regime = regime_names[current_regime_idx] if current_regime_idx < len(regime_names) else f"State_{current_regime_idx}"
-            regime_confidence = float(current_regime_probs[current_regime_idx]) if len(current_regime_probs) > 0 else 0.0
+            current_regime_idx = (
+                np.argmax(current_regime_probs) if len(current_regime_probs) > 0 else 0
+            )
+            current_regime = (
+                regime_names[current_regime_idx]
+                if current_regime_idx < len(regime_names)
+                else f"State_{current_regime_idx}"
+            )
+            regime_confidence = (
+                float(current_regime_probs[current_regime_idx])
+                if len(current_regime_probs) > 0
+                else 0.0
+            )
 
             # Calculate regime persistence (simplified)
             most_likely_states = model.predict(current_data)
@@ -322,9 +368,13 @@ class ModelDataCollector:
                         break
 
             # Estimate expected duration from transition matrix
-            if hasattr(model, 'transition_matrix_'):
-                diag_prob = model.transition_matrix_[current_regime_idx, current_regime_idx]
-                expected_duration = 1.0 / (1.0 - diag_prob) if diag_prob < 1.0 else float('inf')
+            if hasattr(model, "transition_matrix_"):
+                diag_prob = model.transition_matrix_[
+                    current_regime_idx, current_regime_idx
+                ]
+                expected_duration = (
+                    1.0 / (1.0 - diag_prob) if diag_prob < 1.0 else float("inf")
+                )
             else:
                 expected_duration = 10.0  # Default
 
@@ -336,13 +386,29 @@ class ModelDataCollector:
                 days_in_regime=days_in_regime,
                 expected_regime_duration=expected_duration,
                 regime_characteristics={
-                    "mean_return": float(model.emission_means_[current_regime_idx]) if hasattr(model, 'emission_means_') else 0.0,
-                    "volatility": float(model.emission_stds_[current_regime_idx]) if hasattr(model, 'emission_stds_') else 0.0
+                    "mean_return": (
+                        float(model.emission_means_[current_regime_idx])
+                        if hasattr(model, "emission_means_")
+                        else 0.0
+                    ),
+                    "volatility": (
+                        float(model.emission_stds_[current_regime_idx])
+                        if hasattr(model, "emission_stds_")
+                        else 0.0
+                    ),
                 },
-                transition_probabilities={
-                    regime_names[i]: float(model.transition_matrix_[current_regime_idx, i])
-                    for i in range(min(len(regime_names), model.transition_matrix_.shape[1]))
-                } if hasattr(model, 'transition_matrix_') else {}
+                transition_probabilities=(
+                    {
+                        regime_names[i]: float(
+                            model.transition_matrix_[current_regime_idx, i]
+                        )
+                        for i in range(
+                            min(len(regime_names), model.transition_matrix_.shape[1])
+                        )
+                    }
+                    if hasattr(model, "transition_matrix_")
+                    else {}
+                ),
             )
 
         except Exception as e:
@@ -354,26 +420,28 @@ class ModelDataCollector:
             metrics = {}
 
             # Data component metrics
-            if hasattr(pipeline, 'data'):
+            if hasattr(pipeline, "data"):
                 data = pipeline.data.get_all_data()
                 metrics["data_size"] = len(data)
-                metrics["data_completeness"] = 1.0 - (data.isnull().sum().sum() / (len(data) * len(data.columns)))
+                metrics["data_completeness"] = 1.0 - (
+                    data.isnull().sum().sum() / (len(data) * len(data.columns))
+                )
                 metrics["data_start"] = str(data.index[0]) if len(data) > 0 else None
                 metrics["data_end"] = str(data.index[-1]) if len(data) > 0 else None
 
             # Model component metrics
-            if hasattr(pipeline, 'model') and hasattr(pipeline.model, 'is_fitted'):
+            if hasattr(pipeline, "model") and hasattr(pipeline.model, "is_fitted"):
                 metrics["model_fitted"] = pipeline.model.is_fitted
                 if pipeline.model.is_fitted:
-                    metrics["model_complexity"] = getattr(pipeline.model, 'n_states', 0)
+                    metrics["model_complexity"] = getattr(pipeline.model, "n_states", 0)
 
             # Pipeline component availability
             metrics["components_available"] = {
-                "data": hasattr(pipeline, 'data'),
-                "observations": hasattr(pipeline, 'observations'),
-                "model": hasattr(pipeline, 'model'),
-                "analysis": hasattr(pipeline, 'analysis'),
-                "report": hasattr(pipeline, 'report')
+                "data": hasattr(pipeline, "data"),
+                "observations": hasattr(pipeline, "observations"),
+                "model": hasattr(pipeline, "model"),
+                "analysis": hasattr(pipeline, "analysis"),
+                "report": hasattr(pipeline, "report"),
             }
 
             return metrics
@@ -408,17 +476,21 @@ class ModelDataCollector:
             "emission_means": [],
             "emission_stds": [],
             "log_likelihoods": [],
-            "parameter_deltas": []
+            "parameter_deltas": [],
         }
 
         for snapshot in self.timestep_data:
             if snapshot.hmm_state:
                 evolution["timestamps"].append(snapshot.timestamp)
-                evolution["transition_matrices"].append(snapshot.hmm_state.transition_matrix)
+                evolution["transition_matrices"].append(
+                    snapshot.hmm_state.transition_matrix
+                )
                 evolution["emission_means"].append(snapshot.hmm_state.emission_means)
                 evolution["emission_stds"].append(snapshot.hmm_state.emission_stds)
                 evolution["log_likelihoods"].append(snapshot.hmm_state.log_likelihood)
-                evolution["parameter_deltas"].append(snapshot.hmm_state.parameter_changes)
+                evolution["parameter_deltas"].append(
+                    snapshot.hmm_state.parameter_changes
+                )
 
         return evolution
 
@@ -427,10 +499,10 @@ class ModelDataCollector:
         # Convert dataclasses to dictionaries for JSON serialization
         export_data = {
             "collection_stats": self.collection_stats,
-            "timesteps": [asdict(snapshot) for snapshot in self.timestep_data]
+            "timesteps": [asdict(snapshot) for snapshot in self.timestep_data],
         }
 
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             json.dump(export_data, f, indent=2, default=str)
 
     def export_to_parquet(self, filepath: str):
@@ -442,29 +514,45 @@ class ModelDataCollector:
             row = {
                 "timestamp": snapshot.timestamp,
                 "data_end_date": snapshot.data_end_date,
-                "execution_time": snapshot.execution_time
+                "execution_time": snapshot.execution_time,
             }
 
             # Add HMM state data
             if snapshot.hmm_state:
-                row.update({
-                    "hmm_log_likelihood": snapshot.hmm_state.log_likelihood,
-                    "hmm_training_iterations": snapshot.hmm_state.training_iterations,
-                    "hmm_converged": snapshot.hmm_state.converged,
-                    "hmm_n_observations": snapshot.hmm_state.n_observations,
-                    "hmm_current_regime_0": snapshot.hmm_state.current_regime_probs[0] if snapshot.hmm_state.current_regime_probs else None,
-                    "hmm_current_regime_1": snapshot.hmm_state.current_regime_probs[1] if len(snapshot.hmm_state.current_regime_probs) > 1 else None,
-                    "hmm_current_regime_2": snapshot.hmm_state.current_regime_probs[2] if len(snapshot.hmm_state.current_regime_probs) > 2 else None
-                })
+                row.update(
+                    {
+                        "hmm_log_likelihood": snapshot.hmm_state.log_likelihood,
+                        "hmm_training_iterations": snapshot.hmm_state.training_iterations,
+                        "hmm_converged": snapshot.hmm_state.converged,
+                        "hmm_n_observations": snapshot.hmm_state.n_observations,
+                        "hmm_current_regime_0": (
+                            snapshot.hmm_state.current_regime_probs[0]
+                            if snapshot.hmm_state.current_regime_probs
+                            else None
+                        ),
+                        "hmm_current_regime_1": (
+                            snapshot.hmm_state.current_regime_probs[1]
+                            if len(snapshot.hmm_state.current_regime_probs) > 1
+                            else None
+                        ),
+                        "hmm_current_regime_2": (
+                            snapshot.hmm_state.current_regime_probs[2]
+                            if len(snapshot.hmm_state.current_regime_probs) > 2
+                            else None
+                        ),
+                    }
+                )
 
             # Add regime analysis data
             if snapshot.regime_analysis:
-                row.update({
-                    "regime_current": snapshot.regime_analysis.current_regime,
-                    "regime_confidence": snapshot.regime_analysis.regime_confidence,
-                    "regime_days": snapshot.regime_analysis.days_in_regime,
-                    "regime_expected_duration": snapshot.regime_analysis.expected_regime_duration
-                })
+                row.update(
+                    {
+                        "regime_current": snapshot.regime_analysis.current_regime,
+                        "regime_confidence": snapshot.regime_analysis.regime_confidence,
+                        "regime_days": snapshot.regime_analysis.days_in_regime,
+                        "regime_expected_duration": snapshot.regime_analysis.expected_regime_duration,
+                    }
+                )
 
             flattened_data.append(row)
 
@@ -480,7 +568,7 @@ class ModelDataCollector:
             "successful_collections": 0,
             "failed_collections": 0,
             "start_time": datetime.now(timezone.utc).isoformat(),
-            "last_collection": None
+            "last_collection": None,
         }
 
     def get_summary_stats(self) -> Dict[str, Any]:
@@ -489,8 +577,12 @@ class ModelDataCollector:
             return {"message": "No data collected yet"}
 
         successful_hmm = sum(1 for s in self.timestep_data if s.hmm_state is not None)
-        successful_indicators = sum(1 for s in self.timestep_data if s.technical_indicators is not None)
-        successful_regime = sum(1 for s in self.timestep_data if s.regime_analysis is not None)
+        successful_indicators = sum(
+            1 for s in self.timestep_data if s.technical_indicators is not None
+        )
+        successful_regime = sum(
+            1 for s in self.timestep_data if s.regime_analysis is not None
+        )
 
         execution_times = [s.execution_time for s in self.timestep_data]
 
@@ -505,6 +597,6 @@ class ModelDataCollector:
             "max_execution_time": np.max(execution_times),
             "date_range": {
                 "start": self.timestep_data[0].data_end_date,
-                "end": self.timestep_data[-1].data_end_date
-            }
+                "end": self.timestep_data[-1].data_end_date,
+            },
         }

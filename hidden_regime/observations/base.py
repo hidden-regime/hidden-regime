@@ -6,24 +6,25 @@ that can be used by models for training and prediction.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Callable, Union
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
+from typing import Any, Callable, Dict, List, Union
 
-from ..pipeline.interfaces import ObservationComponent
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
 from ..config.observation import ObservationConfig
+from ..pipeline.interfaces import ObservationComponent
 from ..utils.exceptions import ValidationError
 
 
 class BaseObservationGenerator(ObservationComponent):
     """
     Base class for observation generation components.
-    
+
     Provides common functionality for transforming raw data into observations
     including validation, generator management, and plotting capabilities.
     """
-    
+
     def __init__(self, config: ObservationConfig):
         """
         Initialize observation generator with configuration.
@@ -41,20 +42,22 @@ class BaseObservationGenerator(ObservationComponent):
         self._cache = {}
 
         # Default window size for calculations
-        self.window_size = getattr(config, 'window_size', 20)
-    
-    def _parse_generators(self, generators: List[Union[str, Callable]]) -> List[Callable]:
+        self.window_size = getattr(config, "window_size", 20)
+
+    def _parse_generators(
+        self, generators: List[Union[str, Callable]]
+    ) -> List[Callable]:
         """
         Parse generator specifications into callable functions.
-        
+
         Args:
             generators: List of generator specifications (strings or callables)
-            
+
         Returns:
             List of callable generator functions
         """
         parsed_generators = []
-        
+
         for generator in generators:
             if callable(generator):
                 parsed_generators.append(generator)
@@ -65,17 +68,19 @@ class BaseObservationGenerator(ObservationComponent):
                     raise ValidationError(f"Unknown generator: {generator}")
                 parsed_generators.append(generator_func)
             else:
-                raise ValidationError(f"Generator must be string or callable, got {type(generator)}")
-        
+                raise ValidationError(
+                    f"Generator must be string or callable, got {type(generator)}"
+                )
+
         return parsed_generators
-    
+
     def _get_builtin_generator(self, name: str) -> Callable:
         """
         Get built-in generator function by name.
-        
+
         Args:
             name: Name of built-in generator
-            
+
         Returns:
             Generator function or None if not found
         """
@@ -90,9 +95,9 @@ class BaseObservationGenerator(ObservationComponent):
             "volatility_context": self._generate_volatility_context,
             "directional_consistency": self._generate_directional_consistency,
         }
-        
+
         return builtin_generators.get(name)
-    
+
     def update(self, data: pd.DataFrame) -> pd.DataFrame:
         """
         Generate observations from input data.
@@ -109,7 +114,7 @@ class BaseObservationGenerator(ObservationComponent):
         # Check for missing values
         if data.isnull().any().any():
             raise ValidationError("Data contains missing values")
-        
+
         # Store reference for plotting
         self.last_data = data.copy()
 
@@ -129,33 +134,43 @@ class BaseObservationGenerator(ObservationComponent):
                 if isinstance(new_observations, pd.DataFrame):
                     observations = pd.concat([observations, new_observations], axis=1)
                 elif isinstance(new_observations, pd.Series):
-                    observations[new_observations.name or 'observation'] = new_observations
+                    observations[new_observations.name or "observation"] = (
+                        new_observations
+                    )
                 else:
-                    raise ValidationError(f"Generator must return DataFrame or Series, got {type(new_observations)}")
+                    raise ValidationError(
+                        f"Generator must return DataFrame or Series, got {type(new_observations)}"
+                    )
 
             except Exception as e:
-                raise ValidationError(f"Generator {generator.__name__} failed: {str(e)}")
+                raise ValidationError(
+                    f"Generator {generator.__name__} failed: {str(e)}"
+                )
 
         # Generate additional features
         for feature_name, feature_params in self.features.items():
             try:
-                if feature_name == 'volatility':
-                    window = feature_params.get('window', self.window_size)
-                    if 'log_return' in observations.columns:
-                        volatility = self._calculate_volatility(observations['log_return'], window)
-                        observations['volatility'] = volatility
-                elif feature_name == 'momentum':
-                    window = feature_params.get('window', 3)
-                    if 'close' in observations.columns:
-                        momentum = observations['close'].pct_change(window)
-                        observations['momentum'] = momentum
+                if feature_name == "volatility":
+                    window = feature_params.get("window", self.window_size)
+                    if "log_return" in observations.columns:
+                        volatility = self._calculate_volatility(
+                            observations["log_return"], window
+                        )
+                        observations["volatility"] = volatility
+                elif feature_name == "momentum":
+                    window = feature_params.get("window", 3)
+                    if "close" in observations.columns:
+                        momentum = observations["close"].pct_change(window)
+                        observations["momentum"] = momentum
             except Exception as e:
                 # Log warning but don't fail the update
                 print(f"Warning: Feature {feature_name} calculation failed: {e}")
 
         # Remove duplicate columns (keep last)
-        observations = observations.loc[:, ~observations.columns.duplicated(keep='last')]
-        
+        observations = observations.loc[
+            :, ~observations.columns.duplicated(keep="last")
+        ]
+
         # Store for plotting
         self.last_observations = observations.copy()
 
@@ -163,144 +178,165 @@ class BaseObservationGenerator(ObservationComponent):
         self._cache[cache_key] = observations.copy()
 
         return observations
-    
+
     def plot(self, **kwargs) -> plt.Figure:
         """
         Generate visualization of observations.
-        
+
         Returns:
             matplotlib Figure with observation plots
         """
         if self.last_observations is None:
             fig, ax = plt.subplots(figsize=(10, 6))
-            ax.text(0.5, 0.5, 'No observations generated yet', ha='center', va='center', fontsize=14)
+            ax.text(
+                0.5,
+                0.5,
+                "No observations generated yet",
+                ha="center",
+                va="center",
+                fontsize=14,
+            )
             ax.set_xlim(0, 1)
             ax.set_ylim(0, 1)
-            ax.axis('off')
+            ax.axis("off")
             return fig
-        
+
         # Plot each observation column
-        observation_cols = [col for col in self.last_observations.columns 
-                           if col not in ['open', 'high', 'low', 'close', 'volume']]
-        
+        observation_cols = [
+            col
+            for col in self.last_observations.columns
+            if col not in ["open", "high", "low", "close", "volume"]
+        ]
+
         if not observation_cols:
             fig, ax = plt.subplots(figsize=(10, 6))
-            ax.text(0.5, 0.5, 'No observation columns to plot', ha='center', va='center', fontsize=14)
+            ax.text(
+                0.5,
+                0.5,
+                "No observation columns to plot",
+                ha="center",
+                va="center",
+                fontsize=14,
+            )
             ax.set_xlim(0, 1)
             ax.set_ylim(0, 1)
-            ax.axis('off')
+            ax.axis("off")
             return fig
-        
+
         n_cols = min(len(observation_cols), 4)  # Max 4 subplots
         fig, axes = plt.subplots(n_cols, 1, figsize=(12, 3 * n_cols))
-        
+
         if n_cols == 1:
             axes = [axes]
-        
+
         for i, col in enumerate(observation_cols[:n_cols]):
             ax = axes[i]
             data = self.last_observations[col].dropna()
-            
+
             if len(data) > 0:
                 ax.plot(data.index, data.values, label=col)
-                ax.set_title(f'Observation: {col}')
+                ax.set_title(f"Observation: {col}")
                 ax.set_ylabel(col)
                 ax.grid(True, alpha=0.3)
                 ax.legend()
-        
+
         plt.tight_layout()
         return fig
-    
+
     # Built-in generator functions
     def _generate_log_return(self, data: pd.DataFrame) -> pd.Series:
         """Generate log returns from price data, preserving existing calculations."""
         # Check if log_return already exists (e.g., from financial data loader)
-        if 'log_return' in data.columns:
-            existing_log_return = data['log_return'].dropna()
+        if "log_return" in data.columns:
+            existing_log_return = data["log_return"].dropna()
             if len(existing_log_return) > 0:
                 # Use existing log_return if available and not empty
-                return pd.Series(data['log_return'], index=data.index, name='log_return')
+                return pd.Series(
+                    data["log_return"], index=data.index, name="log_return"
+                )
 
         # Fallback: calculate log returns from price data
         price_col = self._get_price_column(data)
         prices = data[price_col]
         log_returns = np.log(prices / prices.shift(1))
-        return pd.Series(log_returns, index=data.index, name='log_return')
-    
+        return pd.Series(log_returns, index=data.index, name="log_return")
+
     def _generate_return_ratio(self, data: pd.DataFrame) -> pd.Series:
         """Generate return ratios from price data."""
         price_col = self._get_price_column(data)
         prices = data[price_col]
         return_ratios = prices / prices.shift(1)
-        return pd.Series(return_ratios, index=data.index, name='return_ratio')
-    
+        return pd.Series(return_ratios, index=data.index, name="return_ratio")
+
     def _generate_price_change(self, data: pd.DataFrame) -> pd.Series:
         """Generate price changes from price data."""
         price_col = self._get_price_column(data)
         prices = data[price_col]
         price_changes = prices.diff()
-        return pd.Series(price_changes, index=data.index, name='price_change')
-    
+        return pd.Series(price_changes, index=data.index, name="price_change")
+
     def _generate_volatility(self, data: pd.DataFrame, window: int = 20) -> pd.Series:
         """Generate rolling volatility from log returns."""
-        if 'log_return' not in data.columns:
+        if "log_return" not in data.columns:
             log_returns = self._generate_log_return(data)
         else:
-            log_returns = data['log_return']
-        
+            log_returns = data["log_return"]
+
         volatility = log_returns.rolling(window=window).std()
-        return pd.Series(volatility, index=data.index, name='volatility')
-    
+        return pd.Series(volatility, index=data.index, name="volatility")
+
     def _get_price_column(self, data: pd.DataFrame) -> str:
         """
         Determine which price column to use.
-        
+
         Args:
             data: Input data DataFrame
-            
+
         Returns:
             Name of price column to use
         """
         # Try common price column names
-        price_columns = ['close', 'Close', 'price', 'Price', 'adj_close', 'Adj Close']
-        
+        price_columns = ["close", "Close", "price", "Price", "adj_close", "Adj Close"]
+
         for col in price_columns:
             if col in data.columns:
                 return col
-        
+
         # If no standard price column found, use first numeric column
         numeric_cols = data.select_dtypes(include=[np.number]).columns
         if len(numeric_cols) > 0:
             return numeric_cols[0]
-        
+
         raise ValidationError("No suitable price column found in data")
-    
+
     def get_observation_info(self) -> Dict[str, Any]:
         """
         Get information about generated observations.
-        
+
         Returns:
             Dictionary with observation metadata
         """
         if self.last_observations is None:
-            return {'status': 'No observations generated'}
-        
+            return {"status": "No observations generated"}
+
         info = {
-            'num_observations': len(self.last_observations),
-            'observation_columns': list(self.last_observations.columns),
-            'date_range': {
-                'start': str(self.last_observations.index.min()),
-                'end': str(self.last_observations.index.max())
+            "num_observations": len(self.last_observations),
+            "observation_columns": list(self.last_observations.columns),
+            "date_range": {
+                "start": str(self.last_observations.index.min()),
+                "end": str(self.last_observations.index.max()),
             },
-            'generators_used': [gen.__name__ for gen in self.generators],
-            'missing_values': self.last_observations.isnull().sum().to_dict()
+            "generators_used": [gen.__name__ for gen in self.generators],
+            "missing_values": self.last_observations.isnull().sum().to_dict(),
         }
-        
+
         return info
 
     # Enhanced regime-relevant feature generators
 
-    def _generate_momentum_strength(self, data: pd.DataFrame, short_window: int = 5, long_window: int = 20) -> pd.Series:
+    def _generate_momentum_strength(
+        self, data: pd.DataFrame, short_window: int = 5, long_window: int = 20
+    ) -> pd.Series:
         """
         Generate momentum strength indicator for Bull/Bear regime detection.
 
@@ -319,7 +355,9 @@ class BaseObservationGenerator(ObservationComponent):
         prices = data[price_col]
 
         # Short-term momentum: recent price change relative to short window
-        short_momentum = (prices - prices.shift(short_window)) / prices.shift(short_window)
+        short_momentum = (prices - prices.shift(short_window)) / prices.shift(
+            short_window
+        )
 
         # Long-term trend direction: price change over longer window
         long_trend = (prices - prices.shift(long_window)) / prices.shift(long_window)
@@ -327,9 +365,11 @@ class BaseObservationGenerator(ObservationComponent):
         # Momentum strength: short-term move aligned with long-term trend
         momentum_strength = short_momentum * np.sign(long_trend) * np.abs(long_trend)
 
-        return pd.Series(momentum_strength, index=data.index, name='momentum_strength')
+        return pd.Series(momentum_strength, index=data.index, name="momentum_strength")
 
-    def _generate_trend_persistence(self, data: pd.DataFrame, window: int = 10) -> pd.Series:
+    def _generate_trend_persistence(
+        self, data: pd.DataFrame, window: int = 10
+    ) -> pd.Series:
         """
         Generate trend persistence indicator for Sideways regime detection.
 
@@ -343,10 +383,10 @@ class BaseObservationGenerator(ObservationComponent):
         Returns:
             Series with trend persistence values
         """
-        if 'log_return' not in data.columns:
+        if "log_return" not in data.columns:
             log_returns = self._generate_log_return(data)
         else:
-            log_returns = data['log_return']
+            log_returns = data["log_return"]
 
         # Calculate directional consistency over rolling window
         rolling_returns = log_returns.rolling(window=window)
@@ -359,13 +399,19 @@ class BaseObservationGenerator(ObservationComponent):
             valid_mask = ~np.isnan(returns)
             if np.sum(valid_mask) < 3:
                 return 0.0
-            return np.corrcoef(returns[valid_mask], time_index[valid_mask])[0, 1] if np.sum(valid_mask) > 1 else 0.0
+            return (
+                np.corrcoef(returns[valid_mask], time_index[valid_mask])[0, 1]
+                if np.sum(valid_mask) > 1
+                else 0.0
+            )
 
         persistence = rolling_returns.apply(calc_trend_correlation, raw=False)
 
-        return pd.Series(persistence, index=data.index, name='trend_persistence')
+        return pd.Series(persistence, index=data.index, name="trend_persistence")
 
-    def _generate_volatility_context(self, data: pd.DataFrame, vol_window: int = 20, context_window: int = 60) -> pd.Series:
+    def _generate_volatility_context(
+        self, data: pd.DataFrame, vol_window: int = 20, context_window: int = 60
+    ) -> pd.Series:
         """
         Generate volatility context indicator for Crisis regime detection.
 
@@ -380,10 +426,10 @@ class BaseObservationGenerator(ObservationComponent):
         Returns:
             Series with volatility context values (volatility shock ratio)
         """
-        if 'log_return' not in data.columns:
+        if "log_return" not in data.columns:
             log_returns = self._generate_log_return(data)
         else:
-            log_returns = data['log_return']
+            log_returns = data["log_return"]
 
         # Current volatility (short-term)
         current_vol = log_returns.rolling(window=vol_window).std()
@@ -394,9 +440,11 @@ class BaseObservationGenerator(ObservationComponent):
         # Volatility shock ratio: current vol relative to historical context
         vol_shock_ratio = current_vol / historical_vol
 
-        return pd.Series(vol_shock_ratio, index=data.index, name='volatility_context')
+        return pd.Series(vol_shock_ratio, index=data.index, name="volatility_context")
 
-    def _generate_directional_consistency(self, data: pd.DataFrame, window: int = 15) -> pd.Series:
+    def _generate_directional_consistency(
+        self, data: pd.DataFrame, window: int = 15
+    ) -> pd.Series:
         """
         Generate directional consistency indicator for regime characterization.
 
@@ -410,10 +458,10 @@ class BaseObservationGenerator(ObservationComponent):
         Returns:
             Series with directional consistency values (0-1)
         """
-        if 'log_return' not in data.columns:
+        if "log_return" not in data.columns:
             log_returns = self._generate_log_return(data)
         else:
-            log_returns = data['log_return']
+            log_returns = data["log_return"]
 
         # Calculate sign of returns
         return_signs = np.sign(log_returns)
@@ -422,7 +470,7 @@ class BaseObservationGenerator(ObservationComponent):
         rolling_signs = return_signs.rolling(window=window)
         consistency = rolling_signs.mean().abs()
 
-        return pd.Series(consistency, index=data.index, name='directional_consistency')
+        return pd.Series(consistency, index=data.index, name="directional_consistency")
 
     # Missing methods expected by tests
 
@@ -437,7 +485,7 @@ class BaseObservationGenerator(ObservationComponent):
             Log returns series
         """
         log_returns = np.log(prices / prices.shift(1))
-        return pd.Series(log_returns.dropna(), name='log_return')
+        return pd.Series(log_returns.dropna(), name="log_return")
 
     def _calculate_volatility(self, returns: pd.Series, window: int) -> pd.Series:
         """
@@ -451,7 +499,7 @@ class BaseObservationGenerator(ObservationComponent):
             Volatility series
         """
         volatility = returns.rolling(window=window).std()
-        return pd.Series(volatility, index=returns.index, name='volatility')
+        return pd.Series(volatility, index=returns.index, name="volatility")
 
     def add_feature(self, feature_name: str, **kwargs):
         """
@@ -465,7 +513,7 @@ class BaseObservationGenerator(ObservationComponent):
             raise ValueError(f"Feature '{feature_name}' already exists")
 
         # Validate feature type
-        valid_features = ['volatility', 'momentum', 'log_return']
+        valid_features = ["volatility", "momentum", "log_return"]
         if feature_name not in valid_features:
             raise ValueError(f"Unknown feature type: {feature_name}")
 
@@ -481,7 +529,9 @@ class BaseObservationGenerator(ObservationComponent):
         if feature_name in self.features:
             del self.features[feature_name]
 
-    def plot(self, observations: pd.DataFrame = None, features: List[str] = None, **kwargs) -> plt.Figure:
+    def plot(
+        self, observations: pd.DataFrame = None, features: List[str] = None, **kwargs
+    ) -> plt.Figure:
         """
         Generate visualization of observations.
 
@@ -498,10 +548,17 @@ class BaseObservationGenerator(ObservationComponent):
 
         if observations is None:
             fig, ax = plt.subplots(figsize=(10, 6))
-            ax.text(0.5, 0.5, 'No observations generated yet', ha='center', va='center', fontsize=14)
+            ax.text(
+                0.5,
+                0.5,
+                "No observations generated yet",
+                ha="center",
+                va="center",
+                fontsize=14,
+            )
             ax.set_xlim(0, 1)
             ax.set_ylim(0, 1)
-            ax.axis('off')
+            ax.axis("off")
             return fig
 
         # Validate features if specified
@@ -514,15 +571,25 @@ class BaseObservationGenerator(ObservationComponent):
         if features:
             observation_cols = features
         else:
-            observation_cols = [col for col in observations.columns
-                               if col not in ['open', 'high', 'low', 'close', 'volume']]
+            observation_cols = [
+                col
+                for col in observations.columns
+                if col not in ["open", "high", "low", "close", "volume"]
+            ]
 
         if not observation_cols:
             fig, ax = plt.subplots(figsize=(10, 6))
-            ax.text(0.5, 0.5, 'No observation columns to plot', ha='center', va='center', fontsize=14)
+            ax.text(
+                0.5,
+                0.5,
+                "No observation columns to plot",
+                ha="center",
+                va="center",
+                fontsize=14,
+            )
             ax.set_xlim(0, 1)
             ax.set_ylim(0, 1)
-            ax.axis('off')
+            ax.axis("off")
             return fig
 
         n_cols = min(len(observation_cols), 4)  # Max 4 subplots
@@ -537,7 +604,7 @@ class BaseObservationGenerator(ObservationComponent):
 
             if len(data) > 0:
                 ax.plot(data.index, data.values, label=col)
-                ax.set_title(f'Observation: {col}')
+                ax.set_title(f"Observation: {col}")
                 ax.set_ylabel(col)
                 ax.grid(True, alpha=0.3)
                 ax.legend()

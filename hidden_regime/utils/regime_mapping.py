@@ -6,57 +6,58 @@ labels and colors, ensuring consistency between financial characterization and
 visualization systems.
 """
 
-from typing import Dict, List, Tuple, Optional
-import numpy as np
-from ..financial.regime_characterizer import RegimeProfile, RegimeType
+from typing import Dict, List, Optional, Tuple
 
+import numpy as np
+
+from ..financial.regime_characterizer import RegimeProfile, RegimeType
 
 # Base color mapping for regime types
 REGIME_TYPE_COLORS = {
-    RegimeType.BULLISH: '#2E8B57',      # Sea Green
-    RegimeType.BEARISH: '#DC143C',      # Crimson Red
-    RegimeType.SIDEWAYS: '#DAA520',     # Golden Rod
-    RegimeType.CRISIS: '#8B0000',       # Dark Red
-    RegimeType.MIXED: '#9370DB'         # Medium Purple
+    RegimeType.BULLISH: "#2E8B57",  # Sea Green
+    RegimeType.BEARISH: "#DC143C",  # Crimson Red
+    RegimeType.SIDEWAYS: "#DAA520",  # Golden Rod
+    RegimeType.CRISIS: "#8B0000",  # Dark Red
+    RegimeType.MIXED: "#9370DB",  # Medium Purple
 }
 
 # Enhanced color variations for multiple regimes of same type
 REGIME_COLOR_VARIATIONS = {
     RegimeType.BULLISH: [
-        '#228B22',  # Forest Green (strong)
-        '#32CD32',  # Lime Green (moderate)
-        '#90EE90',  # Light Green (weak)
-        '#006400',  # Dark Green (very strong)
-        '#9ACD32'   # Yellow Green (emerging)
+        "#228B22",  # Forest Green (strong)
+        "#32CD32",  # Lime Green (moderate)
+        "#90EE90",  # Light Green (weak)
+        "#006400",  # Dark Green (very strong)
+        "#9ACD32",  # Yellow Green (emerging)
     ],
     RegimeType.BEARISH: [
-        '#B22222',  # Fire Brick (strong)
-        '#CD5C5C',  # Indian Red (moderate)
-        '#F08080',  # Light Coral (weak)
-        '#8B0000',  # Dark Red (very strong)
-        '#A0522D'   # Sienna (emerging)
+        "#B22222",  # Fire Brick (strong)
+        "#CD5C5C",  # Indian Red (moderate)
+        "#F08080",  # Light Coral (weak)
+        "#8B0000",  # Dark Red (very strong)
+        "#A0522D",  # Sienna (emerging)
     ],
     RegimeType.SIDEWAYS: [
-        '#B8860B',  # Dark Golden Rod
-        '#DAA520',  # Golden Rod
-        '#F0E68C',  # Khaki
-        '#D2691E',  # Chocolate
-        '#BDB76B'   # Dark Khaki
+        "#B8860B",  # Dark Golden Rod
+        "#DAA520",  # Golden Rod
+        "#F0E68C",  # Khaki
+        "#D2691E",  # Chocolate
+        "#BDB76B",  # Dark Khaki
     ],
     RegimeType.CRISIS: [
-        '#8B0000',  # Dark Red
-        '#800000',  # Maroon
-        '#DC143C',  # Crimson
-        '#B22222',  # Fire Brick
-        '#CD5C5C'   # Indian Red
+        "#8B0000",  # Dark Red
+        "#800000",  # Maroon
+        "#DC143C",  # Crimson
+        "#B22222",  # Fire Brick
+        "#CD5C5C",  # Indian Red
     ],
     RegimeType.MIXED: [
-        '#9370DB',  # Medium Purple
-        '#8A2BE2',  # Blue Violet
-        '#9932CC',  # Dark Orchid
-        '#BA55D3',  # Medium Orchid
-        '#DDA0DD'   # Plum
-    ]
+        "#9370DB",  # Medium Purple
+        "#8A2BE2",  # Blue Violet
+        "#9932CC",  # Dark Orchid
+        "#BA55D3",  # Medium Orchid
+        "#DDA0DD",  # Plum
+    ],
 }
 
 
@@ -72,12 +73,12 @@ def create_regime_mapping(regime_profiles: Dict[int, RegimeProfile]) -> Dict[str
     """
     if not regime_profiles:
         return {
-            'labels': [],
-            'colors': [],
-            'state_to_label': {},
-            'state_to_color': {},
-            'regime_types': [],
-            'metadata': {}
+            "labels": [],
+            "colors": [],
+            "state_to_label": {},
+            "state_to_color": {},
+            "regime_types": [],
+            "metadata": {},
         }
 
     # Group regimes by type for intelligent labeling
@@ -134,16 +135,16 @@ def create_regime_mapping(regime_profiles: Dict[int, RegimeProfile]) -> Dict[str
         ordered_types.append(regime_profiles[state_id].regime_type)
 
     return {
-        'labels': ordered_labels,
-        'colors': ordered_colors,
-        'state_to_label': state_to_label,
-        'state_to_color': state_to_color,
-        'regime_types': ordered_types,
-        'metadata': {
-            'n_states': len(regime_profiles),
-            'regimes_by_type': {str(k): len(v) for k, v in regimes_by_type.items()},
-            'has_multiple_same_type': any(len(v) > 1 for v in regimes_by_type.values())
-        }
+        "labels": ordered_labels,
+        "colors": ordered_colors,
+        "state_to_label": state_to_label,
+        "state_to_color": state_to_color,
+        "regime_types": ordered_types,
+        "metadata": {
+            "n_states": len(regime_profiles),
+            "regimes_by_type": {str(k): len(v) for k, v in regimes_by_type.items()},
+            "has_multiple_same_type": any(len(v) > 1 for v in regimes_by_type.values()),
+        },
     }
 
 
@@ -196,7 +197,9 @@ def _create_multi_regime_label(profile: RegimeProfile, index: int, total: int) -
 
 def _get_regime_color_variation(regime_type: RegimeType, index: int) -> str:
     """Get color variation for multiple regimes of same type."""
-    variations = REGIME_COLOR_VARIATIONS.get(regime_type, [REGIME_TYPE_COLORS[regime_type]])
+    variations = REGIME_COLOR_VARIATIONS.get(
+        regime_type, [REGIME_TYPE_COLORS[regime_type]]
+    )
 
     if index < len(variations):
         return variations[index]
@@ -205,7 +208,9 @@ def _get_regime_color_variation(regime_type: RegimeType, index: int) -> str:
         return REGIME_TYPE_COLORS[regime_type]
 
 
-def get_regime_labels_from_profiles(regime_profiles: Dict[int, RegimeProfile]) -> List[str]:
+def get_regime_labels_from_profiles(
+    regime_profiles: Dict[int, RegimeProfile],
+) -> List[str]:
     """
     Get ordered regime labels from RegimeProfile objects.
 
@@ -216,10 +221,12 @@ def get_regime_labels_from_profiles(regime_profiles: Dict[int, RegimeProfile]) -
         List of regime labels ordered by state ID
     """
     mapping = create_regime_mapping(regime_profiles)
-    return mapping['labels']
+    return mapping["labels"]
 
 
-def get_regime_colors_from_profiles(regime_profiles: Dict[int, RegimeProfile]) -> List[str]:
+def get_regime_colors_from_profiles(
+    regime_profiles: Dict[int, RegimeProfile],
+) -> List[str]:
     """
     Get ordered regime colors from RegimeProfile objects.
 
@@ -230,11 +237,12 @@ def get_regime_colors_from_profiles(regime_profiles: Dict[int, RegimeProfile]) -
         List of regime colors ordered by state ID
     """
     mapping = create_regime_mapping(regime_profiles)
-    return mapping['colors']
+    return mapping["colors"]
 
 
-def get_regime_mapping_for_visualization(regime_profiles: Optional[Dict[int, RegimeProfile]],
-                                       n_states: int) -> Tuple[List[str], List[str]]:
+def get_regime_mapping_for_visualization(
+    regime_profiles: Optional[Dict[int, RegimeProfile]], n_states: int
+) -> Tuple[List[str], List[str]]:
     """
     Get regime labels and colors suitable for visualization functions.
 
@@ -251,10 +259,11 @@ def get_regime_mapping_for_visualization(regime_profiles: Optional[Dict[int, Reg
     if regime_profiles and len(regime_profiles) == n_states:
         # Use financial characterization
         mapping = create_regime_mapping(regime_profiles)
-        return mapping['labels'], mapping['colors']
+        return mapping["labels"], mapping["colors"]
     else:
         # Fallback to generic labels (backward compatibility)
-        from ..visualization.plotting import get_regime_names, get_regime_colors
+        from ..visualization.plotting import get_regime_colors, get_regime_names
+
         labels = get_regime_names(n_states)
         colors = get_regime_colors(n_states)
         return labels, colors
@@ -277,7 +286,7 @@ def format_regime_summary(regime_profiles: Dict[int, RegimeProfile]) -> str:
 
     # Count regimes by type
     type_counts = {}
-    for regime_type in mapping['regime_types']:
+    for regime_type in mapping["regime_types"]:
         type_name = regime_type.value.title()
         type_counts[type_name] = type_counts.get(type_name, 0) + 1
 

@@ -5,14 +5,19 @@ Replaces naive state number assumptions with intelligent signal generation
 based on actual financial regime characteristics and market behavior.
 """
 
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional, Tuple, Literal
 from enum import Enum
+from typing import Dict, List, Literal, Optional, Tuple
 
-from .regime_characterizer import FinancialRegimeCharacterizer, RegimeProfile, RegimeType
+import numpy as np
+import pandas as pd
+
 from ..simulation.signal_generators import SignalGenerator, SignalType
 from ..utils.exceptions import AnalysisError
+from .regime_characterizer import (
+    FinancialRegimeCharacterizer,
+    RegimeProfile,
+    RegimeType,
+)
 
 
 class FinancialSignalGenerator(SignalGenerator):
@@ -23,10 +28,14 @@ class FinancialSignalGenerator(SignalGenerator):
     signal generation based on actual regime behavior analysis.
     """
 
-    def __init__(self,
-                 strategy_type: Literal['regime_following', 'regime_contrarian', 'confidence_weighted'] = 'regime_following',
-                 min_confidence: float = 0.3,
-                 position_scaling: bool = True):
+    def __init__(
+        self,
+        strategy_type: Literal[
+            "regime_following", "regime_contrarian", "confidence_weighted"
+        ] = "regime_following",
+        min_confidence: float = 0.3,
+        position_scaling: bool = True,
+    ):
         """
         Initialize financial signal generator.
 
@@ -35,16 +44,16 @@ class FinancialSignalGenerator(SignalGenerator):
             min_confidence: Minimum regime confidence for non-zero signals
             position_scaling: Whether to scale position size by regime strength
         """
-        super().__init__(f'financial_{strategy_type}')
+        super().__init__(f"financial_{strategy_type}")
         self.strategy_type = strategy_type
         self.min_confidence = min_confidence
         self.position_scaling = position_scaling
         self.regime_characterizer = FinancialRegimeCharacterizer()
         self.regime_profiles: Optional[Dict[int, RegimeProfile]] = None
 
-    def generate_signals(self,
-                        price_data: pd.DataFrame,
-                        additional_data: Optional[pd.DataFrame] = None) -> pd.Series:
+    def generate_signals(
+        self, price_data: pd.DataFrame, additional_data: Optional[pd.DataFrame] = None
+    ) -> pd.Series:
         """
         Generate trading signals based on regime financial characteristics.
 
@@ -58,8 +67,10 @@ class FinancialSignalGenerator(SignalGenerator):
         if not self.validate_data(price_data):
             raise ValueError("Invalid price data for financial signal generation")
 
-        if additional_data is None or 'predicted_state' not in additional_data.columns:
-            raise ValueError("Financial signal generator requires regime predictions in additional_data")
+        if additional_data is None or "predicted_state" not in additional_data.columns:
+            raise ValueError(
+                "Financial signal generator requires regime predictions in additional_data"
+            )
 
         # Characterize regimes if not done already
         if self.regime_profiles is None:
@@ -74,20 +85,24 @@ class FinancialSignalGenerator(SignalGenerator):
 
         return signals
 
-    def _generate_characteristic_based_signals(self,
-                                             price_data: pd.DataFrame,
-                                             regime_data: pd.DataFrame,
-                                             regime_profiles: Dict[int, RegimeProfile]) -> pd.Series:
+    def _generate_characteristic_based_signals(
+        self,
+        price_data: pd.DataFrame,
+        regime_data: pd.DataFrame,
+        regime_profiles: Dict[int, RegimeProfile],
+    ) -> pd.Series:
         """Generate signals based on actual regime financial characteristics."""
 
         signals = pd.Series(SignalType.HOLD.value, index=price_data.index)
 
         # Align data
-        aligned_data = price_data.join(regime_data[['predicted_state', 'confidence']], how='inner')
+        aligned_data = price_data.join(
+            regime_data[["predicted_state", "confidence"]], how="inner"
+        )
 
         for i, (idx, row) in enumerate(aligned_data.iterrows()):
-            regime_state = int(row['predicted_state'])
-            confidence = row.get('confidence', 1.0)
+            regime_state = int(row["predicted_state"])
+            confidence = row.get("confidence", 1.0)
 
             if regime_state not in regime_profiles:
                 continue
@@ -112,12 +127,16 @@ class FinancialSignalGenerator(SignalGenerator):
         if profile.regime_type == RegimeType.BULLISH:
             # Strong positive signal based on regime strength
             # Scale by annualized return and regime strength
-            signal_strength = min(1.0, profile.annualized_return / 0.20)  # Normalize by 20% return
+            signal_strength = min(
+                1.0, profile.annualized_return / 0.20
+            )  # Normalize by 20% return
             return signal_strength * profile.regime_strength
 
         elif profile.regime_type == RegimeType.BEARISH:
             # Strong negative signal based on regime characteristics
-            signal_strength = min(1.0, abs(profile.annualized_return) / 0.15)  # Normalize by 15% loss
+            signal_strength = min(
+                1.0, abs(profile.annualized_return) / 0.15
+            )  # Normalize by 15% loss
             return -signal_strength * profile.regime_strength
 
         elif profile.regime_type == RegimeType.CRISIS:
@@ -135,10 +154,9 @@ class FinancialSignalGenerator(SignalGenerator):
             else:
                 return -0.2 * profile.regime_strength
 
-    def _apply_strategy_and_confidence(self,
-                                     base_signal: float,
-                                     profile: RegimeProfile,
-                                     confidence: float) -> float:
+    def _apply_strategy_and_confidence(
+        self, base_signal: float, profile: RegimeProfile, confidence: float
+    ) -> float:
         """Apply strategy type and confidence weighting to base signal."""
 
         # Apply minimum confidence threshold
@@ -146,14 +164,14 @@ class FinancialSignalGenerator(SignalGenerator):
             return 0.0
 
         # Apply strategy type
-        if self.strategy_type == 'regime_following':
+        if self.strategy_type == "regime_following":
             strategy_signal = base_signal
 
-        elif self.strategy_type == 'regime_contrarian':
+        elif self.strategy_type == "regime_contrarian":
             # Contrarian: opposite of regime signal, but scaled down
             strategy_signal = -base_signal * 0.5
 
-        elif self.strategy_type == 'confidence_weighted':
+        elif self.strategy_type == "confidence_weighted":
             # Weight signal by confidence and regime characteristics
             regime_confidence_weight = (confidence + profile.confidence_score) / 2
             strategy_signal = base_signal * regime_confidence_weight
@@ -167,7 +185,9 @@ class FinancialSignalGenerator(SignalGenerator):
             final_signal = strategy_signal * confidence
         else:
             # Binary signals based on sign
-            final_signal = np.sign(strategy_signal) if abs(strategy_signal) > 0.1 else 0.0
+            final_signal = (
+                np.sign(strategy_signal) if abs(strategy_signal) > 0.1 else 0.0
+            )
 
         # Ensure signal is in valid range [-1, 1]
         return np.clip(final_signal, -1.0, 1.0)
@@ -180,7 +200,7 @@ class FinancialSignalGenerator(SignalGenerator):
 
         summary_lines = [
             f"Financial Signal Generation Summary ({self.strategy_type}):",
-            "=" * 60
+            "=" * 60,
         ]
 
         for state_id, profile in self.regime_profiles.items():
@@ -197,14 +217,16 @@ class FinancialSignalGenerator(SignalGenerator):
             else:
                 signal_desc = "Hold/Neutral"
 
-            summary_lines.extend([
-                f"\nState {state_id} ({profile.regime_type.value}):",
-                f"  Financial Signal: {signal_desc} ({base_signal:.2f})",
-                f"  Return: {profile.annualized_return:.1%}",
-                f"  Volatility: {profile.annualized_volatility:.1%}",
-                f"  Regime Strength: {profile.regime_strength:.2f}",
-                f"  Confidence: {profile.confidence_score:.2f}"
-            ])
+            summary_lines.extend(
+                [
+                    f"\nState {state_id} ({profile.regime_type.value}):",
+                    f"  Financial Signal: {signal_desc} ({base_signal:.2f})",
+                    f"  Return: {profile.annualized_return:.1%}",
+                    f"  Volatility: {profile.annualized_volatility:.1%}",
+                    f"  Regime Strength: {profile.regime_strength:.2f}",
+                    f"  Confidence: {profile.confidence_score:.2f}",
+                ]
+            )
 
         return "\n".join(summary_lines)
 
@@ -217,20 +239,20 @@ class AdaptiveSignalGenerator(SignalGenerator):
     """
 
     def __init__(self, min_confidence: float = 0.4):
-        super().__init__('adaptive_financial')
+        super().__init__("adaptive_financial")
         self.min_confidence = min_confidence
         self.regime_characterizer = FinancialRegimeCharacterizer()
         self.regime_profiles: Optional[Dict[int, RegimeProfile]] = None
 
-    def generate_signals(self,
-                        price_data: pd.DataFrame,
-                        additional_data: Optional[pd.DataFrame] = None) -> pd.Series:
+    def generate_signals(
+        self, price_data: pd.DataFrame, additional_data: Optional[pd.DataFrame] = None
+    ) -> pd.Series:
         """Generate adaptive signals based on regime-specific strategies."""
 
         if not self.validate_data(price_data):
             raise ValueError("Invalid price data for adaptive signal generation")
 
-        if additional_data is None or 'predicted_state' not in additional_data.columns:
+        if additional_data is None or "predicted_state" not in additional_data.columns:
             raise ValueError("Adaptive signal generator requires regime predictions")
 
         # Characterize regimes
@@ -246,18 +268,22 @@ class AdaptiveSignalGenerator(SignalGenerator):
 
         return signals
 
-    def _generate_adaptive_signals(self,
-                                  price_data: pd.DataFrame,
-                                  regime_data: pd.DataFrame,
-                                  regime_profiles: Dict[int, RegimeProfile]) -> pd.Series:
+    def _generate_adaptive_signals(
+        self,
+        price_data: pd.DataFrame,
+        regime_data: pd.DataFrame,
+        regime_profiles: Dict[int, RegimeProfile],
+    ) -> pd.Series:
         """Generate signals with regime-specific adaptive strategies."""
 
         signals = pd.Series(0.0, index=price_data.index)
-        aligned_data = price_data.join(regime_data[['predicted_state', 'confidence']], how='inner')
+        aligned_data = price_data.join(
+            regime_data[["predicted_state", "confidence"]], how="inner"
+        )
 
         for i, (idx, row) in enumerate(aligned_data.iterrows()):
-            regime_state = int(row['predicted_state'])
-            confidence = row.get('confidence', 1.0)
+            regime_state = int(row["predicted_state"])
+            confidence = row.get("confidence", 1.0)
 
             if regime_state not in regime_profiles or confidence < self.min_confidence:
                 continue
@@ -275,7 +301,9 @@ class AdaptiveSignalGenerator(SignalGenerator):
 
             elif profile.regime_type == RegimeType.SIDEWAYS:
                 # Mean reversion for sideways markets
-                signal = self._mean_reversion_signal(profile, confidence, i, aligned_data)
+                signal = self._mean_reversion_signal(
+                    profile, confidence, i, aligned_data
+                )
 
             elif profile.regime_type == RegimeType.CRISIS:
                 # Risk-off for crisis periods
@@ -289,7 +317,9 @@ class AdaptiveSignalGenerator(SignalGenerator):
 
         return signals
 
-    def _trend_following_signal(self, profile: RegimeProfile, confidence: float) -> float:
+    def _trend_following_signal(
+        self, profile: RegimeProfile, confidence: float
+    ) -> float:
         """Generate trend-following signal for bullish regimes."""
         base_strength = min(1.0, profile.annualized_return / 0.25)
         return base_strength * confidence * profile.regime_strength
@@ -300,17 +330,21 @@ class AdaptiveSignalGenerator(SignalGenerator):
         downside_strength = min(1.0, abs(profile.annualized_return) / 0.20)
         return -downside_strength * confidence * profile.regime_strength
 
-    def _mean_reversion_signal(self,
-                              profile: RegimeProfile,
-                              confidence: float,
-                              current_idx: int,
-                              data: pd.DataFrame) -> float:
+    def _mean_reversion_signal(
+        self,
+        profile: RegimeProfile,
+        confidence: float,
+        current_idx: int,
+        data: pd.DataFrame,
+    ) -> float:
         """Generate mean reversion signal for sideways regimes."""
         # For sideways markets, use recent price action for mean reversion
         if current_idx < 5:
             return 0.0
 
-        recent_returns = data['log_return'].iloc[max(0, current_idx-4):current_idx+1]
+        recent_returns = data["log_return"].iloc[
+            max(0, current_idx - 4) : current_idx + 1
+        ]
         if len(recent_returns) < 3:
             return 0.0
 

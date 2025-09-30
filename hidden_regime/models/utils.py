@@ -10,7 +10,6 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-
 from sklearn.cluster import KMeans
 
 
@@ -127,9 +126,7 @@ def initialize_parameters_kmeans(
     outlier_mask = np.abs(returns_pct) <= outlier_threshold_pct
 
     if outlier_mask.sum() < n_states * 5:  # Need minimum data per state
-        warnings.warn(
-            "Too many outliers removed, using less aggressive filtering"
-        )
+        warnings.warn("Too many outliers removed, using less aggressive filtering")
         outlier_threshold_pct = 0.25  # 25% threshold as fallback
         outlier_mask = np.abs(returns_pct) <= outlier_threshold_pct
 
@@ -203,7 +200,9 @@ def initialize_parameters_kmeans(
     # STEP 5: Apply financial domain constraints to emission means
     # Convert means to percentage space for constraint application
     raw_means_pct = np.exp([mean for _, mean in cluster_means]) - 1
-    sorted_cluster_info = sorted(cluster_means, key=lambda x: x[1])  # Sort by log return
+    sorted_cluster_info = sorted(
+        cluster_means, key=lambda x: x[1]
+    )  # Sort by log return
 
     # Define financial constraints in percentage space
     constrained_means_pct = []
@@ -267,7 +266,7 @@ def _validate_financial_constraints(emission_params: np.ndarray, n_states: int) 
 
         # Check gaps between adjacent regimes
         if i > 0:
-            gap_pct = means_pct[i] - means_pct[i-1]
+            gap_pct = means_pct[i] - means_pct[i - 1]
             if gap_pct > 0.03:  # >3% gap between regimes is large
                 warnings.warn(
                     f"Large gap between regimes {i-1} and {i}: {gap_pct:.2%} daily return difference"

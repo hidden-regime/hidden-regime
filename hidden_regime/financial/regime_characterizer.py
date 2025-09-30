@@ -6,22 +6,24 @@ to determine their market behavior, replacing naive state number assumptions
 with data-driven regime interpretation.
 """
 
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Any, Tuple, Literal
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Dict, List, Literal, Tuple
+
+import numpy as np
+import pandas as pd
 
 from ..utils.exceptions import AnalysisError
 
 
 class RegimeType(Enum):
     """Financial regime types based on actual market behavior."""
-    BULLISH = "bullish"      # Strong positive returns, moderate volatility
-    BEARISH = "bearish"      # Negative returns, often high volatility
-    SIDEWAYS = "sideways"    # Low returns, typically low volatility
-    CRISIS = "crisis"        # Extreme volatility, negative returns
-    MIXED = "mixed"          # Unclear financial characteristics
+
+    BULLISH = "bullish"  # Strong positive returns, moderate volatility
+    BEARISH = "bearish"  # Negative returns, often high volatility
+    SIDEWAYS = "sideways"  # Low returns, typically low volatility
+    CRISIS = "crisis"  # Extreme volatility, negative returns
+    MIXED = "mixed"  # Unclear financial characteristics
 
 
 @dataclass
@@ -31,6 +33,7 @@ class RegimeProfile:
 
     Contains actual financial characteristics rather than arbitrary state labels.
     """
+
     state_id: int
     regime_type: RegimeType
     mean_daily_return: float
@@ -60,10 +63,12 @@ class FinancialRegimeCharacterizer:
     analysis of regime behavior in terms of returns, volatility, and persistence.
     """
 
-    def __init__(self,
-                 min_regime_days: int = 5,
-                 return_column: str = 'log_return',
-                 price_column: str = 'close'):
+    def __init__(
+        self,
+        min_regime_days: int = 5,
+        return_column: str = "log_return",
+        price_column: str = "close",
+    ):
         """
         Initialize financial regime characterizer.
 
@@ -76,9 +81,9 @@ class FinancialRegimeCharacterizer:
         self.return_column = return_column
         self.price_column = price_column
 
-    def characterize_regimes(self,
-                           regime_data: pd.DataFrame,
-                           price_data: pd.DataFrame) -> Dict[int, RegimeProfile]:
+    def characterize_regimes(
+        self, regime_data: pd.DataFrame, price_data: pd.DataFrame
+    ) -> Dict[int, RegimeProfile]:
         """
         Analyze the financial characteristics of each detected regime.
 
@@ -89,30 +94,36 @@ class FinancialRegimeCharacterizer:
         Returns:
             Dictionary mapping state IDs to RegimeProfile objects
         """
-        if 'predicted_state' not in regime_data.columns:
+        if "predicted_state" not in regime_data.columns:
             raise AnalysisError("regime_data must contain 'predicted_state' column")
 
         if self.return_column not in price_data.columns:
-            raise AnalysisError(f"price_data must contain '{self.return_column}' column")
+            raise AnalysisError(
+                f"price_data must contain '{self.return_column}' column"
+            )
 
         # Align data
-        aligned_data = price_data.join(regime_data[['predicted_state', 'confidence']], how='inner')
+        aligned_data = price_data.join(
+            regime_data[["predicted_state", "confidence"]], how="inner"
+        )
 
         if len(aligned_data) == 0:
             raise AnalysisError("No aligned data between price and regime predictions")
 
         # Get unique states
-        states = sorted(aligned_data['predicted_state'].unique())
+        states = sorted(aligned_data["predicted_state"].unique())
         n_states = len(states)
 
         regime_profiles = {}
 
         for state in states:
             # Extract data for this regime
-            state_data = aligned_data[aligned_data['predicted_state'] == state]
+            state_data = aligned_data[aligned_data["predicted_state"] == state]
 
             if len(state_data) < self.min_regime_days:
-                print(f"Warning: State {state} has only {len(state_data)} days, may be unreliable")
+                print(
+                    f"Warning: State {state} has only {len(state_data)} days, may be unreliable"
+                )
 
             # Calculate financial characteristics
             profile = self._analyze_regime_state(state, state_data, aligned_data)
@@ -123,10 +134,9 @@ class FinancialRegimeCharacterizer:
 
         return regime_profiles
 
-    def _analyze_regime_state(self,
-                            state_id: int,
-                            state_data: pd.DataFrame,
-                            full_data: pd.DataFrame) -> RegimeProfile:
+    def _analyze_regime_state(
+        self, state_id: int, state_data: pd.DataFrame, full_data: pd.DataFrame
+    ) -> RegimeProfile:
         """Analyze financial characteristics of a single regime state."""
 
         returns = state_data[self.return_column].dropna()
@@ -151,7 +161,9 @@ class FinancialRegimeCharacterizer:
         # Regime persistence analysis
         persistence_days = self._calculate_persistence(state_data, full_data, state_id)
         avg_duration = self._calculate_average_duration(full_data, state_id)
-        transition_volatility = self._calculate_transition_volatility(full_data, state_id)
+        transition_volatility = self._calculate_transition_volatility(
+            full_data, state_id
+        )
 
         # Classify regime type
         regime_type = self._classify_regime_type(
@@ -178,14 +190,16 @@ class FinancialRegimeCharacterizer:
             return_skewness=return_skewness,
             return_kurtosis=return_kurtosis,
             avg_duration=avg_duration,
-            transition_volatility=transition_volatility
+            transition_volatility=transition_volatility,
         )
 
-    def _classify_regime_type(self,
-                            mean_return: float,
-                            volatility: float,
-                            win_rate: float,
-                            max_drawdown: float) -> RegimeType:
+    def _classify_regime_type(
+        self,
+        mean_return: float,
+        volatility: float,
+        win_rate: float,
+        max_drawdown: float,
+    ) -> RegimeType:
         """
         Classify regime based on financial characteristics.
 
@@ -214,14 +228,13 @@ class FinancialRegimeCharacterizer:
         # Mixed: doesn't fit clear patterns
         return RegimeType.MIXED
 
-    def _calculate_persistence(self,
-                             state_data: pd.DataFrame,
-                             full_data: pd.DataFrame,
-                             state_id: int) -> float:
+    def _calculate_persistence(
+        self, state_data: pd.DataFrame, full_data: pd.DataFrame, state_id: int
+    ) -> float:
         """Calculate average persistence (days before switching) for this regime."""
 
         # Find regime transitions
-        regime_series = full_data['predicted_state']
+        regime_series = full_data["predicted_state"]
         transitions = []
         current_regime = regime_series.iloc[0]
         start_idx = 0
@@ -241,25 +254,33 @@ class FinancialRegimeCharacterizer:
 
         return np.mean(transitions) if transitions else 1.0
 
-    def _calculate_average_duration(self, full_data: pd.DataFrame, state_id: int) -> float:
+    def _calculate_average_duration(
+        self, full_data: pd.DataFrame, state_id: int
+    ) -> float:
         """Calculate average duration of regime episodes."""
-        return self._calculate_persistence(full_data[full_data['predicted_state'] == state_id],
-                                         full_data, state_id)
+        return self._calculate_persistence(
+            full_data[full_data["predicted_state"] == state_id], full_data, state_id
+        )
 
-    def _calculate_transition_volatility(self, full_data: pd.DataFrame, state_id: int) -> float:
+    def _calculate_transition_volatility(
+        self, full_data: pd.DataFrame, state_id: int
+    ) -> float:
         """Calculate volatility around regime transitions."""
 
-        regime_series = full_data['predicted_state']
+        regime_series = full_data["predicted_state"]
         returns = full_data[self.return_column]
 
         # Find transitions into this regime
         transition_returns = []
 
         for i in range(1, len(regime_series)):
-            if regime_series.iloc[i] == state_id and regime_series.iloc[i-1] != state_id:
+            if (
+                regime_series.iloc[i] == state_id
+                and regime_series.iloc[i - 1] != state_id
+            ):
                 # Transition into this regime - look at surrounding volatility
-                start_idx = max(0, i-2)
-                end_idx = min(len(returns), i+3)
+                start_idx = max(0, i - 2)
+                end_idx = min(len(returns), i + 3)
                 transition_period_returns = returns.iloc[start_idx:end_idx]
                 transition_returns.extend(transition_period_returns.tolist())
 
@@ -278,9 +299,9 @@ class FinancialRegimeCharacterizer:
         drawdown = (cumulative - running_max) / running_max
         return drawdown.min()
 
-    def _calculate_classification_confidence(self,
-                                           returns: pd.Series,
-                                           regime_type: RegimeType) -> float:
+    def _calculate_classification_confidence(
+        self, returns: pd.Series, regime_type: RegimeType
+    ) -> float:
         """
         Calculate confidence in regime classification.
 
@@ -319,7 +340,9 @@ class FinancialRegimeCharacterizer:
         else:  # MIXED
             return 0.5  # Medium confidence for mixed regimes
 
-    def _calculate_regime_strengths(self, regime_profiles: Dict[int, RegimeProfile]) -> None:
+    def _calculate_regime_strengths(
+        self, regime_profiles: Dict[int, RegimeProfile]
+    ) -> None:
         """
         Calculate relative strength of each regime compared to others.
 
@@ -362,20 +385,24 @@ class FinancialRegimeCharacterizer:
         summary_lines = ["Regime Characterization Summary:", "=" * 40]
 
         for state_id, profile in regime_profiles.items():
-            summary_lines.extend([
-                f"\nState {state_id}: {profile.regime_type.value.upper()}",
-                f"  Annual Return: {profile.annualized_return:.1%}",
-                f"  Annual Volatility: {profile.annualized_volatility:.1%}",
-                f"  Win Rate: {profile.win_rate:.1%}",
-                f"  Max Drawdown: {profile.max_drawdown:.1%}",
-                f"  Avg Duration: {profile.avg_duration:.1f} days",
-                f"  Strength: {profile.regime_strength:.2f}",
-                f"  Confidence: {profile.confidence_score:.2f}"
-            ])
+            summary_lines.extend(
+                [
+                    f"\nState {state_id}: {profile.regime_type.value.upper()}",
+                    f"  Annual Return: {profile.annualized_return:.1%}",
+                    f"  Annual Volatility: {profile.annualized_volatility:.1%}",
+                    f"  Win Rate: {profile.win_rate:.1%}",
+                    f"  Max Drawdown: {profile.max_drawdown:.1%}",
+                    f"  Avg Duration: {profile.avg_duration:.1f} days",
+                    f"  Strength: {profile.regime_strength:.2f}",
+                    f"  Confidence: {profile.confidence_score:.2f}",
+                ]
+            )
 
         return "\n".join(summary_lines)
 
-    def suggest_trading_approach(self, regime_profiles: Dict[int, RegimeProfile]) -> Dict[int, str]:
+    def suggest_trading_approach(
+        self, regime_profiles: Dict[int, RegimeProfile]
+    ) -> Dict[int, str]:
         """Suggest appropriate trading approach for each regime."""
 
         suggestions = {}
@@ -385,7 +412,9 @@ class FinancialRegimeCharacterizer:
                 if profile.confidence_score > 0.7:
                     suggestions[state_id] = "Strong long bias - increase position size"
                 else:
-                    suggestions[state_id] = "Moderate long bias - standard position size"
+                    suggestions[state_id] = (
+                        "Moderate long bias - standard position size"
+                    )
 
             elif profile.regime_type == RegimeType.BEARISH:
                 if profile.confidence_score > 0.7:

@@ -6,10 +6,11 @@ This script tests the new data-driven regime assignment and validation
 to ensure regime labels match actual market behavior.
 """
 
+import os
+import sys
+
 import numpy as np
 import pandas as pd
-import sys
-import os
 
 # Add the project root to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
@@ -22,16 +23,20 @@ def create_test_data(scenario: str, n_days: int = 100) -> pd.DataFrame:
     """Create test data for different market scenarios."""
 
     np.random.seed(42)  # For reproducible tests
-    dates = pd.date_range('2024-01-01', periods=n_days, freq='D')
+    dates = pd.date_range("2024-01-01", periods=n_days, freq="D")
 
     if scenario == "clear_bull":
         # Clear bull market: mostly positive returns
-        returns = np.random.normal(0.008, 0.015, n_days)  # 0.8% daily mean, 1.5% volatility
+        returns = np.random.normal(
+            0.008, 0.015, n_days
+        )  # 0.8% daily mean, 1.5% volatility
         returns = np.maximum(returns, -0.03)  # Cap extreme losses
 
     elif scenario == "clear_bear":
         # Clear bear market: mostly negative returns
-        returns = np.random.normal(-0.008, 0.02, n_days)  # -0.8% daily mean, 2% volatility
+        returns = np.random.normal(
+            -0.008, 0.02, n_days
+        )  # -0.8% daily mean, 2% volatility
         returns = np.minimum(returns, 0.03)  # Cap extreme gains
 
     elif scenario == "regime_switching":
@@ -68,10 +73,10 @@ def create_test_data(scenario: str, n_days: int = 100) -> pd.DataFrame:
     for ret in returns:
         prices.append(prices[-1] * (1 + ret))
 
-    df = pd.DataFrame({
-        'close': prices[1:],  # Remove starting price
-        'log_return': log_returns
-    }, index=dates)
+    df = pd.DataFrame(
+        {"close": prices[1:], "log_return": log_returns},  # Remove starting price
+        index=dates,
+    )
 
     return df
 
@@ -97,7 +102,7 @@ def test_data_assessment():
         ("clear_bear", "Clear Bear Market"),
         ("regime_switching", "Regime Switching Market"),
         ("monotonic_up", "Monotonic Uptrend"),
-        ("low_volatility", "Low Volatility Sideways")
+        ("low_volatility", "Low Volatility Sideways"),
     ]
 
     for scenario, description in scenarios:
@@ -106,19 +111,21 @@ def test_data_assessment():
             data = create_test_data(scenario)
             assessment = FinancialAnalysis.assess_data_for_regime_detection(data)
 
-            recommendations = assessment['recommendations']
-            print(f"   Suitable for regime detection: {recommendations['suitable_for_regime_detection']}")
+            recommendations = assessment["recommendations"]
+            print(
+                f"   Suitable for regime detection: {recommendations['suitable_for_regime_detection']}"
+            )
             print(f"   Recommended n_states: {recommendations['recommended_n_states']}")
             print(f"   Approach: {recommendations['regime_detection_approach']}")
 
-            if recommendations['warnings']:
+            if recommendations["warnings"]:
                 print(f"   Warnings:")
-                for warning in recommendations['warnings']:
+                for warning in recommendations["warnings"]:
                     print(f"     • {warning}")
 
-            if recommendations['rationale']:
+            if recommendations["rationale"]:
                 print(f"   Rationale:")
-                for rationale in recommendations['rationale']:
+                for rationale in recommendations["rationale"]:
                     print(f"     • {rationale}")
 
         except Exception as e:
@@ -137,16 +144,23 @@ def test_regime_validation():
         # Valid cases
         (np.array([-0.01, 0.0005, 0.008]), "PASS", "Valid Bear/Sideways/Bull"),
         (np.array([-0.015, 0.012]), "PASS", "Valid Bear/Bull"),
-        (np.array([-0.025, -0.008, 0.001, 0.018]), "PASS", "Valid Crisis/Bear/Sideways/Bull"),
-
+        (
+            np.array([-0.025, -0.008, 0.001, 0.018]),
+            "PASS",
+            "Valid Crisis/Bear/Sideways/Bull",
+        ),
         # Invalid cases that should fail validation
-        (np.array([0.0001, 0.0002, 0.0003]), "FAIL", "Insufficient spread between regimes"),
+        (
+            np.array([0.0001, 0.0002, 0.0003]),
+            "FAIL",
+            "Insufficient spread between regimes",
+        ),
         # Note: The algorithm automatically assigns correct labels based on returns,
         # so we can't easily create "incorrect" mappings for testing.
     ]
 
-    from hidden_regime.config.analysis import FinancialAnalysisConfig
     from hidden_regime.analysis.financial import FinancialAnalysis
+    from hidden_regime.config.analysis import FinancialAnalysisConfig
 
     for emission_means, expected_result, description in test_cases:
         print(f"\n📊 Testing: {description}")
@@ -160,22 +174,26 @@ def test_regime_validation():
 
             # Create mock model output
             n_observations = 50
-            model_output = pd.DataFrame({
-                'predicted_state': np.random.randint(0, len(emission_means), n_observations),
-                'confidence': np.random.uniform(0.5, 0.9, n_observations)
-            })
+            model_output = pd.DataFrame(
+                {
+                    "predicted_state": np.random.randint(
+                        0, len(emission_means), n_observations
+                    ),
+                    "confidence": np.random.uniform(0.5, 0.9, n_observations),
+                }
+            )
 
             # Try to update analysis (this will trigger regime validation)
             result = analysis_component.update(
                 model_output=model_output,
                 raw_data=None,
-                model_component=model_component
+                model_component=model_component,
             )
 
             if expected_result == "PASS":
                 print(f"   ✅ PASS: Validation succeeded as expected")
                 # Show the regime mapping
-                if hasattr(analysis_component, '_current_state_mapping'):
+                if hasattr(analysis_component, "_current_state_mapping"):
                     mapping = analysis_component._current_state_mapping
                     print(f"   Regime mapping: {mapping}")
             else:
@@ -205,14 +223,16 @@ def test_real_case_study():
 
         # Test with a short period to see validation
         config = CaseStudyConfig(
-            ticker='AAPL',
-            output_directory='./output/regime_validation_test',
-            start_date='2024-08-25',
-            end_date='2024-08-30',
-            n_training=10
+            ticker="AAPL",
+            output_directory="./output/regime_validation_test",
+            start_date="2024-08-25",
+            end_date="2024-08-30",
+            n_training=10,
         )
 
-        print(f"Testing case study with {config.ticker} from {config.start_date} to {config.end_date}")
+        print(
+            f"Testing case study with {config.ticker} from {config.start_date} to {config.end_date}"
+        )
 
         orchestrator = CaseStudyOrchestrator(config)
         result = orchestrator.run_complete_case_study()
@@ -245,4 +265,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n💥 Test suite failed: {e}")
         import traceback
+
         traceback.print_exc()

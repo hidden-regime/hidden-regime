@@ -6,14 +6,18 @@ Quick test to verify that the simulation engine is properly integrated
 with the case study orchestrator.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+
+import warnings
 
 from examples.case_study import CaseStudyOrchestrator
 from hidden_regime.config.case_study import CaseStudyConfig
-import warnings
-warnings.filterwarnings('ignore')
+
+warnings.filterwarnings("ignore")
+
 
 def test_simulation_integration():
     """Test the simulation integration with a quick case study."""
@@ -22,9 +26,7 @@ def test_simulation_integration():
 
     # Create a very quick case study configuration
     config = CaseStudyConfig.create_quick_study(
-        ticker="SPY",
-        days_back=20,  # Very short period for quick test
-        n_states=3
+        ticker="SPY", days_back=20, n_states=3  # Very short period for quick test
     )
 
     # Disable animations for faster testing
@@ -32,15 +34,19 @@ def test_simulation_integration():
         create_animations=False,
         save_individual_frames=False,
         generate_comprehensive_report=True,
-        enable_simulation=True
+        enable_simulation=True,
     )
 
-    print(f"📊 Configuration: {config.ticker}, {config.get_total_analysis_period()} periods")
+    print(
+        f"📊 Configuration: {config.ticker}, {config.get_total_analysis_period()} periods"
+    )
     print(f"💰 Simulation enabled: {config.enable_simulation}")
 
     # Create orchestrator
     orchestrator = CaseStudyOrchestrator(config)
-    print(f"🏗️  Orchestrator created with simulation config: {orchestrator.simulation_config is not None}")
+    print(
+        f"🏗️  Orchestrator created with simulation config: {orchestrator.simulation_config is not None}"
+    )
 
     # Test simulation config creation
     if orchestrator.simulation_config:
@@ -56,6 +62,7 @@ def test_simulation_integration():
 
     return True
 
+
 if __name__ == "__main__":
     try:
         test_simulation_integration()
@@ -63,5 +70,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

@@ -5,14 +5,14 @@ This module provides financial market-focused components that understand
 financial concepts natively, rather than treating them as generic abstractions.
 """
 
-from .regime_characterizer import FinancialRegimeCharacterizer, RegimeProfile
+from .analysis import FinancialAnalysisResult, FinancialRegimeAnalysis
 from .config import FinancialRegimeConfig
-from .analysis import FinancialRegimeAnalysis, FinancialAnalysisResult
+from .regime_characterizer import FinancialRegimeCharacterizer, RegimeProfile
 
 __all__ = [
-    'FinancialRegimeCharacterizer',
-    'RegimeProfile',
-    'FinancialRegimeConfig',
-    'FinancialRegimeAnalysis',
-    'FinancialAnalysisResult'
+    "FinancialRegimeCharacterizer",
+    "RegimeProfile",
+    "FinancialRegimeConfig",
+    "FinancialRegimeAnalysis",
+    "FinancialAnalysisResult",
 ]

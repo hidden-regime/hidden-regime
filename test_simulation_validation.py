@@ -6,11 +6,12 @@ Test script to validate that the trading simulation logic is working correctly
 with proper trade counting, temporal isolation, and realistic results.
 """
 
-import sys
 import os
-import pandas as pd
-import numpy as np
+import sys
 from datetime import datetime
+
+import numpy as np
+import pandas as pd
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
@@ -24,16 +25,16 @@ def test_buy_hold_trade_count():
     print("🧪 Testing buy-and-hold trade count...")
 
     # Create test data
-    dates = pd.date_range('2024-01-01', periods=100, freq='D')
-    prices = pd.DataFrame({
-        'close': 100 * np.cumprod(1 + np.random.normal(0, 0.01, 100))
-    }, index=dates)
+    dates = pd.date_range("2024-01-01", periods=100, freq="D")
+    prices = pd.DataFrame(
+        {"close": 100 * np.cumprod(1 + np.random.normal(0, 0.01, 100))}, index=dates
+    )
 
     analyzer = CaseStudyAnalyzer()
     result = analyzer.analyze_buy_hold_performance(prices)
 
     expected_trades = 2
-    actual_trades = result['num_trades']
+    actual_trades = result["num_trades"]
 
     print(f"   Expected trades: {expected_trades}")
     print(f"   Actual trades: {actual_trades}")
@@ -52,21 +53,24 @@ def test_technical_indicator_trade_count():
 
     # Create test data with more realistic price movement
     np.random.seed(42)
-    dates = pd.date_range('2024-01-01', periods=100, freq='D')
+    dates = pd.date_range("2024-01-01", periods=100, freq="D")
 
     # Create trending data to ensure signals are generated
     trend = np.linspace(0, 0.5, 100)
     noise = np.random.normal(0, 0.02, 100)
-    returns = trend/100 + noise
+    returns = trend / 100 + noise
     prices = 100 * np.cumprod(1 + returns)
 
-    data = pd.DataFrame({
-        'open': prices * (1 + np.random.normal(0, 0.005, 100)),
-        'high': prices * (1 + np.abs(np.random.normal(0, 0.01, 100))),
-        'low': prices * (1 - np.abs(np.random.normal(0, 0.01, 100))),
-        'close': prices,
-        'volume': np.random.randint(100000, 1000000, 100)
-    }, index=dates)
+    data = pd.DataFrame(
+        {
+            "open": prices * (1 + np.random.normal(0, 0.005, 100)),
+            "high": prices * (1 + np.abs(np.random.normal(0, 0.01, 100))),
+            "low": prices * (1 - np.abs(np.random.normal(0, 0.01, 100))),
+            "close": prices,
+            "volume": np.random.randint(100000, 1000000, 100),
+        },
+        index=dates,
+    )
 
     analyzer = TechnicalIndicatorAnalyzer()
 
@@ -77,7 +81,7 @@ def test_technical_indicator_trade_count():
 
         valid_results = 0
         for indicator_name, metrics in results.items():
-            trades = metrics.get('number_of_trades', 0)
+            trades = metrics.get("number_of_trades", 0)
 
             # Technical indicators should have reasonable trade counts (not 100 daily trades)
             if 0 <= trades <= 50:  # Reasonable range for 100 days of data
@@ -103,21 +107,26 @@ def test_hmm_strategy_trade_count():
     print("\n🧪 Testing HMM strategy trade count...")
 
     # Create test data
-    dates = pd.date_range('2024-01-01', periods=50, freq='D')
-    prices = pd.DataFrame({
-        'close': 100 * np.cumprod(1 + np.random.normal(0, 0.01, 50))
-    }, index=dates)
+    dates = pd.date_range("2024-01-01", periods=50, freq="D")
+    prices = pd.DataFrame(
+        {"close": 100 * np.cumprod(1 + np.random.normal(0, 0.01, 50))}, index=dates
+    )
 
     # Create mock regime data with some regime changes
-    regime_data = pd.DataFrame({
-        'predicted_state': [0]*15 + [1]*20 + [2]*15,  # 3 regimes with 2 transitions
-        'confidence': np.random.uniform(0.7, 0.9, 50)
-    }, index=dates)
+    regime_data = pd.DataFrame(
+        {
+            "predicted_state": [0] * 15
+            + [1] * 20
+            + [2] * 15,  # 3 regimes with 2 transitions
+            "confidence": np.random.uniform(0.7, 0.9, 50),
+        },
+        index=dates,
+    )
 
     analyzer = CaseStudyAnalyzer()
     result = analyzer.analyze_hmm_strategy_performance(prices, regime_data)
 
-    trades = result['num_trades']
+    trades = result["num_trades"]
 
     print(f"   HMM strategy trades: {trades}")
 
@@ -138,7 +147,7 @@ def test_temporal_isolation():
     # the evolution process feeding only historical data to each strategy
 
     # Create data with a clear pattern in the second half
-    dates = pd.date_range('2024-01-01', periods=100, freq='D')
+    dates = pd.date_range("2024-01-01", periods=100, freq="D")
 
     # First 50 days: random walk
     returns1 = np.random.normal(0, 0.01, 50)
@@ -149,13 +158,16 @@ def test_temporal_isolation():
     returns = np.concatenate([returns1, returns2])
     prices = 100 * np.cumprod(1 + returns)
 
-    data = pd.DataFrame({
-        'open': prices,
-        'high': prices * 1.01,
-        'low': prices * 0.99,
-        'close': prices,
-        'volume': np.ones(100) * 1000000
-    }, index=dates)
+    data = pd.DataFrame(
+        {
+            "open": prices,
+            "high": prices * 1.01,
+            "low": prices * 0.99,
+            "close": prices,
+            "volume": np.ones(100) * 1000000,
+        },
+        index=dates,
+    )
 
     # Test with only first 50 days (no future info)
     data_no_future = data.iloc[:50]
@@ -167,7 +179,9 @@ def test_temporal_isolation():
 
         # Check that analysis completes without errors
         if len(results_no_future) > 0:
-            print("   ✅ Temporal isolation test passed - analysis works with limited data")
+            print(
+                "   ✅ Temporal isolation test passed - analysis works with limited data"
+            )
             return True
         else:
             print("   ⚠️  Temporal isolation test inconclusive - no results generated")
@@ -187,7 +201,7 @@ def main():
         test_buy_hold_trade_count,
         test_technical_indicator_trade_count,
         test_hmm_strategy_trade_count,
-        test_temporal_isolation
+        test_temporal_isolation,
     ]
 
     passed = 0

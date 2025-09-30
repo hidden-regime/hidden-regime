@@ -5,19 +5,21 @@ Provides realistic trading simulation using actual capital allocation,
 share tracking, and proper buy/sell timing as specified in simulation.md.
 """
 
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
-from .performance_analytics import TradeJournal, PerformanceAnalyzer
+import numpy as np
+import pandas as pd
+
+from .performance_analytics import PerformanceAnalyzer, TradeJournal
 from .risk_management import RiskManager
 
 
 class SignalType(Enum):
     """Trading signal types."""
+
     BUY = 1
     SELL = -1
     HOLD = 0
@@ -26,6 +28,7 @@ class SignalType(Enum):
 @dataclass
 class Position:
     """Represents a trading position."""
+
     symbol: str
     shares: int
     entry_price: float
@@ -41,6 +44,7 @@ class Position:
 @dataclass
 class Trade:
     """Represents a completed trade."""
+
     symbol: str
     shares: int
     entry_price: float
@@ -71,7 +75,7 @@ class TradingSimulationEngine:
         default_shares: int = 100,
         transaction_cost: float = 0.0,
         enable_shorting: bool = True,
-        risk_manager: Optional[RiskManager] = None
+        risk_manager: Optional[RiskManager] = None,
     ):
         """
         Initialize trading simulation engine.
@@ -104,9 +108,7 @@ class TradingSimulationEngine:
         self.simulation_end_date = None
 
     def initialize_simulation(
-        self,
-        price_data: pd.DataFrame,
-        price_column: str = 'close'
+        self, price_data: pd.DataFrame, price_column: str = "close"
     ) -> bool:
         """
         Initialize simulation with price data.
@@ -120,9 +122,11 @@ class TradingSimulationEngine:
         """
         try:
             # Validate required columns
-            required_columns = ['open', 'close']
+            required_columns = ["open", "close"]
             if not all(col in price_data.columns for col in required_columns):
-                missing = [col for col in required_columns if col not in price_data.columns]
+                missing = [
+                    col for col in required_columns if col not in price_data.columns
+                ]
                 raise ValueError(f"Missing required columns: {missing}")
 
             # Set initial capital if not provided
@@ -147,10 +151,7 @@ class TradingSimulationEngine:
             return False
 
     def run_simulation(
-        self,
-        price_data: pd.DataFrame,
-        signals: pd.DataFrame,
-        symbol: str = 'ASSET'
+        self, price_data: pd.DataFrame, signals: pd.DataFrame, symbol: str = "ASSET"
     ) -> Dict[str, Any]:
         """
         Run complete trading simulation.
@@ -180,7 +181,7 @@ class TradingSimulationEngine:
                         signal_value=signal_value,
                         price_row=price_row,
                         symbol=symbol,
-                        next_open=self._get_next_open_price(price_data, i)
+                        next_open=self._get_next_open_price(price_data, i),
                     )
 
             # Check stop-losses on existing positions
@@ -194,7 +195,7 @@ class TradingSimulationEngine:
             self.simulation_end_date,
             price_data.iloc[-1],
             symbol,
-            exit_reason='end_of_data'
+            exit_reason="end_of_data",
         )
 
         # Calculate final performance metrics
@@ -207,7 +208,7 @@ class TradingSimulationEngine:
         signal_value: float,
         price_row: pd.Series,
         symbol: str,
-        next_open: Optional[float]
+        next_open: Optional[float],
     ) -> None:
         """Process a trading signal for a specific strategy."""
 
@@ -225,8 +226,8 @@ class TradingSimulationEngine:
             self._close_position(
                 position_key=position_key,
                 exit_date=date,
-                exit_price=price_row['close'],
-                exit_reason='signal'
+                exit_price=price_row["close"],
+                exit_reason="signal",
             )
 
         elif signal_type == SignalType.BUY and next_open is not None:
@@ -240,7 +241,7 @@ class TradingSimulationEngine:
                     shares=shares_to_buy,
                     entry_price=next_open,
                     entry_date=date,
-                    signal_name=signal_name
+                    signal_name=signal_name,
                 )
 
     def _calculate_position_size(self, price: float, signal_name: str) -> int:
@@ -248,8 +249,7 @@ class TradingSimulationEngine:
 
         # Apply risk management limits
         max_position_value = self.risk_manager.get_max_position_value(
-            self.cash + self._get_total_position_value(),
-            signal_name
+            self.cash + self._get_total_position_value(), signal_name
         )
 
         # Calculate affordable shares
@@ -273,7 +273,7 @@ class TradingSimulationEngine:
         shares: int,
         entry_price: float,
         entry_date: datetime,
-        signal_name: str
+        signal_name: str,
     ) -> None:
         """Open a new trading position."""
 
@@ -294,7 +294,7 @@ class TradingSimulationEngine:
             shares=shares,
             entry_price=entry_price,
             entry_date=entry_date,
-            stop_loss=stop_loss
+            stop_loss=stop_loss,
         )
 
         # Update portfolio
@@ -302,14 +302,16 @@ class TradingSimulationEngine:
         self.cash -= total_cost
 
         # Log trade opening
-        print(f"📈 Opened position: {shares} shares of {symbol} at ${entry_price:.2f} ({signal_name})")
+        print(
+            f"📈 Opened position: {shares} shares of {symbol} at ${entry_price:.2f} ({signal_name})"
+        )
 
     def _close_position(
         self,
         position_key: str,
         exit_date: datetime,
         exit_price: float,
-        exit_reason: str
+        exit_reason: str,
     ) -> None:
         """Close an existing trading position."""
 
@@ -338,7 +340,7 @@ class TradingSimulationEngine:
             pnl=pnl,
             pnl_pct=pnl_pct,
             hold_days=hold_days,
-            exit_reason=exit_reason
+            exit_reason=exit_reason,
         )
 
         # Record in trade journal
@@ -348,20 +350,25 @@ class TradingSimulationEngine:
         del self.positions[position_key]
 
         # Log trade closing
-        print(f"📉 Closed position: {position.shares} shares of {position.symbol} at ${exit_price:.2f} "
-              f"(P&L: ${pnl:.2f}, {pnl_pct:+.1f}%, {exit_reason})")
+        print(
+            f"📉 Closed position: {position.shares} shares of {position.symbol} at ${exit_price:.2f} "
+            f"(P&L: ${pnl:.2f}, {pnl_pct:+.1f}%, {exit_reason})"
+        )
 
-    def _check_stop_losses(self, date: datetime, price_row: pd.Series, symbol: str) -> None:
+    def _check_stop_losses(
+        self, date: datetime, price_row: pd.Series, symbol: str
+    ) -> None:
         """Check if any positions should be stopped out."""
 
         positions_to_close = []
-        current_price = price_row['close']
+        current_price = price_row["close"]
 
         for position_key, position in self.positions.items():
             if position.stop_loss is not None:
                 # Check if stop-loss is triggered
-                if (position.shares > 0 and current_price <= position.stop_loss) or \
-                   (position.shares < 0 and current_price >= position.stop_loss):
+                if (position.shares > 0 and current_price <= position.stop_loss) or (
+                    position.shares < 0 and current_price >= position.stop_loss
+                ):
                     positions_to_close.append(position_key)
 
         # Close stopped out positions
@@ -370,19 +377,15 @@ class TradingSimulationEngine:
                 position_key=position_key,
                 exit_date=date,
                 exit_price=current_price,
-                exit_reason='stop_loss'
+                exit_reason="stop_loss",
             )
 
     def _close_all_positions(
-        self,
-        exit_date: datetime,
-        price_row: pd.Series,
-        symbol: str,
-        exit_reason: str
+        self, exit_date: datetime, price_row: pd.Series, symbol: str, exit_reason: str
     ) -> None:
         """Close all remaining positions at end of simulation."""
 
-        exit_price = price_row['close']
+        exit_price = price_row["close"]
         position_keys = list(self.positions.keys())
 
         for position_key in position_keys:
@@ -390,44 +393,52 @@ class TradingSimulationEngine:
                 position_key=position_key,
                 exit_date=exit_date,
                 exit_price=exit_price,
-                exit_reason=exit_reason
+                exit_reason=exit_reason,
             )
 
-    def _get_next_open_price(self, price_data: pd.DataFrame, current_index: int) -> Optional[float]:
+    def _get_next_open_price(
+        self, price_data: pd.DataFrame, current_index: int
+    ) -> Optional[float]:
         """Get next day's opening price for position entry."""
 
         if current_index + 1 < len(price_data):
-            return price_data.iloc[current_index + 1]['open']
+            return price_data.iloc[current_index + 1]["open"]
         return None
 
     def _get_total_position_value(self) -> float:
         """Calculate total value of all current positions."""
         return sum(pos.entry_value for pos in self.positions.values())
 
-    def _record_portfolio_state(self, date: datetime, price_row: pd.Series, symbol: str) -> None:
+    def _record_portfolio_state(
+        self, date: datetime, price_row: pd.Series, symbol: str
+    ) -> None:
         """Record daily portfolio state for performance tracking."""
 
         # Calculate current position values at market price
         position_value = 0.0
         for position in self.positions.values():
-            current_price = price_row['close']
+            current_price = price_row["close"]
             position_value += position.shares * current_price
 
         total_portfolio_value = self.cash + position_value
         daily_return = 0.0
 
         if self.portfolio_history:
-            prev_value = self.portfolio_history[-1]['total_value']
-            daily_return = (total_portfolio_value - prev_value) / prev_value if prev_value > 0 else 0.0
+            prev_value = self.portfolio_history[-1]["total_value"]
+            daily_return = (
+                (total_portfolio_value - prev_value) / prev_value
+                if prev_value > 0
+                else 0.0
+            )
 
         # Record state
         portfolio_state = {
-            'date': date,
-            'cash': self.cash,
-            'position_value': position_value,
-            'total_value': total_portfolio_value,
-            'daily_return': daily_return,
-            'num_positions': len(self.positions)
+            "date": date,
+            "cash": self.cash,
+            "position_value": position_value,
+            "total_value": total_portfolio_value,
+            "daily_return": daily_return,
+            "num_positions": len(self.positions),
         }
 
         self.portfolio_history.append(portfolio_state)
@@ -441,7 +452,7 @@ class TradingSimulationEngine:
 
         # Basic portfolio metrics
         initial_value = self.initial_capital
-        final_value = self.portfolio_history[-1]['total_value']
+        final_value = self.portfolio_history[-1]["total_value"]
         total_return = (final_value - initial_value) / initial_value
 
         # Time-based metrics
@@ -452,36 +463,32 @@ class TradingSimulationEngine:
         # Use performance analyzer for advanced metrics
         performance_metrics = self.performance_analyzer.calculate_metrics(
             daily_returns=self.daily_returns,
-            portfolio_values=[state['total_value'] for state in self.portfolio_history],
-            trades=self.trade_journal.get_all_trades()
+            portfolio_values=[state["total_value"] for state in self.portfolio_history],
+            trades=self.trade_journal.get_all_trades(),
         )
 
         # Combine all results
         results = {
             # Basic metrics
-            'symbol': symbol,
-            'initial_capital': initial_value,
-            'final_value': final_value,
-            'total_return': total_return,
-            'total_return_pct': total_return * 100,
-
+            "symbol": symbol,
+            "initial_capital": initial_value,
+            "final_value": final_value,
+            "total_return": total_return,
+            "total_return_pct": total_return * 100,
             # Timing
-            'start_date': start_date,
-            'end_date': end_date,
-            'trading_days': trading_days,
-
+            "start_date": start_date,
+            "end_date": end_date,
+            "trading_days": trading_days,
             # Performance metrics
             **performance_metrics,
-
             # Trade statistics
-            'trade_journal': self.trade_journal,
-            'portfolio_history': self.portfolio_history,
-            'total_trades': len(self.trade_journal.get_all_trades()),
-
+            "trade_journal": self.trade_journal,
+            "portfolio_history": self.portfolio_history,
+            "total_trades": len(self.trade_journal.get_all_trades()),
             # Risk metrics
-            'max_drawdown_dollars': self._calculate_max_drawdown_dollars(),
-            'final_cash': self.cash,
-            'simulation_success': True
+            "max_drawdown_dollars": self._calculate_max_drawdown_dollars(),
+            "final_cash": self.cash,
+            "simulation_success": True,
         }
 
         return results
@@ -491,7 +498,7 @@ class TradingSimulationEngine:
         if not self.portfolio_history:
             return 0.0
 
-        values = [state['total_value'] for state in self.portfolio_history]
+        values = [state["total_value"] for state in self.portfolio_history]
         peak = values[0]
         max_drawdown = 0.0
 
@@ -507,10 +514,10 @@ class TradingSimulationEngine:
     def _create_failed_simulation_result(self) -> Dict[str, Any]:
         """Create result dictionary for failed simulation."""
         return {
-            'simulation_success': False,
-            'error': 'Simulation failed to initialize or execute properly',
-            'total_return': 0.0,
-            'total_trades': 0,
-            'trade_journal': TradeJournal(),
-            'portfolio_history': []
+            "simulation_success": False,
+            "error": "Simulation failed to initialize or execute properly",
+            "total_return": 0.0,
+            "total_trades": 0,
+            "trade_journal": TradeJournal(),
+            "portfolio_history": [],
         }

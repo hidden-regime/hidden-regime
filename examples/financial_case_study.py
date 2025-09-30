@@ -14,30 +14,27 @@ Key improvements over the old system:
 - Unified configuration and analysis entry point
 """
 
-import sys
 import os
+import sys
 from datetime import datetime, timedelta
-from typing import Dict, Any
+from typing import Any, Dict
 
 # Add the project root to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from hidden_regime.financial.config import FinancialRegimeConfig
 from hidden_regime.financial.analysis import FinancialRegimeAnalysis
+from hidden_regime.financial.config import FinancialRegimeConfig
 
 
 def run_financial_case_study_basic() -> Dict[str, Any]:
     """Run a basic financial regime analysis case study."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("📊 BASIC FINANCIAL REGIME ANALYSIS")
-    print("="*60)
+    print("=" * 60)
 
     # Quick analysis configuration
     config = FinancialRegimeConfig.create_quick_analysis(
-        ticker="AAPL",
-        days_back=90,
-        n_regimes=3,
-        initial_capital=50000.0
+        ticker="AAPL", days_back=90, n_regimes=3, initial_capital=50000.0
     )
 
     # Note: Config is frozen, output_directory is auto-generated
@@ -59,11 +56,15 @@ def run_financial_case_study_basic() -> Dict[str, Any]:
         # Display key results
         if results.analysis_success:
             current = results.current_regime_info
-            print(f"🎯 Current: {current['regime_type']} ({current['confidence']:.1%} confidence)")
+            print(
+                f"🎯 Current: {current['regime_type']} ({current['confidence']:.1%} confidence)"
+            )
 
         if results.simulation_results is not None:
             sim = results.simulation_results
-            print(f"💰 Return: {sim.total_return_pct:.2f}% | Sharpe: {sim.sharpe_ratio:.3f}")
+            print(
+                f"💰 Return: {sim.total_return_pct:.2f}% | Sharpe: {sim.sharpe_ratio:.3f}"
+            )
             print(f"🏆 Best: {sim.best_strategy}")
 
         print(f"📁 Output: {config.output_directory}")
@@ -76,9 +77,9 @@ def run_financial_case_study_basic() -> Dict[str, Any]:
 
 def run_financial_case_study_comprehensive() -> Dict[str, Any]:
     """Run a comprehensive financial regime analysis case study."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("📊 COMPREHENSIVE FINANCIAL REGIME ANALYSIS")
-    print("="*60)
+    print("=" * 60)
 
     # Comprehensive analysis configuration
     config = FinancialRegimeConfig.create_comprehensive_analysis(
@@ -86,7 +87,7 @@ def run_financial_case_study_comprehensive() -> Dict[str, Any]:
         start_date="2024-01-01",
         end_date="2024-06-01",
         n_regimes=4,
-        initial_capital=100000.0
+        initial_capital=100000.0,
     )
 
     # Note: Config is frozen, output_directory is auto-generated
@@ -111,14 +112,18 @@ def run_financial_case_study_comprehensive() -> Dict[str, Any]:
         if results.analysis_success and results.regime_profiles:
             print(f"\n🎯 Regime Profiles:")
             for regime_id, profile in results.regime_profiles.items():
-                print(f"   {regime_id}: {profile.regime_type.value.title()} "
-                      f"({profile.annualized_return:.1%} return, "
-                      f"{profile.annualized_volatility:.1%} vol)")
+                print(
+                    f"   {regime_id}: {profile.regime_type.value.title()} "
+                    f"({profile.annualized_return:.1%} return, "
+                    f"{profile.annualized_volatility:.1%} vol)"
+                )
 
         if results.analysis_success:
             current = results.current_regime_info
-            print(f"\n📈 Current State: {current['regime_type']} "
-                  f"({current['confidence']:.1%} confidence)")
+            print(
+                f"\n📈 Current State: {current['regime_type']} "
+                f"({current['confidence']:.1%} confidence)"
+            )
 
         if results.simulation_results is not None:
             sim = results.simulation_results
@@ -134,15 +139,16 @@ def run_financial_case_study_comprehensive() -> Dict[str, Any]:
     except Exception as e:
         print(f"❌ Failed: {e}")
         import traceback
+
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
 def run_financial_case_study_single_asset() -> Dict[str, Any]:
     """Run a single-asset optimized financial regime analysis case study."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("📊 SINGLE-ASSET OPTIMIZED ANALYSIS")
-    print("="*60)
+    print("=" * 60)
 
     # Single-asset optimized configuration
     config = FinancialRegimeConfig.create_single_asset_study(
@@ -150,7 +156,7 @@ def run_financial_case_study_single_asset() -> Dict[str, Any]:
         start_date="2024-01-01",
         end_date="2024-09-01",
         initial_capital=100000.0,
-        aggressive=False  # Conservative single-asset approach
+        aggressive=False,  # Conservative single-asset approach
     )
 
     # Note: Config is frozen, output_directory is auto-generated
@@ -180,7 +186,9 @@ def run_financial_case_study_single_asset() -> Dict[str, Any]:
         if results.simulation_results is not None:
             sim = results.simulation_results
             print(f"\n💰 Single-Asset Performance:")
-            print(f"   Capital Growth: ${sim.initial_capital:,.0f} → ${sim.final_value:,.0f}")
+            print(
+                f"   Capital Growth: ${sim.initial_capital:,.0f} → ${sim.final_value:,.0f}"
+            )
             print(f"   Total Return: {sim.total_return_pct:.2f}%")
             print(f"   Risk-Adjusted: {sim.sharpe_ratio:.3f} Sharpe")
             print(f"   Downside Protection: {sim.max_drawdown_pct:.2f}% max drawdown")
@@ -196,9 +204,9 @@ def run_financial_case_study_single_asset() -> Dict[str, Any]:
 def main():
     """Run all financial case study examples."""
     print("🚀 FINANCIAL-FIRST REGIME ANALYSIS SYSTEM")
-    print("="*80)
+    print("=" * 80)
     print("Demonstrates intelligent regime characterization and optimized trading")
-    print("="*80)
+    print("=" * 80)
 
     results = {}
 
@@ -206,7 +214,7 @@ def main():
     case_studies = [
         ("basic", run_financial_case_study_basic),
         ("comprehensive", run_financial_case_study_comprehensive),
-        ("single_asset", run_financial_case_study_single_asset)
+        ("single_asset", run_financial_case_study_single_asset),
     ]
 
     for name, runner in case_studies:
@@ -218,12 +226,14 @@ def main():
             results[name] = {"success": False, "error": str(e)}
 
     # Summary
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("📊 FINANCIAL CASE STUDY SUMMARY")
-    print("="*80)
+    print("=" * 80)
 
     success_count = sum(1 for r in results.values() if r.get("success", False))
-    total_time = sum(r.get("execution_time", 0) for r in results.values() if r.get("success", False))
+    total_time = sum(
+        r.get("execution_time", 0) for r in results.values() if r.get("success", False)
+    )
 
     print(f"✅ Completed: {success_count}/{len(case_studies)} case studies")
     print(f"⏱️  Total time: {total_time:.1f} seconds")
@@ -252,4 +262,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Error in financial case study system: {e}")
         import traceback
+
         traceback.print_exc()

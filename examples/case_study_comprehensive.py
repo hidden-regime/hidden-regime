@@ -7,15 +7,15 @@ This example shows the complete capabilities of the financial-first architecture
 including intelligent signal generation, comprehensive simulation, and detailed analysis.
 """
 
-import sys
 import os
+import sys
 from datetime import datetime, timedelta
 
 # Add the project root to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from hidden_regime.financial.config import FinancialRegimeConfig
 from hidden_regime.financial.analysis import FinancialRegimeAnalysis
+from hidden_regime.financial.config import FinancialRegimeConfig
 
 
 def main():
@@ -29,7 +29,7 @@ def main():
         start_date="2024-01-01",
         end_date="2024-06-01",
         n_regimes=4,  # 4-regime model for nuanced analysis
-        initial_capital=100000.0  # $100k for comprehensive simulation
+        initial_capital=100000.0,  # $100k for comprehensive simulation
     )
 
     # Note: Configuration is frozen - can't modify after creation
@@ -48,7 +48,9 @@ def main():
     try:
         # Run the comprehensive financial analysis
         print(f"\n🚀 Starting comprehensive financial regime analysis...")
-        print("This may take several minutes due to animations and comprehensive analysis...")
+        print(
+            "This may take several minutes due to animations and comprehensive analysis..."
+        )
 
         start_time = datetime.now()
 
@@ -100,14 +102,16 @@ def main():
                 print(f"\n📊 Strategy Performance Rankings:")
                 sorted_strategies = sorted(
                     sim.strategy_results.items(),
-                    key=lambda x: x[1].get('sharpe_ratio', 0),
-                    reverse=True
+                    key=lambda x: x[1].get("sharpe_ratio", 0),
+                    reverse=True,
                 )
                 for i, (strategy, metrics) in enumerate(sorted_strategies[:5]):
-                    sharpe = metrics.get('sharpe_ratio', 0)
-                    returns = metrics.get('total_return_pct', 0)
-                    print(f"   {i+1}. {strategy.replace('_', ' ').title()}: "
-                          f"{returns:.2f}% return, {sharpe:.3f} Sharpe")
+                    sharpe = metrics.get("sharpe_ratio", 0)
+                    returns = metrics.get("total_return_pct", 0)
+                    print(
+                        f"   {i+1}. {strategy.replace('_', ' ').title()}: "
+                        f"{returns:.2f}% return, {sharpe:.3f} Sharpe"
+                    )
 
         # Generated files summary
         print(f"\n📁 Generated files in {config.output_directory}:")
@@ -125,14 +129,19 @@ def main():
         if results.analysis_success:
             print(f"\n💡 Key Financial Insights:")
             print(f"   • Intelligent regime-based signal generation")
-            print(f"   • Data-driven regime characterization (not naive state assumptions)")
-            print(f"   • Single-asset optimized position sizing (100% allocation capability)")
+            print(
+                f"   • Data-driven regime characterization (not naive state assumptions)"
+            )
+            print(
+                f"   • Single-asset optimized position sizing (100% allocation capability)"
+            )
             print(f"   • Zero transaction costs (retail-friendly)")
             print(f"   • Comprehensive risk-adjusted performance metrics")
 
     except Exception as e:
         print(f"\n❌ Comprehensive financial analysis failed: {e}")
         import traceback
+
         traceback.print_exc()
 
 

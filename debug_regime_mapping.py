@@ -3,12 +3,14 @@
 Debug script to test regime mapping in visualization functions.
 """
 
-import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '.'))
+import sys
 
-from hidden_regime.financial.config import FinancialRegimeConfig
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "."))
+
 from hidden_regime.financial.analysis import FinancialRegimeAnalysis
+from hidden_regime.financial.config import FinancialRegimeConfig
+
 
 def main():
     """Debug regime mapping integration."""
@@ -16,10 +18,7 @@ def main():
     print("=" * 60)
 
     # Create a small test configuration
-    config = FinancialRegimeConfig.create_quick_analysis(
-        ticker="AAPL",
-        n_regimes=3
-    )
+    config = FinancialRegimeConfig.create_quick_analysis(ticker="AAPL", n_regimes=3)
 
     # Run analysis
     analysis = FinancialRegimeAnalysis(config)
@@ -28,10 +27,15 @@ def main():
     if results.analysis_success:
         print("\n📊 Regime Profiles:")
         for state_id, profile in results.regime_profiles.items():
-            print(f"   State {state_id}: {profile.regime_type.value} ({profile.annualized_return:.1%})")
+            print(
+                f"   State {state_id}: {profile.regime_type.value} ({profile.annualized_return:.1%})"
+            )
 
         print("\n🎨 Testing visualization functions:")
-        from hidden_regime.visualization.plotting import get_regime_names, get_regime_colors
+        from hidden_regime.visualization.plotting import (
+            get_regime_colors,
+            get_regime_names,
+        )
 
         n_states = len(results.regime_profiles)
 
@@ -42,7 +46,9 @@ def main():
 
         # Test with regime profiles (new way)
         new_names = get_regime_names(n_states, regime_profiles=results.regime_profiles)
-        new_colors = get_regime_colors(n_states, regime_profiles=results.regime_profiles)
+        new_colors = get_regime_colors(
+            n_states, regime_profiles=results.regime_profiles
+        )
         print(f"   New names: {new_names}")
 
         print(f"\n✅ Names match: {old_names != new_names}")
@@ -50,6 +56,7 @@ def main():
 
     else:
         print("❌ Analysis failed")
+
 
 if __name__ == "__main__":
     main()
