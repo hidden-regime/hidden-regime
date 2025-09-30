@@ -23,15 +23,12 @@ from .performance import RegimePerformanceAnalyzer
 
 # Try to import technical indicators
 try:
-    from ..indicators import (
-        IndicatorCalculator,
-        calculate_all_indicators,
-        compare_hmm_vs_indicators
-    )
+    from .technical_indicators import TechnicalIndicatorAnalyzer
+    from .indicator_comparison import IndicatorPerformanceComparator
     INDICATORS_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     INDICATORS_AVAILABLE = False
-    warnings.warn("Technical indicators not available - indicator comparisons disabled")
+    warnings.warn(f"Technical indicators not available - indicator comparisons disabled: {e}")
 
 
 class FinancialAnalysis(AnalysisComponent):
@@ -62,10 +59,12 @@ class FinancialAnalysis(AnalysisComponent):
         
         # Initialize indicator calculator if available
         if INDICATORS_AVAILABLE and self.config.indicator_comparisons:
-            self.indicator_calculator = IndicatorCalculator()
+            self.indicator_analyzer = TechnicalIndicatorAnalyzer()
+            self.indicator_comparator = IndicatorPerformanceComparator()
             self._indicators_cache = {}
         else:
-            self.indicator_calculator = None
+            self.indicator_analyzer = None
+            self.indicator_comparator = None
             self._indicators_cache = {}
         
         # Initialize performance analyzer
@@ -781,7 +780,7 @@ class FinancialAnalysis(AnalysisComponent):
     
     def _add_indicator_comparisons(self, analysis: pd.DataFrame, raw_data: pd.DataFrame) -> pd.DataFrame:
         """Add technical indicator comparisons."""
-        if not INDICATORS_AVAILABLE or not self.indicator_calculator:
+        if not INDICATORS_AVAILABLE or not self.indicator_analyzer:
             return analysis
         
         try:
@@ -836,8 +835,8 @@ class FinancialAnalysis(AnalysisComponent):
                     return self._calculate_ma_signal(raw_data['close'])
             
             # Fallback: try to use full indicators calculator if available
-            if hasattr(self.indicator_calculator, 'calculate_all_indicators'):
-                indicators = self.indicator_calculator.calculate_all_indicators(raw_data)
+            if hasattr(self.indicator_analyzer, 'calculate_all_indicators'):
+                indicators = self.indicator_analyzer.calculate_all_indicators(raw_data)
                 if indicator_name in indicators.columns:
                     return indicators[indicator_name]
         
