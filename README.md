@@ -7,6 +7,10 @@
 
 Hidden Regime is a Python package for detecting and analyzing market regimes using Hidden Markov Models (HMMs). It provides a complete pipeline for regime-based trading analysis, from data loading through model training to trading simulation and reporting.
 
+**FOR EDUCATIONAL PURPOSES ONLY.** _This is not financial advice and should not be considered as such._
+
+ Hidden Regime is a mathematical tool designed for educational purposes only to explore financial concepts and analysis techniques. It is not financial advice, and its outputs should not be used to make investment decisions. Always consult with a qualified financial professional before making any investment decisions.
+
 ## Features
 
 - **Hidden Markov Models**: 2-5 state HMMs with Baum-Welch training and Viterbi inference
@@ -291,3 +295,9 @@ Built with inspiration from academic research in regime-switching models and mod
 ---
 
 **Hidden Regime** - Quantitative market regime detection for systematic trading.
+
+--- 
+
+**FOR EDUCATIONAL PURPOSES ONLY.** _This is not financial advice and should not be considered as such._
+
+ Hidden Regime is a mathematical tool designed for educational purposes only to explore financial concepts and analysis techniques. It is not financial advice, and its outputs should not be used to make investment decisions. Always consult with a qualified financial professional before making any investment decisions.
