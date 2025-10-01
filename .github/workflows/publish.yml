@@ -1,0 +1,302 @@
+name: Build and Publish to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      publish_to_test:
+        description: 'Publish to Test PyPI instead of PyPI'
+        required: false
+        default: true
+        type: boolean
+      version_override:
+        description: 'Override version (leave empty for auto)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  id-token: write  # Required for trusted publishing
+
+jobs:
+  build:
+    name: Build Distribution
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for proper versioning
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine setuptools wheel
+
+    - name: Override version if specified
+      if: github.event.inputs.version_override != ''
+      run: |
+        echo "Overriding version to ${{ github.event.inputs.version_override }}"
+        sed -i 's/__version__ = ".*"/__version__ = "${{ github.event.inputs.version_override }}"/' hidden_regime/_version.py
+
+    - name: Build source distribution
+      run: |
+        python -m build --sdist
+
+    - name: Build wheel distribution
+      run: |
+        python -m build --wheel
+
+    - name: Check distributions
+      run: |
+        twine check dist/*
+        
+    - name: List built files
+      run: |
+        ls -la dist/
+        echo "Source distribution:"
+        tar -tzf dist/*.tar.gz | head -20
+        echo "Wheel contents:"
+        python -m zipfile -l dist/*.whl | head -20
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: python-distributions
+        path: dist/
+        retention-days: 30
+
+  test-install:
+    name: Test Installation
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.11', '3.12']
+
+    steps:
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: python-distributions
+        path: dist/
+
+    - name: Install from wheel
+      run: |
+        pip install dist/*.whl
+
+    - name: Test basic import
+      run: |
+        python -c "
+        import hidden_regime
+        print(f'Hidden Regime version: {hidden_regime.__version__}')
+        
+        # Test basic functionality
+        from hidden_regime import HiddenMarkovModel, DataLoader
+        print('✓ Core classes imported successfully')
+        
+        # Test convenience functions
+        from hidden_regime import load_stock_data, detect_regimes
+        print('✓ Convenience functions imported successfully')
+        
+        print('✓ Package installation test passed')
+        "
+
+    - name: Install with extras
+      run: |
+        pip install dist/*.whl[dev,ml]
+
+    - name: Test extras functionality
+      run: |
+        python -c "
+        try:
+            import sklearn
+            print('✓ ML extras working')
+        except ImportError:
+            print('✗ ML extras not working')
+            exit(1)
+        "
+
+  publish-test-pypi:
+    name: Publish to Test PyPI
+    needs: [build, test-install]
+    runs-on: ubuntu-latest
+    if: github.event.inputs.publish_to_test == 'true' || github.event_name == 'workflow_dispatch'
+    environment:
+      name: test-pypi
+      url: https://test.pypi.org/p/hidden-regime
+
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: python-distributions
+        path: dist/
+
+    - name: Publish to Test PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        verbose: true
+
+    - name: Test installation from Test PyPI
+      run: |
+        sleep 60  # Wait for package to be available
+        pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ hidden-regime
+        python -c "import hidden_regime; print(f'Test PyPI version: {hidden_regime.__version__}')"
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [build, test-install]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || (github.event.inputs.publish_to_test == 'false' && github.event_name == 'workflow_dispatch')
+    environment:
+      name: pypi
+      url: https://pypi.org/p/hidden-regime
+
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: python-distributions
+        path: dist/
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }}
+        verbose: true
+
+    - name: Create GitHub Release Assets
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/*.whl
+          dist/*.tar.gz
+        body: |
+          ## Package Distribution Files
+          
+          This release includes the following distribution files:
+          - **Source Distribution** (`.tar.gz`): For installation from source
+          - **Wheel Distribution** (`.whl`): For fast binary installation
+          
+          Install with: `pip install hidden-regime==${{ github.ref_name }}`
+          
+          See [CHANGELOG.md](https://github.com/hidden-regime/hidden-regime/blob/main/CHANGELOG.md) for full release notes.
+
+  notify-success:
+    name: Notify Success
+    needs: [publish-pypi, publish-test-pypi]
+    runs-on: ubuntu-latest
+    if: always() && (needs.publish-pypi.result == 'success' || needs.publish-test-pypi.result == 'success')
+
+    steps:
+    - name: Create Success Issue
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const publishedTo = '${{ needs.publish-pypi.result }}' === 'success' ? 'PyPI' : 'Test PyPI';
+          const version = '${{ github.ref_name }}' || 'latest';
+          
+          const title = `🎉 Successfully Published to ${publishedTo}`;
+          const body = `
+          The package has been successfully published to ${publishedTo}!
+          
+          **Version:** ${version}
+          **Published:** ${new Date().toISOString()}
+          **Workflow:** ${context.workflow}
+          **Run:** [${context.runId}](${context.payload.repository.html_url}/actions/runs/${context.runId})
+          
+          ## Installation
+          \`\`\`bash
+          pip install hidden-regime${version !== 'latest' ? '==' + version : ''}
+          \`\`\`
+          
+          ## Next Steps
+          - [ ] Update documentation if needed
+          - [ ] Announce on social media/blog
+          - [ ] Monitor PyPI download stats
+          - [ ] Check for any user feedback or issues
+          
+          This issue will be automatically closed after 24 hours.
+          `;
+          
+          const issue = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['release', 'automation', 'success']
+          });
+          
+          // Auto-close after 24 hours
+          setTimeout(async () => {
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.data.number,
+              state: 'closed'
+            });
+          }, 24 * 60 * 60 * 1000);
+
+  notify-failure:
+    name: Notify Failure
+    needs: [build, test-install, publish-pypi, publish-test-pypi]
+    runs-on: ubuntu-latest
+    if: failure()
+
+    steps:
+    - name: Create Failure Issue
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const title = `❌ PyPI Publication Failed`;
+          const body = `
+          The PyPI publication workflow failed.
+          
+          **Workflow:** ${context.workflow}
+          **Run:** [${context.runId}](${context.payload.repository.html_url}/actions/runs/${context.runId})
+          **Commit:** ${context.sha}
+          
+          ## Failed Jobs
+          ${JSON.stringify(context.payload, null, 2)}
+          
+          Please check the workflow logs for details and fix any issues.
+          
+          ## Common Issues
+          - Version already exists on PyPI
+          - Invalid credentials or tokens
+          - Build or test failures
+          - Network connectivity issues
+          
+          ## Actions Needed
+          - [ ] Review workflow logs
+          - [ ] Fix identified issues
+          - [ ] Re-run workflow or create new release
+          `;
+          
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['release', 'automation', 'bug', 'urgent']
+          });

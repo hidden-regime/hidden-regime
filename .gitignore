@@ -1,0 +1,119 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit tests / coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+coverage.json
+*.cover
+.hypothesis/
+.pytest_cache/
+tests/pytest.log
+
+# CI/CD artifacts
+benchmark_*.json
+baseline_benchmark.json
+performance_report.json
+performance_summary.md
+bandit-report.json
+.benchmarks/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Environments
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# PyPI credentials (important!)
+.pypirc
+
+# Personal notes (optional)
+notes/
+todo.md
+scratch/
+TODOS.md
+
+# Data files (you'll probably have these later)
+/data/
+*.csv
+*.json
+*.pkl
+*.h5
+examples/output/**
+
+# Log files
+*log.txt
+
+# Model outputs
+checkpoints/
+results/
+output/
+*.png
+**/*_report_*.md
+**/*_report.md
+**/*_analysis_*.md
+*.gif
+
+# Setuptools
+_version.py

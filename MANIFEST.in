@@ -1,0 +1,101 @@
+# Include essential package files
+include README.md
+include LICENSE
+include CHANGELOG.md
+include setup.py
+include pyproject.toml
+
+# Include package data
+recursive-include hidden_regime *.py
+include hidden_regime/py.typed  # Type information marker (if using typing)
+
+# Include documentation
+recursive-include docs *.md *.rst *.txt
+recursive-include docs *.png *.jpg *.jpeg *.gif *.svg
+include docs/conf.py
+
+# Include examples and demos
+recursive-include examples *.py
+recursive-include examples *.ipynb
+recursive-include examples *.md
+recursive-include examples *.json
+recursive-include examples *.csv
+exclude examples/.ipynb_checkpoints
+exclude examples/**/.ipynb_checkpoints
+
+# Include tests for source distributions (useful for development installs)
+recursive-include tests *.py
+include tests/conftest.py
+include tests/pytest.ini
+recursive-include tests/fixtures *.py *.json *.csv
+recursive-include tests/test_data *.py
+exclude tests/__pycache__
+exclude tests/**/__pycache__
+exclude tests/*.pyc
+exclude tests/**/*.pyc
+
+# Include configuration files
+include pytest.ini
+include .coveragerc
+include tox.ini
+include mypy.ini
+
+# Include GitHub workflows (for source distribution users who want to contribute)
+recursive-include .github *.yml *.yaml *.md
+
+# Exclude development and build artifacts
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.pyd
+global-exclude __pycache__
+global-exclude .pytest_cache
+global-exclude .coverage
+global-exclude coverage.xml
+global-exclude coverage.json
+global-exclude htmlcov
+global-exclude .tox
+global-exclude .git*
+global-exclude .DS_Store
+global-exclude Thumbs.db
+global-exclude *.swp
+global-exclude *.swo
+global-exclude *~
+
+# Exclude CI/CD artifacts
+exclude benchmark_*.json
+exclude baseline_benchmark.json  
+exclude performance_report.json
+exclude performance_summary.md
+exclude bandit-report.json
+exclude .benchmarks
+
+# Exclude IDE files
+exclude .vscode
+exclude .idea
+exclude *.sublime-*
+
+# Exclude build directories
+exclude build
+exclude dist
+exclude *.egg-info
+exclude .eggs
+
+# Exclude virtual environments
+exclude venv
+exclude .venv
+exclude env
+exclude .env
+
+# Exclude temporary and cache files
+exclude .tmp
+exclude *.tmp
+exclude .cache
+exclude pip-log.txt
+exclude pip-delete-this-directory.txt
+
+# Exclude personal development files
+exclude notes
+exclude todo.md
+exclude scratch
+exclude .secrets
+exclude .env.*
