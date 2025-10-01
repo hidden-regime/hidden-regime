@@ -19,6 +19,8 @@ import hidden_regime as hr
 from hidden_regime.pipeline.temporal import TemporalController
 
 
+@pytest.mark.slow
+@pytest.mark.performance
 class TestPerformanceBenchmarks:
     """Test performance characteristics and benchmarks."""
 
@@ -52,6 +54,8 @@ class TestPerformanceBenchmarks:
         return process, initial_memory
 
     @patch("yfinance.Ticker")
+    @pytest.mark.slow
+    @pytest.mark.performance
     def test_training_performance_large_dataset(
         self, mock_ticker, large_mock_data, process_monitor
     ):
@@ -96,6 +100,8 @@ class TestPerformanceBenchmarks:
         assert len(data_output) == len(large_mock_data)
 
     @patch("yfinance.Ticker")
+    @pytest.mark.slow
+    @pytest.mark.performance
     def test_prediction_performance(self, mock_ticker, large_mock_data):
         """Test prediction performance after training."""
         mock_ticker.return_value.history.return_value = large_mock_data
@@ -123,6 +129,8 @@ class TestPerformanceBenchmarks:
         ), f"Prediction too slow: {avg_prediction_time:.4f}s per prediction"  # Increased from 0.01s
 
     @patch("yfinance.Ticker")
+    @pytest.mark.slow
+    @pytest.mark.performance
     def test_temporal_analysis_performance(self, mock_ticker, large_mock_data):
         """Test temporal analysis performance for backtesting."""
         mock_ticker.return_value.history.return_value = large_mock_data
@@ -255,6 +263,8 @@ class TestPerformanceBenchmarks:
         ), f"Likelihood degraded significantly: {likelihood_improvement}"
 
 
+@pytest.mark.slow
+@pytest.mark.performance
 class TestScalabilityTests:
     """Test scalability with different data sizes and model complexities."""
 
@@ -346,6 +356,8 @@ class TestScalabilityTests:
             ), f"Training time {training_time:.2f}s too slow for {n_states} states"
 
 
+@pytest.mark.slow
+@pytest.mark.performance
 class TestRobustnessTests:
     """Test robustness under various conditions."""
 

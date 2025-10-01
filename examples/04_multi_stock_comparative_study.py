@@ -35,6 +35,10 @@ import pandas as pd
 import yfinance as yf
 
 import hidden_regime as hr
+from hidden_regime.data.financial import FinancialDataLoader
+from hidden_regime.config.data import FinancialDataConfig
+from hidden_regime.models.hmm import HiddenMarkovModel
+from hidden_regime.config.model import HMMConfig
 
 
 def main():
@@ -80,32 +84,41 @@ def main():
                 end_date = datetime.now()
                 start_date = end_date - timedelta(days=ANALYSIS_PERIOD + 50)
 
-                loader = hr.DataLoader()
-                data = loader.load_stock_data(
-                    ticker,
-                    start_date.strftime("%Y-%m-%d"),
-                    end_date.strftime("%Y-%m-%d"),
+                data_config = FinancialDataConfig(
+                    ticker=ticker,
+                    start_date=start_date.strftime("%Y-%m-%d"),
+                    end_date=end_date.strftime("%Y-%m-%d")
                 )
+                loader = FinancialDataLoader(data_config)
+                data = loader.update()
 
                 if data is None or len(data) < 200:
                     print("❌ Insufficient data")
                     failed_tickers.append(ticker)
                     continue
 
-                # Run HMM analysis
-                hmm_config = hr.HMMConfig(
-                    n_states=3, max_iterations=100, tolerance=1e-4, random_seed=42
-                )
-                hmm = hr.HiddenMarkovModel(config=hmm_config)
+                # Create observations
+                from hidden_regime.observations.financial import FinancialObservationGenerator
+                from hidden_regime.config.observation import FinancialObservationConfig
 
-                returns = data["log_return"].dropna().values
-                if len(returns) < 100:
-                    print("❌ Insufficient return data")
+                obs_config = FinancialObservationConfig(generators=["log_return"])
+                obs_gen = FinancialObservationGenerator(obs_config)
+                observations = obs_gen.update(data)
+
+                if len(observations) < 100:
+                    print("❌ Insufficient observations")
                     failed_tickers.append(ticker)
                     continue
 
-                hmm.fit(returns, verbose=False)
-                states = hmm.predict(returns)
+                # Run HMM analysis
+                hmm_config = HMMConfig(
+                    n_states=3, max_iterations=100, tolerance=1e-4, random_seed=42
+                )
+                hmm = HiddenMarkovModel(config=hmm_config)
+
+                predictions = hmm.update(observations)
+                states = predictions["predicted_state"].values
+                returns = observations["log_return"].values
 
                 # Calculate regime statistics
                 regime_stats = {}

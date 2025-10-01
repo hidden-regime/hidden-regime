@@ -162,7 +162,7 @@ def analyze_asset_regime(asset_name, raw_data):
     )
 
     financial_analysis = FinancialAnalysis(analysis_config)
-    analysis_results = financial_analysis.update(model_output, raw_data)
+    analysis_results = financial_analysis.update(model_output, raw_data, model_component=hmm_model)
 
     return model_output, analysis_results
 

@@ -155,9 +155,11 @@ class HiddenMarkovModel(ModelComponent):
                 f"Insufficient data after cleaning: {len(returns)} observations remaining, need at least {self.n_states * 3}"
             )
 
-        if removed_count > 0:
+        # Allow removal of a small number of NaN values (e.g., from pct_change calculations)
+        # Only fail if we removed a significant portion of the data
+        if removed_count > len(returns) * 0.1:  # More than 10% removed
             raise ValidationError(
-                f"Data contains missing values: {removed_count} observations had to be removed"
+                f"Excessive missing values: {removed_count} observations removed from {len(returns) + removed_count} total"
             )
 
     def fit(self, observations: pd.DataFrame) -> None:

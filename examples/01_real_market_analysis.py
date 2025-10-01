@@ -190,7 +190,7 @@ def analyze_stock(ticker, start_date, end_date):
     )
 
     financial_analysis = FinancialAnalysis(analysis_config)
-    analysis_results = financial_analysis.update(model_output, raw_data)
+    analysis_results = financial_analysis.update(model_output, raw_data, model_component=hmm_model)
 
     # Calculate performance metrics
     regime_counts = model_output["predicted_state"].value_counts().sort_index()

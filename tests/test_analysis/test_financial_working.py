@@ -318,9 +318,10 @@ class TestFinancialAnalysisWorking:
         )
         analyzer = FinancialAnalysis(config)
 
-        # Check indicator calculator initialization
+        # Check indicator analyzer initialization
         # (May be None if indicators not available)
-        assert hasattr(analyzer, "indicator_calculator")
+        assert hasattr(analyzer, "indicator_analyzer")
+        assert hasattr(analyzer, "indicator_comparator")
         assert hasattr(analyzer, "_indicators_cache")
 
     def test_various_configuration_options(self):

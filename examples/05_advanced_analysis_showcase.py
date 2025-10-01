@@ -189,7 +189,7 @@ def main():
     financial_analysis = FinancialAnalysis(analysis_config)
 
     # Run comprehensive analysis
-    analysis_results = financial_analysis.update(model_output, raw_data=raw_data)
+    analysis_results = financial_analysis.update(model_output, raw_data=raw_data, model_component=hmm_model)
     print(f"✅ Analysis complete with {len(analysis_results.columns)} features")
 
     # Get comprehensive performance metrics

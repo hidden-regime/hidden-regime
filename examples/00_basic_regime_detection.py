@@ -170,7 +170,7 @@ def main():
     )
 
     financial_analysis = FinancialAnalysis(analysis_config)
-    analysis_results = financial_analysis.update(model_output, raw_data)
+    analysis_results = financial_analysis.update(model_output, raw_data, model_component=hmm_model)
     print(f"✅ Analysis complete - {len(analysis_results)} features generated")
 
     # Generate report

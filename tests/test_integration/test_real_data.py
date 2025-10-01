@@ -20,6 +20,8 @@ class TestRealDataIntegration:
     """Test pipeline functionality with real financial data."""
 
     @pytest.mark.integration
+    @pytest.mark.slow
+    @pytest.mark.network
     def test_spy_analysis_basic(self):
         """Test basic analysis on SPY (S&P 500 ETF) with real data."""
         try:
@@ -62,6 +64,8 @@ class TestRealDataIntegration:
                 raise
 
     @pytest.mark.integration
+    @pytest.mark.slow
+    @pytest.mark.network
     def test_multiple_assets_analysis(self):
         """Test analysis across multiple popular assets."""
         tickers = ["AAPL", "MSFT", "GOOGL"]
@@ -109,6 +113,8 @@ class TestRealDataIntegration:
                     ), f"Assets {list(results_dict.keys())[i]} and {list(results_dict.keys())[j]} have identical reports"
 
     @pytest.mark.integration
+    @pytest.mark.slow
+    @pytest.mark.network
     def test_temporal_analysis_real_data(self):
         """Test temporal analysis with real data for backtesting validation."""
         try:
@@ -184,6 +190,8 @@ class TestRealDataIntegration:
                 raise
 
     @pytest.mark.integration
+    @pytest.mark.slow
+    @pytest.mark.network
     def test_different_observation_signals(self):
         """Test pipeline with different observation signal types."""
         signals_to_test = ["log_return", "close_price", "volume"]
@@ -229,6 +237,8 @@ class TestRealDataIntegration:
                     continue
 
     @pytest.mark.integration
+    @pytest.mark.slow
+    @pytest.mark.network
     def test_hmm_config_presets_real_data(self):
         """Test different HMM configuration presets with real data."""
         from hidden_regime.config.model import HMMConfig
@@ -307,6 +317,8 @@ class TestRealDataEdgeCases:
     """Test edge cases and robustness with real data."""
 
     @pytest.mark.integration
+    @pytest.mark.slow
+    @pytest.mark.network
     def test_volatile_period_analysis(self):
         """Test analysis during known volatile periods."""
         try:
@@ -352,6 +364,8 @@ class TestRealDataEdgeCases:
                 raise
 
     @pytest.mark.integration
+    @pytest.mark.slow
+    @pytest.mark.network
     def test_small_cap_vs_large_cap(self):
         """Test regime detection differences between small and large cap stocks."""
         try:
@@ -403,6 +417,8 @@ class TestRealDataEdgeCases:
                 raise
 
     @pytest.mark.integration
+    @pytest.mark.slow
+    @pytest.mark.network
     def test_recent_data_availability(self):
         """Test that recent data can be analyzed successfully."""
         try:

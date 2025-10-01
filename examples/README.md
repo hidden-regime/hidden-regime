@@ -1,227 +1,448 @@
 # Hidden Regime Examples
 
-This directory contains comprehensive examples demonstrating the visualization capabilities of the Hidden Regime package.
+This directory contains 12 working examples demonstrating the capabilities of the Hidden Regime package v1.0.0. All examples have been tested and verified to execute successfully.
 
-## 🎨 Visualization Examples
+## 🚀 Quick Start
 
-### 1. Comprehensive Visualization Demo
-**File**: `comprehensive_visualization_demo.py`
-
-A complete showcase of all visualization capabilities across the three main components:
-
-- **DataLoader Visualizations**: Market data analysis (price, returns, distributions, volume)
-- **HiddenMarkovModel Visualizations**: Regime detection analysis (states, transitions, probabilities)
-- **StateStandardizer Visualizations**: Regime characteristics and validation analysis
-- **Multi-Configuration Comparison**: Different regime setups (3-state, 4-state, 5-state)
-- **Style Consistency Demo**: Unified color schemes and formatting
-
-**Features Demonstrated**:
-- ✅ Professional financial styling
-- ✅ Consistent regime color coding
-- ✅ Date-aware time series plotting
-- ✅ Comprehensive error handling
-- ✅ High-quality output suitable for publications
-
-### 2. Quick Visualization Demo  
-**File**: `quick_visualization_demo.py`
-
-A streamlined demonstration perfect for quick testing and getting started:
-
-- Essential plotting capabilities from all three components
-- Individual plot type examples
-- Synthetic data fallback for testing
-- Clear step-by-step progression
-
-### 3. Enhanced Basic HMM Demo
-**File**: `basic_hmm_demo.py` *(Updated)*
-
-The original HMM demo enhanced with integrated visualization capabilities:
-
-- Complete HMM workflow with plotting integration
-- Demonstrates how to add visualizations to existing analysis workflows
-- Shows individual plot types and comprehensive analysis views
-- Performance comparison and accuracy visualization
-
-## 🚀 Getting Started
-
-### Prerequisites
 ```bash
-pip install matplotlib seaborn
+# Activate the virtual environment
+source /home/aoaustin/hidden-regime-pyenv/bin/activate
+
+# Run any example
+python examples/00_basic_regime_detection.py
 ```
 
-### Running the Examples
+All examples generate output in the `output/` directory including:
+- Analysis reports (Markdown format)
+- Visualizations (PNG images)
+- Performance metrics (JSON)
+- Data files (CSV/Parquet)
 
-**For comprehensive demonstration**:
+## 📚 Example Categories
+
+### Beginner Examples
+
+#### 00_basic_regime_detection.py
+**Runtime**: ~30 seconds
+**Purpose**: Minimal working example showing the core pipeline workflow
+
+Demonstrates:
+- Loading financial data with `FinancialDataLoader`
+- Generating observations with `FinancialObservationGenerator`
+- Training a 3-state HMM model
+- Running basic financial analysis
+- Generating analysis reports
+
+**Run**:
 ```bash
-python examples/comprehensive_visualization_demo.py
+python examples/00_basic_regime_detection.py
 ```
 
-**For quick testing**:
+#### 01_real_market_analysis.py
+**Runtime**: ~60 seconds
+**Purpose**: Regime detection on real market data with error handling
+
+Demonstrates:
+- Robust data loading with fallback to sample data
+- Regime change detection in actual market conditions
+- Professional analysis report generation
+- Publication-quality visualizations
+- Graceful handling of data availability issues
+
+**Run**:
 ```bash
-python examples/quick_visualization_demo.py
+python examples/01_real_market_analysis.py
 ```
 
-**For workflow integration example**:
+### Intermediate Examples
+
+#### 02_regime_comparison_analysis.py
+**Runtime**: ~20 seconds
+**Purpose**: Compare regime patterns across different assets
+
+Demonstrates:
+- Multi-asset regime detection
+- Synchronous regime change identification
+- Cross-market correlation analysis
+- Divergence and convergence pattern detection
+- Portfolio analysis applications
+
+**Run**:
 ```bash
-python examples/basic_hmm_demo.py
+python examples/02_regime_comparison_analysis.py
 ```
 
-## 📊 Available Visualization Types
+#### 03_trading_strategy_demo.py
+**Runtime**: ~15 seconds
+**Purpose**: Build practical trading strategies based on regime detection
 
-### DataLoader Plots
-- **'all'**: Comprehensive market data dashboard
-- **'price'**: Price evolution with moving averages
-- **'returns'**: Daily log returns with rolling volatility
-- **'distribution'**: Returns distribution analysis with statistical overlays
-- **'volume'**: Trading volume analysis (when available)
+Demonstrates:
+- Regime-based position sizing
+- Entry and exit signal generation
+- Performance metrics calculation
+- Realistic trading simulation with transaction costs
+- Strategy performance reporting
 
-### HiddenMarkovModel Plots  
-- **'all'**: Complete regime analysis dashboard
-- **'regimes'**: Regime classification timeline
-- **'probabilities'**: State probabilities heatmap over time
-- **'transitions'**: Regime transition matrix heatmap
-- **'statistics'**: Regime statistics comparison
-- **'convergence'**: Training convergence analysis
-- **'duration'**: Regime duration analysis
+**Run**:
+```bash
+python examples/03_trading_strategy_demo.py
+```
 
-### StateStandardizer Plots
-- **'all'**: Comprehensive regime characteristics dashboard
-- **'characteristics'**: Regime characteristics matrix heatmap
-- **'validation'**: Regime validation confidence matrix
-- **'comparison'**: Risk-return profile scatter plot
-- **'economic'**: Economic validation dashboard
+#### 04_multi_stock_comparative_study.py
+**Runtime**: ~180 seconds
+**Purpose**: Comprehensive regime analysis across multiple stocks
 
-## 🎨 Key Visualization Features
+Demonstrates:
+- Batch processing of multiple tickers
+- Cross-stock regime correlation analysis
+- Sector-based comparative studies
+- Market regime consensus identification
+- Institutional-quality comparative reporting
 
-### Professional Styling
-- Consistent financial chart styling
-- Clean, publication-ready aesthetics
-- Proper grid lines and axis formatting
-- Professional color schemes
+**Run**:
+```bash
+python examples/04_multi_stock_comparative_study.py
+```
 
-### Colorblind-Friendly Regime Color Coding
-- **Bear Markets**: Dark Orange (`#E69F00`) - colorblind-safe alternative to red
-- **Crisis Periods**: Pink/Magenta (`#CC79A7`) - distinctive and alarming
-- **Sideways Markets**: Yellow (`#F0E442`) - neutral and accessible
-- **Bull Markets**: Blue (`#0072B2`) - positive and universally accessible
-- **Euphoric Periods**: Purple (`#9467BD`) - extreme and distinctive
+### Advanced Examples
 
-**Accessibility Features:**
-- ✅ **Colorblind-Safe**: Based on Okabe-Ito research palette
-- ✅ **Pattern Support**: Different line styles (solid, dashed, dotted)
-- ✅ **Shape Differentiation**: Unique markers (triangles, squares, stars)
-- ✅ **High Contrast**: Dark edges on markers for better visibility
+#### 05_advanced_analysis_showcase.py
+**Runtime**: ~15 seconds
+**Purpose**: Complete working pipeline with all components
 
-### Date-Aware Plotting
-- Intelligent date formatting based on data range
-- Proper handling of matplotlib date limitations
-- Graceful fallback to integer indices when needed
+Demonstrates:
+- Full data → observation → model → analysis pipeline
+- Comprehensive financial metrics
+- Report generation with markdown output
+- Proper handling of edge cases
+- Current API best practices
 
-### Comprehensive Error Handling
-- Automatic detection of missing visualization dependencies
-- Informative error messages and installation instructions
-- Graceful degradation when data issues occur
+**Run**:
+```bash
+python examples/05_advanced_analysis_showcase.py
+```
 
-## 📈 Usage Patterns
+#### improved_features.py
+**Runtime**: ~120 seconds
+**Purpose**: Enhanced features for improved regime detection
 
-### Basic Usage
+Demonstrates:
+- **Momentum strength**: Bull/Bear momentum detection
+- **Trend persistence**: Sideways regime identification
+- **Volatility context**: Crisis period detection
+- **Directional consistency**: Regime characterization
+- Baseline vs enhanced feature comparison
+- Configuration-driven feature selection
+
+**Run**:
+```bash
+python examples/improved_features.py
+```
+
+### Case Study Examples
+
+#### case_study.py
+**Runtime**: ~30 seconds
+**Purpose**: Main case study orchestrator implementing 4-phase workflow
+
+Demonstrates:
+- **Phase 1 - Training**: Train HMM on historical data
+- **Phase 2 - Evolution**: Daily regime updates over evaluation period
+- **Phase 3 - Visualization**: Charts and animations
+- **Phase 4 - Analysis**: Compare vs buy-and-hold and technical indicators
+- Proper temporal isolation
+- Comprehensive performance analysis
+
+**Run**:
+```bash
+python examples/case_study.py
+```
+
+#### case_study_basic.py
+**Runtime**: ~30 seconds
+**Purpose**: Simple financial regime analysis with unified API
+
+Demonstrates:
+- `FinancialRegimeAnalysis` unified entry point
+- Quick analysis configuration
+- 3-month analysis on single stock
+- Simplified workflow for rapid testing
+
+**Run**:
+```bash
+python examples/case_study_basic.py
+```
+
+#### case_study_comprehensive.py
+**Runtime**: ~60 seconds
+**Purpose**: Full-featured analysis with all advanced options
+
+Demonstrates:
+- Comprehensive analysis configuration
+- Intelligent signal generation
+- Full trading simulation
+- Detailed performance metrics
+- Advanced reporting capabilities
+
+**Run**:
+```bash
+python examples/case_study_comprehensive.py
+```
+
+#### case_study_multi_asset.py
+**Runtime**: ~120 seconds
+**Purpose**: Comparative analysis across multiple assets
+
+Demonstrates:
+- Batch case study execution
+- Cross-asset regime comparison
+- Sector analysis capabilities
+- Asset class comparative studies
+- Multi-ticker output organization
+
+**Run**:
+```bash
+python examples/case_study_multi_asset.py
+```
+
+#### financial_case_study.py
+**Runtime**: ~90 seconds
+**Purpose**: Financial-first architecture showcase
+
+Demonstrates:
+- Data-driven regime characterization (not naive state assumptions)
+- Intelligent signal generation using regime characteristics
+- Single-asset optimized position sizing (100% allocation)
+- Zero transaction cost defaults (retail-friendly)
+- Unified configuration and analysis
+
+**Run**:
+```bash
+python examples/financial_case_study.py
+```
+
+## 🎯 Running All Examples
+
+To verify all examples work in your environment:
+
+```bash
+# Activate environment
+source /home/aoaustin/hidden-regime-pyenv/bin/activate
+
+# Run all examples (this will take ~10 minutes)
+for example in examples/*.py; do
+    echo "Running $example..."
+    python "$example"
+done
+```
+
+## 📊 Example Output Structure
+
+All examples generate organized output:
+
+```
+output/
+├── plots/                          # Visualizations (PNG)
+│   ├── regime_analysis_*.png
+│   ├── performance_comparison_*.png
+│   └── enhanced_features_*.png
+├── reports/                        # Analysis reports (Markdown)
+│   ├── *_analysis_report.md
+│   └── *_case_study_report.md
+├── data/                          # Data exports (JSON/CSV/Parquet)
+│   ├── evolution_results.json
+│   ├── performance_metrics.json
+│   └── regime_history.parquet
+└── animations/                    # Time-lapse animations (GIF)
+    └── *_regime_evolution.gif
+```
+
+## 🏗️ Pipeline Architecture
+
+All examples follow the consistent pipeline pattern:
+
 ```python
-from hidden_regime.data.loader import DataLoader
-from hidden_regime.models.base_hmm import HiddenMarkovModel
-from hidden_regime.models.state_standardizer import StateStandardizer
+# 1. Data Loading
+from hidden_regime.data.financial import FinancialDataLoader
+from hidden_regime.config.data import FinancialDataConfig
 
-# Load data and create plots
-loader = DataLoader()
-data = loader.load_stock_data("AAPL", "2023-01-01", "2024-01-01")
-fig = loader.plot(data, plot_type='all')
+data_config = FinancialDataConfig(ticker="AAPL", ...)
+loader = FinancialDataLoader(data_config)
+raw_data = loader.update()
 
-# Train HMM and visualize regime analysis
-hmm = HiddenMarkovModel()
-hmm.fit(data['log_return'].values)
-fig = hmm.plot(data['log_return'].values, dates=data['date'].values, plot_type='all')
+# 2. Observation Generation
+from hidden_regime.observations.financial import FinancialObservationGenerator
+from hidden_regime.config.observation import FinancialObservationConfig
 
-# Analyze regime characteristics
-standardizer = StateStandardizer(regime_type='3_state')
-fig = standardizer.plot(hmm.emission_params_, plot_type='all')
+obs_config = FinancialObservationConfig(generators=["log_return"])
+obs_gen = FinancialObservationGenerator(obs_config)
+observations = obs_gen.update(raw_data)
+
+# 3. Model Training
+from hidden_regime.models.hmm import HiddenMarkovModel
+from hidden_regime.config.model import HMMConfig
+
+model_config = HMMConfig(n_states=3)
+hmm_model = HiddenMarkovModel(config=model_config)
+model_output = hmm_model.update(observations)
+
+# 4. Financial Analysis
+from hidden_regime.analysis.financial import FinancialAnalysis
+from hidden_regime.config.analysis import FinancialAnalysisConfig
+
+analysis_config = FinancialAnalysisConfig()
+financial_analysis = FinancialAnalysis(analysis_config)
+analysis_results = financial_analysis.update(
+    model_output,
+    raw_data,
+    model_component=hmm_model
+)
+
+# 5. Report Generation
+from hidden_regime.reporting.financial import FinancialReportGenerator
+from hidden_regime.config.reporting import FinancialReportConfig
+
+report_config = FinancialReportConfig(output_dir="./output")
+report_gen = FinancialReportGenerator(report_config)
+report_gen.update(analysis_results, model_output, raw_data)
 ```
 
-### Saving Plots
+## 🔧 Common Configuration
+
+### Data Configuration
 ```python
-# Save individual plots
-fig = hmm.plot(returns, dates=dates, plot_type='regimes', save_path='regime_analysis.png')
+from hidden_regime.config.data import FinancialDataConfig
 
-# Save with custom settings  
-fig = loader.plot(data, plot_type='all', figsize=(16, 12))
-plt.savefig('market_analysis.png', dpi=300, bbox_inches='tight')
+config = FinancialDataConfig(
+    ticker="AAPL",
+    start_date="2024-01-01",
+    end_date="2024-12-31",
+    source="yfinance",
+    frequency="business_days"
+)
 ```
 
-### Customization
+### Model Configuration
 ```python
-# Adjust figure size
-fig = hmm.plot(returns, plot_type='all', figsize=(20, 14))
+from hidden_regime.config.model import HMMConfig
 
-# Focus on specific analysis
-fig = standardizer.plot(emission_params, plot_type='characteristics', figsize=(10, 8))
-
-# Individual component analysis
-fig = hmm.plot(returns, dates=dates, plot_type='transitions', figsize=(8, 6))
+config = HMMConfig(
+    n_states=3,              # Number of regimes
+    max_iterations=1000,     # EM algorithm iterations
+    tolerance=1e-6,          # Convergence tolerance
+    random_seed=42           # Reproducibility
+)
 ```
 
-## 🏆 Best Practices
-
-1. **Use 'all' plot types** for comprehensive analysis and presentations
-2. **Individual plot types** for focused analysis and reports
-3. **Consistent figsize** across related plots for professional presentations
-4. **Save plots** with high DPI (150-300) for publication quality
-5. **Combine components** (DataLoader → HMM → StateStandardizer) for complete analysis
-
-## ♿ Accessibility Features
-
-### Colorblind-Friendly Design
-The visualization framework is designed to be accessible to users with color vision deficiencies:
-
-- **Scientific Color Palette**: Based on Okabe-Ito colorblind-safe research
-- **Multiple Visual Cues**: Colors + shapes + patterns for regime differentiation  
-- **High Contrast**: Dark edges and borders for better visibility
-- **Meaningful Colors**: Blue for positive (bull), yellow for neutral (sideways)
-
-### Accessibility Options
+### Analysis Configuration
 ```python
-# Enable accessibility features (default: True)
-fig = hmm.plot(returns, dates=dates, plot_type='regimes', 
-               use_accessibility_features=True)
+from hidden_regime.config.analysis import FinancialAnalysisConfig
 
-# Get accessibility styling helpers
-colors = get_regime_colors(['Bear', 'Bull', 'Sideways'])
-markers = get_regime_markers(['Bear', 'Bull', 'Sideways'])  
-line_styles = get_regime_line_styles(['Bear', 'Bull', 'Sideways'])
+config = FinancialAnalysisConfig(
+    enable_trading_simulation=True,
+    initial_capital=100000.0,
+    position_sizing="regime_based",
+    stop_loss_pct=0.05
+)
 ```
 
-### Testing Your Visualizations
-- View plots in grayscale to test accessibility
-- Use colorblind simulation tools to verify distinction
-- Ensure legends include both color and text labels
+## 📖 Key Concepts
 
-## 🔧 Troubleshooting
+### Regime Detection
+The HMM identifies distinct market regimes based on return patterns:
+- **Bearish**: Negative mean returns, high volatility
+- **Sideways**: Near-zero returns, low volatility
+- **Bullish**: Positive returns, moderate volatility
+- **Crisis**: Extreme negative returns, extreme volatility
 
-### Common Issues
-- **Missing matplotlib/seaborn**: Install with `pip install matplotlib seaborn`
-- **Date conversion errors**: The package automatically handles invalid dates
-- **Memory issues with large datasets**: Use individual plot types instead of 'all'
-- **Display issues**: Ensure you have a display backend configured for matplotlib
+### Data-Driven Regime Labeling
+Unlike naive approaches, regimes are characterized by **actual financial metrics**:
+- Mean return and volatility per regime
+- Win rate and duration statistics
+- Risk-adjusted return ratios
+- Maximum drawdown per regime
 
-### Performance Tips
-- Use synthetic data for testing and development
-- Individual plot types are faster than comprehensive dashboards
-- Consider data size when using 'all' plot types
+### Trading Simulation
+Examples demonstrate realistic trading strategies:
+- Regime-based position sizing
+- Transaction cost modeling
+- Stop-loss risk management
+- Performance attribution by regime
+
+## 🎓 Learning Path
+
+**Beginners**: Start with examples 00 → 01 → 02
+
+**Traders**: Focus on examples 03 → case_study_basic → financial_case_study
+
+**Researchers**: Explore examples 04 → 05 → improved_features
+
+**Production Users**: Study case_study_comprehensive for complete workflows
+
+## ⚠️ Important Notes
+
+1. **Data Requirements**: Most examples use yfinance for data. Internet connection required for real market data.
+
+2. **Runtime**: Case study and multi-asset examples can take 2-3 minutes. Examples with 30-180s timeouts are expected.
+
+3. **Output Directory**: Examples create `output/` directory automatically. Add to `.gitignore` if committing to version control.
+
+4. **Model Component Parameter**: When using `FinancialAnalysis.update()`, always pass `model_component=hmm_model` for data-driven regime interpretation.
+
+5. **Virtual Environment**: Always activate the environment before running examples.
+
+## 🐛 Troubleshooting
+
+### Data Loading Issues
+```python
+# Examples handle this gracefully with fallback to sample data
+# Check internet connection if real market data fails
+```
+
+### Missing Dependencies
+```bash
+pip install yfinance pandas numpy matplotlib seaborn scipy
+```
+
+### Output Directory Permissions
+```bash
+chmod -R 755 output/
+```
 
 ## 🌟 Next Steps
 
 After running the examples:
-1. Try with your own financial data
-2. Experiment with different regime configurations
-3. Integrate plotting into your analysis workflows
-4. Customize styling and colors for your specific needs
-5. Explore saving plots for reports and presentations
+1. Modify configurations for your specific assets
+2. Experiment with different regime numbers (2-6 states)
+3. Adjust position sizing and risk parameters
+4. Integrate regime detection into your trading workflow
+5. Explore the generated reports and visualizations
 
-The visualization framework is designed to be both powerful and easy to use, providing professional-quality financial charts with minimal code.
+For API documentation, see the module READMEs in:
+- `hidden_regime/data/README.md`
+- `hidden_regime/models/README.md`
+- `hidden_regime/analysis/README.md`
+- `hidden_regime/reporting/README.md`
+
+## 📝 Example Summary Table
+
+| Example | Runtime | Complexity | Purpose |
+|---------|---------|------------|---------|
+| 00_basic_regime_detection.py | 30s | Beginner | Minimal working example |
+| 01_real_market_analysis.py | 60s | Beginner | Real market data with fallbacks |
+| 02_regime_comparison_analysis.py | 20s | Intermediate | Multi-asset comparison |
+| 03_trading_strategy_demo.py | 15s | Intermediate | Trading strategy development |
+| 04_multi_stock_comparative_study.py | 180s | Intermediate | Batch multi-ticker analysis |
+| 05_advanced_analysis_showcase.py | 15s | Advanced | Complete pipeline showcase |
+| improved_features.py | 120s | Advanced | Enhanced feature engineering |
+| case_study.py | 30s | Intermediate | 4-phase case study system |
+| case_study_basic.py | 30s | Beginner | Quick unified API example |
+| case_study_comprehensive.py | 60s | Advanced | Full-featured analysis |
+| case_study_multi_asset.py | 120s | Advanced | Multi-asset case studies |
+| financial_case_study.py | 90s | Advanced | Financial-first architecture |
+
+**Total Runtime**: ~10 minutes for all examples
+
+---
+
+*All examples tested and verified working on 2025-09-30*
