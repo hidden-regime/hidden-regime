@@ -126,6 +126,7 @@ The `examples/` directory contains working demonstrations:
 - **`03_trading_strategy_demo.py`** - Regime-based trading strategies
 - **`04_multi_stock_comparative_study.py`** - Multi-asset analysis
 - **`05_advanced_analysis_showcase.py`** - Advanced visualization and analysis
+- **`initialization_methods_demo.py`** - Complete guide to KMeans, Random, and Custom initialization with transfer learning
 
 ### Running Examples
 
@@ -182,6 +183,74 @@ pipeline = pipeline_factory.create_pipeline(
     # ... other configs
 )
 ```
+
+## Initialization Methods
+
+Hidden Regime supports three approaches for initializing HMM parameters:
+
+### 1. KMeans (Default - Recommended)
+
+Data-driven clustering approach that automatically discovers regime structure:
+
+```python
+config = HMMConfig(
+    n_states=3,
+    initialization_method='kmeans',  # This is the default
+)
+```
+
+**When to use:**
+- ✓ Default choice for most applications
+- ✓ No prior knowledge about regime characteristics
+- ✓ Sufficient historical data (>200 observations)
+
+### 2. Random (Quantile-Based)
+
+Simple initialization using data quantiles:
+
+```python
+config = HMMConfig(
+    n_states=3,
+    initialization_method='random',
+)
+```
+
+**When to use:**
+- ✓ Fallback when sklearn not available
+- ✓ Small datasets where KMeans struggles
+- ✓ Quick prototyping
+
+### 3. Custom (Expert-Specified)
+
+Specify exact starting parameters based on domain knowledge:
+
+```python
+# Option 1: Direct specification
+config = HMMConfig(
+    n_states=3,
+    initialization_method='custom',
+    custom_emission_means=[-0.015, 0.0, 0.012],  # Bear, Sideways, Bull
+    custom_emission_stds=[0.025, 0.015, 0.020],
+    # Optional: custom_transition_matrix, custom_initial_probs
+)
+
+# Option 2: Convenience factory
+config = HMMConfig.from_regime_specs([
+    {'mean': -0.015, 'std': 0.025},  # Bear
+    {'mean': 0.0, 'std': 0.015},     # Sideways
+    {'mean': 0.012, 'std': 0.020},   # Bull
+])
+```
+
+**When to use:**
+- ✓ Transfer learning (use trained params from similar asset)
+- ✓ Incorporating expert domain knowledge
+- ✓ Research reproducibility
+- ✓ Testing specific regime hypotheses
+
+**Note:** Custom parameters are **starting values** - Baum-Welch training will update them based on actual data.
+
+See `examples/initialization_methods_demo.py` for complete demonstrations including transfer learning workflows.
 
 ## Testing
 

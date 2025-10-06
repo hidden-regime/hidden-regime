@@ -20,7 +20,7 @@ from hidden_regime.financial.config import FinancialRegimeConfig
 
 def main():
     """Run basic financial regime analysis example."""
-    print("📊 Financial Regime Analysis - Basic Example")
+    print(" Financial Regime Analysis - Basic Example")
     print("=" * 50)
 
     # Create a quick financial analysis configuration
@@ -42,7 +42,7 @@ def main():
 
     try:
         # Run the financial analysis
-        print(f"\n🚀 Starting financial regime analysis...")
+        print(f"\n Starting financial regime analysis...")
         start_time = datetime.now()
 
         # Create and run analysis
@@ -52,7 +52,7 @@ def main():
         execution_time = (datetime.now() - start_time).total_seconds()
 
         # Display results summary
-        print(f"\n✅ Financial regime analysis completed!")
+        print(f"\n Financial regime analysis completed!")
         print(f"Execution time: {execution_time:.1f} seconds")
         print(f"Output directory: {config.output_directory}")
 
@@ -76,13 +76,13 @@ def main():
             print(f"   Best Strategy: {sim.best_strategy}")
 
         print(f"\n📁 Generated files in {config.output_directory}:")
-        print(f"   📊 Regime analysis charts")
-        print(f"   📈 Performance comparison plots")
+        print(f"    Regime analysis charts")
+        print(f"    Performance comparison plots")
         print(f"   💾 Trade journal and data exports")
         print(f"   📝 Comprehensive analysis report")
 
     except Exception as e:
-        print(f"\n❌ Financial analysis failed: {e}")
+        print(f"\n Financial analysis failed: {e}")
         import traceback
 
         traceback.print_exc()

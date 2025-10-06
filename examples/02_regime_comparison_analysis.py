@@ -212,7 +212,7 @@ def main():
         "INTL_EMERGING": "International Emerging",
     }
 
-    print(f"\\n📊 Analyzing {len(assets)} different market segments...")
+    print(f"\\n Analyzing {len(assets)} different market segments...")
 
     # Load/generate data for all assets
     try:
@@ -221,10 +221,10 @@ def main():
         asset_data, master_regimes = create_correlated_sample_data(
             list(assets.keys()), n_days=250, correlation=0.6
         )
-        print("✅ Sample data generated with 60% correlation")
+        print(" Sample data generated with 60% correlation")
 
     except Exception as e:
-        print(f"❌ Data generation failed: {e}")
+        print(f" Data generation failed: {e}")
         return
 
     # Analyze each asset
@@ -232,7 +232,7 @@ def main():
     regime_results = {}
 
     for asset_code, asset_name in assets.items():
-        print(f"   📈 Analyzing {asset_name}...")
+        print(f"    Analyzing {asset_name}...")
         try:
             raw_data = asset_data[asset_code]["data"]
             model_output, analysis_results = analyze_asset_regime(asset_code, raw_data)
@@ -245,14 +245,14 @@ def main():
                 "current_regime": model_output["predicted_state"].iloc[-1],
                 "confidence": model_output.get("confidence", pd.Series([0.0])).iloc[-1],
             }
-            print(f"   ✅ {asset_name} complete")
+            print(f"    {asset_name} complete")
 
         except Exception as e:
-            print(f"   ❌ {asset_name} failed: {e}")
+            print(f"    {asset_name} failed: {e}")
             continue
 
     if len(regime_results) < 2:
-        print("❌ Need at least 2 successful analyses for comparison")
+        print(" Need at least 2 successful analyses for comparison")
         return
 
     # Extract regime sequences for comparison
@@ -389,7 +389,7 @@ def main():
             )
             f.write("depending on specific asset combinations.\\n\\n")
 
-    print(f"✅ Report saved as: {report_filename}")
+    print(f" Report saved as: {report_filename}")
 
     # Create comparative visualization
     print(f"\\n🎨 Creating comparative visualization...")
@@ -463,14 +463,14 @@ def main():
         fig.savefig(plot_filename, dpi=300, bbox_inches="tight")
         plt.close(fig)
 
-        print(f"✅ Visualization saved as: {plot_filename}")
+        print(f" Visualization saved as: {plot_filename}")
 
     except Exception as e:
-        print(f"❌ Visualization failed: {e}")
+        print(f" Visualization failed: {e}")
         plot_filename = None
 
     # Summary results
-    print(f"\\n📊 Comparison Summary:")
+    print(f"\\n Comparison Summary:")
     print("=" * 30)
 
     print(f"Assets Analyzed: {len(regime_results)}")
@@ -509,10 +509,10 @@ if __name__ == "__main__":
     try:
         results = main()
         print("\\n" + "=" * 50)
-        print("🚀 Regime Comparison Analysis: SUCCESS")
+        print(" Regime Comparison Analysis: SUCCESS")
         print("=" * 50)
     except Exception as e:
-        print(f"\\n❌ Error running comparison: {e}")
+        print(f"\\n Error running comparison: {e}")
         import traceback
 
         traceback.print_exc()

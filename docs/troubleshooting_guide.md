@@ -988,10 +988,10 @@ def validate_model(model, data):
     
     # Check if model is fitted
     if not hasattr(model, 'emission_params_'):
-        print("❌ Model not fitted")
+        print(" Model not fitted")
         return False
     
-    print("✅ Model is fitted")
+    print(" Model is fitted")
     
     # Check parameter validity
     params_valid = True
@@ -999,38 +999,38 @@ def validate_model(model, data):
     # Transition matrix
     T = model.transition_matrix_
     if np.any(np.isnan(T)) or np.any(np.isinf(T)):
-        print("❌ Invalid transition matrix (NaN/Inf)")
+        print(" Invalid transition matrix (NaN/Inf)")
         params_valid = False
     elif not np.allclose(T.sum(axis=1), 1.0, rtol=1e-3):
-        print("❌ Transition matrix not stochastic")
+        print(" Transition matrix not stochastic")
         params_valid = False
     else:
-        print("✅ Transition matrix valid")
+        print(" Transition matrix valid")
     
     # Emission parameters
     emissions = model.emission_params_
     if np.any(np.isnan(emissions)) or np.any(np.isinf(emissions)):
-        print("❌ Invalid emission parameters (NaN/Inf)")
+        print(" Invalid emission parameters (NaN/Inf)")
         params_valid = False
     elif np.any(emissions[:, 1] <= 0):  # Check variances
-        print("❌ Non-positive variances in emission parameters")
+        print(" Non-positive variances in emission parameters")
         params_valid = False
     else:
-        print("✅ Emission parameters valid")
+        print(" Emission parameters valid")
     
     # Test prediction
     try:
         states = model.predict(data['log_return'].values[:100])  # Test with subset
-        print("✅ Prediction successful")
+        print(" Prediction successful")
     except Exception as e:
-        print(f"❌ Prediction failed: {e}")
+        print(f" Prediction failed: {e}")
         params_valid = False
     
     return params_valid
 
 # Usage
 is_valid = validate_model(model, data)
-print(f"\nOverall model validity: {'✅ VALID' if is_valid else '❌ INVALID'}")
+print(f"\nOverall model validity: {' VALID' if is_valid else ' INVALID'}")
 ```
 
 ### Performance Profiler

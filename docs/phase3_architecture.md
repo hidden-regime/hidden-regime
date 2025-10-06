@@ -16,7 +16,7 @@ Phase 3 represents a significant evolution from deterministic HMMs to probabilis
 
 ## Current State Analysis
 
-### Phase 2 Capabilities ✅
+### Phase 2 Capabilities 
 - **Static HMMs**: Fixed parameters after training
 - **Point Estimates**: Single values for all parameters
 - **Batch Processing**: Complete retraining required for updates

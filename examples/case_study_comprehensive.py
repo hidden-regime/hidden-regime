@@ -20,7 +20,7 @@ from hidden_regime.financial.config import FinancialRegimeConfig
 
 def main():
     """Run comprehensive financial regime analysis example."""
-    print("📊 Comprehensive Financial Regime Analysis")
+    print(" Comprehensive Financial Regime Analysis")
     print("=" * 60)
 
     # Create a comprehensive financial analysis configuration
@@ -47,7 +47,7 @@ def main():
 
     try:
         # Run the comprehensive financial analysis
-        print(f"\n🚀 Starting comprehensive financial regime analysis...")
+        print(f"\n Starting comprehensive financial regime analysis...")
         print(
             "This may take several minutes due to animations and comprehensive analysis..."
         )
@@ -61,7 +61,7 @@ def main():
         total_time = (datetime.now() - start_time).total_seconds()
 
         # Display comprehensive results
-        print(f"\n✅ Comprehensive financial regime analysis completed!")
+        print(f"\n Comprehensive financial regime analysis completed!")
         print(f"Total execution time: {total_time:.1f} seconds")
         print(f"Output directory: {config.output_directory}")
 
@@ -78,7 +78,7 @@ def main():
         # Current regime state
         if results.analysis_success:
             current_regime = results.current_regime_info
-            print(f"\n📈 Current Market State:")
+            print(f"\n Current Market State:")
             print(f"   Regime Type: {current_regime['regime_type']}")
             print(f"   Confidence: {current_regime['confidence']:.1%}")
             print(f"   Expected Return: {current_regime['expected_return']:.1%}")
@@ -99,7 +99,7 @@ def main():
 
             # Strategy comparison
             if sim.strategy_results:
-                print(f"\n📊 Strategy Performance Rankings:")
+                print(f"\n Strategy Performance Rankings:")
                 sorted_strategies = sorted(
                     sim.strategy_results.items(),
                     key=lambda x: x[1].get("sharpe_ratio", 0),
@@ -115,8 +115,8 @@ def main():
 
         # Generated files summary
         print(f"\n📁 Generated files in {config.output_directory}:")
-        print(f"   📊 Regime analysis and characterization charts")
-        print(f"   📈 Performance comparison plots")
+        print(f"    Regime analysis and characterization charts")
+        print(f"    Performance comparison plots")
         print(f"   💼 Trading simulation results")
         if config.create_animations:
             print(f"   🎬 Regime evolution animations (GIF)")
@@ -127,7 +127,7 @@ def main():
 
         # Analysis insights
         if results.analysis_success:
-            print(f"\n💡 Key Financial Insights:")
+            print(f"\nNote: Key Financial Insights:")
             print(f"   • Intelligent regime-based signal generation")
             print(
                 f"   • Data-driven regime characterization (not naive state assumptions)"
@@ -139,7 +139,7 @@ def main():
             print(f"   • Comprehensive risk-adjusted performance metrics")
 
     except Exception as e:
-        print(f"\n❌ Comprehensive financial analysis failed: {e}")
+        print(f"\n Comprehensive financial analysis failed: {e}")
         import traceback
 
         traceback.print_exc()

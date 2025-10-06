@@ -6,7 +6,7 @@ The `StateStandardizer` is a post-processing utility that bridges the gap betwee
 
 ## When to Use StateStandardizer
 
-### ✅ Production Financial Applications
+###  Production Financial Applications
 
 **Use StateStandardizer when you need:**
 - **Trading Systems**: Regime-based position sizing and strategy selection
@@ -21,7 +21,7 @@ The `StateStandardizer` is a post-processing utility that bridges the gap betwee
 # Provide: "Currently in Bull regime with 73% confidence"
 ```
 
-### ✅ Standardization and Comparison
+###  Standardization and Comparison
 
 **Use StateStandardizer when you need:**
 - **Model Consistency**: Same regime labels across different time periods
@@ -29,7 +29,7 @@ The `StateStandardizer` is a post-processing utility that bridges the gap betwee
 - **Backtesting**: Consistent regime definitions for historical analysis
 - **Model Validation**: Economic validation of detected patterns
 
-### ❌ Research and Exploration
+###  Research and Exploration
 
 **Skip StateStandardizer when you:**
 - **Discover New Patterns**: Want to find regime structures without preconceptions
@@ -37,7 +37,7 @@ The `StateStandardizer` is a post-processing utility that bridges the gap betwee
 - **Model Development**: Prototyping and experimenting with different approaches
 - **Performance Critical**: Need maximum computational speed
 
-### ❌ Non-Financial Applications
+###  Non-Financial Applications
 
 **Skip StateStandardizer for:**
 - **Speech Recognition**: States represent phonemes, not market conditions

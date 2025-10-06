@@ -452,7 +452,7 @@ class MultiSignalGenerator:
                 signals = generator.generate_signals(price_data, additional_data)
                 all_signals[name] = signals
             except Exception as e:
-                print(f"⚠️ Warning: Failed to generate signals for {name}: {e}")
+                print(f"[WARNING] Warning: Failed to generate signals for {name}: {e}")
                 # Create empty signal series for failed generators
                 all_signals[name] = pd.Series(
                     SignalType.HOLD.value, index=price_data.index

@@ -277,13 +277,13 @@ def calculate_performance_metrics(portfolio_values, benchmark_values):
 
 def main():
     """Main trading strategy demonstration."""
-    print("📊 Trading Strategy Demo")
+    print(" Trading Strategy Demo")
     print("=" * 40)
 
     # Generate or load data
     try:
         # Try real data first
-        print("\\n📈 Attempting to load real market data...")
+        print("\\n Attempting to load real market data...")
         data_loader = FinancialDataLoader(
             FinancialDataConfig(
                 ticker="SPY", start_date="2022-01-01", end_date="2024-01-01"
@@ -293,16 +293,16 @@ def main():
         raw_data = data_loader.update()
 
         if raw_data.empty:
-            print("❌ No real data available, using sample data")
+            print(" No real data available, using sample data")
             raw_data, true_regimes = create_trading_sample_data()
             ticker = "DEMO"
         else:
-            print(f"✅ Loaded {len(raw_data)} days of SPY data")
+            print(f" Loaded {len(raw_data)} days of SPY data")
             ticker = "SPY"
             true_regimes = None
 
     except Exception as e:
-        print(f"❌ Data loading failed: {e}")
+        print(f" Data loading failed: {e}")
         print("📝 Using sample trading data")
         raw_data, true_regimes = create_trading_sample_data()
         ticker = "DEMO"
@@ -320,8 +320,8 @@ def main():
     hmm_model = HiddenMarkovModel(model_config)
     model_output = hmm_model.update(observations)
 
-    print(f"✅ Model trained successfully")
-    print(f"📊 Generated regime predictions for {len(model_output)} days")
+    print(f" Model trained successfully")
+    print(f" Generated regime predictions for {len(model_output)} days")
 
     # Run trading strategy
     print("\\n💰 Running regime-based trading strategy...")
@@ -336,7 +336,7 @@ def main():
     benchmark_values = initial_value * (raw_data["close"] / raw_data["close"].iloc[0])
 
     # Calculate performance
-    print("\\n📊 Calculating performance metrics...")
+    print("\\n Calculating performance metrics...")
     metrics = calculate_performance_metrics(portfolio_values, benchmark_values)
 
     # Generate trading report
@@ -422,23 +422,23 @@ def main():
         f.write("\\n## Strategy Interpretation\\n\\n")
 
         if metrics["total_return_portfolio"] > metrics["total_return_benchmark"]:
-            f.write("✅ **Strategy outperformed** buy-and-hold benchmark.\\n\\n")
+            f.write(" **Strategy outperformed** buy-and-hold benchmark.\\n\\n")
         else:
-            f.write("❌ **Strategy underperformed** buy-and-hold benchmark.\\n\\n")
+            f.write(" **Strategy underperformed** buy-and-hold benchmark.\\n\\n")
 
         if metrics["sharpe_portfolio"] > metrics["sharpe_benchmark"]:
-            f.write("✅ **Better risk-adjusted returns** than benchmark.\\n\\n")
+            f.write(" **Better risk-adjusted returns** than benchmark.\\n\\n")
         else:
-            f.write("❌ **Worse risk-adjusted returns** than benchmark.\\n\\n")
+            f.write(" **Worse risk-adjusted returns** than benchmark.\\n\\n")
 
         if metrics["max_drawdown"] > -0.1:
-            f.write("✅ **Low maximum drawdown** - good downside protection.\\n\\n")
+            f.write(" **Low maximum drawdown** - good downside protection.\\n\\n")
         elif metrics["max_drawdown"] > -0.2:
-            f.write("⚠️ **Moderate maximum drawdown** - acceptable risk level.\\n\\n")
+            f.write("[WARNING] **Moderate maximum drawdown** - acceptable risk level.\\n\\n")
         else:
-            f.write("❌ **High maximum drawdown** - significant downside risk.\\n\\n")
+            f.write(" **High maximum drawdown** - significant downside risk.\\n\\n")
 
-    print(f"✅ Report saved as: {report_filename}")
+    print(f" Report saved as: {report_filename}")
 
     # Create performance visualization
     print("\\n🎨 Creating performance visualization...")
@@ -539,14 +539,14 @@ def main():
         fig.savefig(plot_filename, dpi=300, bbox_inches="tight")
         plt.close(fig)
 
-        print(f"✅ Visualization saved as: {plot_filename}")
+        print(f" Visualization saved as: {plot_filename}")
 
     except Exception as e:
-        print(f"❌ Visualization failed: {e}")
+        print(f" Visualization failed: {e}")
         plot_filename = None
 
     # Display summary results
-    print(f"\\n📊 Trading Strategy Results for {ticker}:")
+    print(f"\\n Trading Strategy Results for {ticker}:")
     print("=" * 50)
 
     print(f"Strategy Performance:")
@@ -594,10 +594,10 @@ if __name__ == "__main__":
     try:
         results = main()
         print("\\n" + "=" * 50)
-        print("🚀 Trading Strategy Demo: SUCCESS")
+        print(" Trading Strategy Demo: SUCCESS")
         print("=" * 50)
     except Exception as e:
-        print(f"\\n❌ Error running trading demo: {e}")
+        print(f"\\n Error running trading demo: {e}")
         import traceback
 
         traceback.print_exc()

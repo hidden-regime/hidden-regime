@@ -1130,14 +1130,14 @@ class ProductionHMMTradingSystem:
             if not validation_metrics['is_valid']:
                 raise Exception(f"Model validation failed: {validation_metrics['errors']}")
             
-            print(f"✅ System initialized successfully")
+            print(f" System initialized successfully")
             print(f"   Model accuracy: {validation_metrics['regime_accuracy']:.2%}")
             print(f"   Confidence: {validation_metrics['avg_confidence']:.2%}")
             
             return True
             
         except Exception as e:
-            print(f"❌ System initialization failed: {e}")
+            print(f" System initialization failed: {e}")
             return False
     
     def process_market_data(self, market_data):
@@ -1209,7 +1209,7 @@ class ProductionHMMTradingSystem:
             return {'status': 'initialized'}
             
         except Exception as e:
-            print(f"❌ Error processing market data: {e}")
+            print(f" Error processing market data: {e}")
             return {'status': 'error', 'error': str(e)}
     
     def execute_trade(self, target_position, current_price, timestamp):
@@ -1247,7 +1247,7 @@ class ProductionHMMTradingSystem:
                     'order_id': order_result['order_id']
                 })
                 
-                print(f"✅ Trade executed: {order_side} {order_size:.3f} at {current_price:.2f}")
+                print(f" Trade executed: {order_side} {order_size:.3f} at {current_price:.2f}")
                 print(f"   New position: {self.current_position:.3f}")
                 
                 return {'trade_executed': True, 'order_result': order_result}
@@ -1255,7 +1255,7 @@ class ProductionHMMTradingSystem:
                 return {'trade_executed': False, 'reason': 'order_failed', 'details': order_result}
                 
         except Exception as e:
-            print(f"❌ Trade execution failed: {e}")
+            print(f" Trade execution failed: {e}")
             return {'trade_executed': False, 'reason': 'execution_error', 'error': str(e)}
     
     def validate_model(self, historical_data):
@@ -1413,7 +1413,7 @@ def run_production_system():
     }
     
     if trading_system.initialize_system(historical_data):
-        print("🚀 Production trading system is running...")
+        print(" Production trading system is running...")
         
         # In production, this would be connected to live market data
         # Example simulation:
@@ -1427,7 +1427,7 @@ def run_production_system():
             print(f"Day {day+1}: {result}")
     
     else:
-        print("❌ Failed to initialize trading system")
+        print(" Failed to initialize trading system")
 
 if __name__ == "__main__":
     run_production_system()
@@ -1860,7 +1860,7 @@ def analyze_hmm_strategy_performance():
     )
     
     # Display results
-    print("📊 HMM Strategy Performance Analysis")
+    print(" HMM Strategy Performance Analysis")
     print("=" * 50)
     
     basic = results['basic_metrics']
@@ -1870,14 +1870,14 @@ def analyze_hmm_strategy_performance():
     print(f"Alpha: {basic['alpha']:.2%}")
     print(f"Information Ratio: {basic['information_ratio']:.2f}")
     
-    print(f"\n📈 Regime Performance:")
+    print(f"\n Regime Performance:")
     for regime, metrics in results['regime_metrics'].items():
         print(f"{regime:>9}: Return={metrics['mean_daily_return']*252:.2%}, "
               f"Sharpe={metrics['sharpe_ratio']:.2f}, "
               f"Hit Rate={metrics['hit_rate']:.1%}")
     
     risk = results['risk_metrics']
-    print(f"\n⚠️  Risk Metrics:")
+    print(f"\n[WARNING]  Risk Metrics:")
     print(f"Max Drawdown: {risk['max_drawdown']:.2%}")
     print(f"VaR (95%): {risk['var_95']:.2%}")
     print(f"Beta: {risk['beta']:.2f}")

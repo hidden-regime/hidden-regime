@@ -243,10 +243,10 @@ for event_date, description in market_events.items():
 ```
 
 **Validation Results:**
-- **Bear Market Start**: ✅ Correctly identified bear regime (89% confidence)
-- **Bull Market Start**: ✅ Detected regime shift 2 days after actual start
-- **Banking Crisis**: ✅ Temporary shift to sideways regime during crisis
-- **Crisis Resolution**: ✅ Quick return to bull regime after stabilization
+- **Bear Market Start**:  Correctly identified bear regime (89% confidence)
+- **Bull Market Start**:  Detected regime shift 2 days after actual start
+- **Banking Crisis**:  Temporary shift to sideways regime during crisis
+- **Crisis Resolution**:  Quick return to bull regime after stabilization
 - **Overall Accuracy**: 94% alignment with major market turning points
 
 ### Portfolio Risk Management Application

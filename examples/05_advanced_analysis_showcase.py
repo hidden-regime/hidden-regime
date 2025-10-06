@@ -120,7 +120,7 @@ def create_sample_data():
 
 def main():
     """Main demonstration function."""
-    print("🚀 Hidden Regime: Advanced Analysis Showcase (Phase 3)")
+    print(" Hidden Regime: Advanced Analysis Showcase (Phase 3)")
     print("=" * 60)
 
     # Configuration
@@ -130,7 +130,7 @@ def main():
 
     try:
         # Load market data
-        print(f"\n📊 Loading market data for {ticker}...")
+        print(f"\n Loading market data for {ticker}...")
         data_loader = FinancialDataLoader(
             FinancialDataConfig(ticker=ticker, start_date=start_date, end_date=end_date)
         )
@@ -138,14 +138,14 @@ def main():
         raw_data = data_loader.update()
 
         if raw_data.empty:
-            print("❌ No data retrieved, using sample data instead")
+            print(" No data retrieved, using sample data instead")
             raw_data = create_sample_data()
             ticker = "SAMPLE"
         else:
-            print(f"✅ Loaded {len(raw_data)} days of {ticker} data")
+            print(f" Loaded {len(raw_data)} days of {ticker} data")
 
     except Exception as e:
-        print(f"❌ Data loading failed: {e}")
+        print(f" Data loading failed: {e}")
         print("📝 Using sample data instead")
         raw_data = create_sample_data()
         ticker = "SAMPLE"
@@ -157,7 +157,7 @@ def main():
 
     # Generate observations
     observations = observation_component.update(raw_data)
-    print(f"✅ Generated {len(observations)} observations")
+    print(f" Generated {len(observations)} observations")
 
     # Create and train HMM model
     print("\n🤖 Training HMM model...")
@@ -166,9 +166,9 @@ def main():
 
     # Train model
     model_output = hmm_model.update(observations)
-    print(f"✅ Model trained, generated {len(model_output)} predictions")
+    print(f" Model trained, generated {len(model_output)} predictions")
     print(
-        f"📊 Current regime: {model_output['predicted_state'].iloc[-1]} "
+        f" Current regime: {model_output['predicted_state'].iloc[-1]} "
         f"(confidence: {model_output['confidence'].iloc[-1]:.1%})"
     )
 
@@ -190,10 +190,10 @@ def main():
 
     # Run comprehensive analysis
     analysis_results = financial_analysis.update(model_output, raw_data=raw_data, model_component=hmm_model)
-    print(f"✅ Analysis complete with {len(analysis_results.columns)} features")
+    print(f" Analysis complete with {len(analysis_results.columns)} features")
 
     # Get comprehensive performance metrics
-    print("\n📈 Generating comprehensive performance metrics...")
+    print("\n Generating comprehensive performance metrics...")
     performance_metrics = financial_analysis.get_comprehensive_performance_metrics()
 
     # Create indicator comparison analysis
@@ -206,9 +206,9 @@ def main():
         indicators=["rsi", "macd", "bollinger_bands", "moving_average"],
     )
 
-    print("✅ Indicator comparison complete")
+    print(" Indicator comparison complete")
     if "indicator_analysis" in comparison_results:
-        print(f"📊 Analyzed {len(comparison_results['indicator_analysis'])} indicators")
+        print(f" Analyzed {len(comparison_results['indicator_analysis'])} indicators")
 
         # Show performance ratings
         for indicator, analysis in comparison_results["indicator_analysis"].items():
@@ -248,7 +248,7 @@ def main():
     with open(report_filename, "w") as f:
         f.write(full_report)
 
-    print(f"✅ Report saved as: {report_filename}")
+    print(f" Report saved as: {report_filename}")
 
     # Create basic visualizations that work
     print("\n🎨 Creating visualizations...")
@@ -293,14 +293,14 @@ def main():
         fig.savefig(plot_filename, dpi=300, bbox_inches="tight")
         plt.close(fig)
 
-        print(f"   ✅ Visualization saved as: {plot_filename}")
+        print(f"    Visualization saved as: {plot_filename}")
 
     except Exception as e:
-        print(f"   ❌ Visualization failed: {e}")
+        print(f"    Visualization failed: {e}")
         plot_filename = None
 
     # Display key results
-    print(f"\n📊 Key Results for {ticker}:")
+    print(f"\n Key Results for {ticker}:")
     print("=" * 40)
 
     # Basic results display
@@ -351,12 +351,12 @@ def main():
         print(f"   • Visualization: {plot_filename}")
 
     print(f"\n🔧 Demonstrated capabilities:")
-    print(f"   ✅ Data loading and processing")
-    print(f"   ✅ HMM regime detection")
-    print(f"   ✅ Financial analysis")
-    print(f"   ✅ Performance metrics")
-    print(f"   ✅ Report generation")
-    print(f"   ✅ Basic visualizations")
+    print(f"    Data loading and processing")
+    print(f"    HMM regime detection")
+    print(f"    Financial analysis")
+    print(f"    Performance metrics")
+    print(f"    Report generation")
+    print(f"    Basic visualizations")
 
     return {
         "analysis": analysis_results,
@@ -371,9 +371,9 @@ if __name__ == "__main__":
     try:
         results = main()
         print("\n" + "=" * 60)
-        print("🚀 Advanced Analysis Showcase: COMPLETE")
+        print(" Advanced Analysis Showcase: COMPLETE")
         print("=" * 60)
     except Exception as e:
-        print(f"\n❌ Error running showcase: {e}")
+        print(f"\n Error running showcase: {e}")
         print("This may be due to known implementation bugs.")
         print("Check TODOS.md for bug resolution status.")

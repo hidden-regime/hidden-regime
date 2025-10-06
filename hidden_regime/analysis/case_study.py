@@ -247,7 +247,7 @@ class CaseStudyAnalyzer:
 
         # Analyze comprehensive technical indicators
         try:
-            print("   📊 Analyzing comprehensive technical indicators...")
+            print("    Analyzing comprehensive technical indicators...")
 
             # Calculate all technical indicator strategies
             all_indicator_results = (
@@ -263,7 +263,7 @@ class CaseStudyAnalyzer:
                 ranking_metric="sharpe_ratio",
             )
 
-            print(f"   📈 Selected top {len(best_indicators)} technical indicators:")
+            print(f"    Selected top {len(best_indicators)} technical indicators:")
             for i, (indicator_name, sharpe) in enumerate(best_indicators):
                 print(f"      {i+1}. {indicator_name}: Sharpe {sharpe:.3f}")
 

@@ -734,6 +734,122 @@ print(f"Max drawdown: {np.minimum.accumulate(np.cumsum(portfolio_returns)).min()
    - Use `'random'` with multiple seeds for robustness
    - Set `random_seed` for reproducible results
 
+**Understanding Silhouette Scores for Financial Data**:
+
+When using KMeans initialization, you may see silhouette scores in the range 0.10-0.20. **This is normal and expected for financial returns**, not a sign of poor clustering. Here's why:
+
+- **Financial regimes overlap**: Bull/bear/sideways states have fuzzy boundaries with gradual transitions
+- **Typical scores**: Research shows 0.10-0.20 is common for financial time series clustering
+- **Standard interpretation doesn't apply**: General clustering guidelines (>0.5 = good, <0.2 = poor) assume convex clusters, which market regimes are not
+
+**What silhouette scores mean for financial data**:
+- **> 0.25**: Excellent separation (regimes are unusually well-defined)
+- **0.15-0.25**: Good separation (typical for real markets)
+- **0.05-0.15**: Typical overlapping regimes (expected, not problematic)
+- **< 0.05**: Investigate regime definition (may be too many states)
+
+**Better quality metrics for financial HMMs**:
+```python
+# Check these instead of relying solely on silhouette score
+diagnostics = hmm.get_initialization_diagnostics()
+
+# 1. Regime persistence (diagonal elements of transition matrix)
+persistence = np.diag(hmm.transition_matrix_)
+print(f"Regime persistence: {persistence}")  # Should be > 0.7
+
+# 2. Model likelihood
+log_likelihood = hmm.score(returns)
+print(f"Log-likelihood: {log_likelihood}")
+
+# 3. Regime duration
+analysis = hmm.analyze_regimes(returns)
+for state, stats in analysis['regime_statistics'].items():
+    print(f"State {state} avg duration: {stats['average_duration']} days")
+```
+
+**Evaluating Model Quality: The 3 Key Metrics**
+
+Instead of relying solely on silhouette scores, use these three metrics to assess your HMM:
+
+```python
+# Get all quality metrics at once
+quality = hmm.get_quality_metrics(observations)
+
+print(f"Log-Likelihood: {quality['log_likelihood']['per_observation']:.4f}")
+print(f"Avg Duration: {quality['regime_durations']['average']:.1f} days")
+print(f"Avg Persistence: {quality['regime_persistence']['average']:.1%}")
+
+# Or print formatted report
+hmm.print_quality_report(observations)
+```
+
+**Quality Guidelines:**
+
+| Metric | Type | Assessment Criteria | Interpretation |
+|--------|------|---------------------|----------------|
+| **Log-Likelihood (per obs)** | Objective Quality | > -3.0: Good fit<br>< -3.0: Poor fit | Higher (less negative) = better model fit<br>**Only metric objectively assessed** |
+| **Regime Duration** | Descriptive | *No universal threshold* | Depends on your trading strategy:<br>• Day trading: 1-2 days ideal<br>• Swing trading: 5-10 days ideal<br>• Position trading: weeks ideal |
+| **Regime Persistence** | Descriptive | *No universal threshold* | Related to duration via 1/(1-P)<br>Higher frequency data → higher persistence<br>Volatile assets → lower persistence |
+
+**Why These Metrics Matter:**
+
+1. **Log-Likelihood** - Objective model fit quality
+   - Only metric that can be universally assessed
+   - More negative = worse fit to data
+   - Compare models: higher (less negative) is better
+   - If < -3.0, consider more data or fewer states
+
+2. **Regime Duration** - Descriptive timing characteristic
+   - Reports how long regimes typically last
+   - **No "good" or "bad" values** - depends on your use case
+   - Short durations may be ideal for day trading
+   - Long durations may be ideal for position trading
+
+3. **Regime Persistence** - Descriptive stability characteristic
+   - Reports probability of staying in same regime
+   - **No "good" or "bad" values** - depends on data frequency and asset type
+   - Higher frequency data (minute/hourly) naturally has higher persistence
+   - Individual stocks naturally have lower persistence than indices
+
+**Example Output:**
+```
+================================================================================
+HMM QUALITY REPORT
+================================================================================
+
+📊 LOG-LIKELIHOOD (Model Fit)
+   Total: -425.32
+   Per Observation: -1.71
+   → Higher is better (less negative)
+
+⏱️  REGIME DURATION (Timing)
+   Average Duration: 8.3 days
+   By State:
+      State 0: 6.2 days
+      State 1: 12.1 days
+      State 2: 7.2 days
+   → Regimes last 8.3 days on average
+
+🔄 REGIME PERSISTENCE (Stability)
+   Average Persistence: 83.9%
+   By State:
+      State 0: 83.8% (expected 6.2 days)
+      State 1: 91.7% (expected 12.0 days)
+      State 2: 86.1% (expected 7.2 days)
+   → Average 83.9% chance of staying in same regime
+
+--------------------------------------------------------------------------------
+OVERALL ASSESSMENT
+   Model fit is good (log-likelihood per observation > -3.0)
+
+Note: Persistence and duration are descriptive characteristics.
+      Suitable values depend on your trading timeframe and strategy:
+      • Day trading: Short durations (1-2 days) may be ideal
+      • Swing trading: Medium durations (5-10 days) may be ideal
+      • Position trading: Long durations (weeks) may be ideal
+================================================================================
+```
+
 3. **Convergence settings**:
    - Increase `max_iterations` for complex models
    - Lower `tolerance` for more precise fitting

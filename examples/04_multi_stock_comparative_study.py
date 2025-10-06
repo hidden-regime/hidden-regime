@@ -66,7 +66,7 @@ def main():
     # Create output directory
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    print(f"📊 Analyzing {len(ALL_TICKERS)} stocks across {len(STOCK_GROUPS)} groups")
+    print(f" Analyzing {len(ALL_TICKERS)} stocks across {len(STOCK_GROUPS)} groups")
     print(f"📁 Output directory: {OUTPUT_DIR}")
 
     try:
@@ -78,7 +78,7 @@ def main():
 
         for ticker in ALL_TICKERS:
             try:
-                print(f"   📈 Processing {ticker}...", end=" ")
+                print(f"    Processing {ticker}...", end=" ")
 
                 # Load data
                 end_date = datetime.now()
@@ -93,7 +93,7 @@ def main():
                 data = loader.update()
 
                 if data is None or len(data) < 200:
-                    print("❌ Insufficient data")
+                    print(" Insufficient data")
                     failed_tickers.append(ticker)
                     continue
 
@@ -106,7 +106,7 @@ def main():
                 observations = obs_gen.update(data)
 
                 if len(observations) < 100:
-                    print("❌ Insufficient observations")
+                    print(" Insufficient observations")
                     failed_tickers.append(ticker)
                     continue
 
@@ -155,19 +155,19 @@ def main():
                     "data_points": len(returns),
                 }
 
-                print("✅")
+                print("")
 
             except Exception as e:
-                print(f"❌ Error: {str(e)[:50]}...")
+                print(f" Error: {str(e)[:50]}...")
                 failed_tickers.append(ticker)
                 continue
 
         successful_count = len(stock_results)
-        print(f"\n   ✅ Successfully analyzed {successful_count} stocks")
-        print(f"   ❌ Failed to analyze {len(failed_tickers)} stocks")
+        print(f"\n    Successfully analyzed {successful_count} stocks")
+        print(f"    Failed to analyze {len(failed_tickers)} stocks")
 
         if successful_count < 5:
-            print("❌ Insufficient successful analyses for comparison")
+            print(" Insufficient successful analyses for comparison")
             return False
 
         # Step 2: Cross-stock regime analysis
@@ -189,7 +189,7 @@ def main():
         # Identify market regime consensus
         consensus = identify_market_consensus(stock_results)
 
-        print(f"   📊 Calculated correlations for {len(correlations)} stock pairs")
+        print(f"    Calculated correlations for {len(correlations)} stock pairs")
         print(
             f"   🎯 Market consensus: {consensus['dominant_regime']} ({consensus['consensus_strength']:.1%})"
         )
@@ -245,7 +245,7 @@ def main():
         print("\n✨ Multi-Stock Analysis Complete!")
         print(f"📁 All files saved to: {OUTPUT_DIR}")
 
-        print(f"\n📊 Key Results:")
+        print(f"\n Key Results:")
         print(
             f"   • Successfully analyzed: {successful_count}/{len(ALL_TICKERS)} stocks"
         )
@@ -276,7 +276,7 @@ def main():
         return True
 
     except Exception as e:
-        print(f"❌ Error in multi-stock analysis: {str(e)}")
+        print(f" Error in multi-stock analysis: {str(e)}")
         import traceback
 
         traceback.print_exc()
@@ -562,7 +562,7 @@ if __name__ == "__main__":
     success = main()
     if success:
         print("\n🎉 Multi-stock comparative analysis completed successfully!")
-        print("📊 Ready for institutional review and strategic planning")
+        print(" Ready for institutional review and strategic planning")
     else:
         print("\n💥 Multi-stock analysis failed - check error messages above")
         sys.exit(1)

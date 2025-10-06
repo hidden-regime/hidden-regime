@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score, calinski_harabasz_score
 
 
 def validate_returns_data(returns: np.ndarray) -> np.ndarray:
@@ -96,7 +97,7 @@ def initialize_parameters_random(
 
 def initialize_parameters_kmeans(
     n_states: int, returns: np.ndarray, random_seed: Optional[int] = None
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[str, Any]]:
     """
     Initialize HMM parameters using financial domain-constrained K-means clustering.
 
@@ -109,14 +110,25 @@ def initialize_parameters_kmeans(
         random_seed: Random seed for reproducibility
 
     Returns:
-        Tuple of (initial_probs, transition_matrix, emission_params)
+        Tuple of (initial_probs, transition_matrix, emission_params, diagnostics)
+        where diagnostics is a dict containing KMeans quality metrics and warnings
     """
 
     if len(returns) < n_states:
         warnings.warn(
             "Insufficient data for K-means initialization, falling back to random"
         )
-        return initialize_parameters_random(n_states, returns, random_seed)
+        init_probs, trans_mat, emission_params = initialize_parameters_random(
+            n_states, returns, random_seed
+        )
+        fallback_diagnostics = {
+            'method': 'random_fallback',
+            'reason': 'insufficient_data',
+            'n_states': n_states,
+            'n_observations': len(returns),
+            'warnings': ['Insufficient data for KMeans, used random initialization']
+        }
+        return init_probs, trans_mat, emission_params, fallback_diagnostics
 
     # STEP 1: Filter extreme outliers in percentage space (easier financial intuition)
     returns_pct = np.exp(returns) - 1  # Convert log returns to percentages
@@ -155,11 +167,27 @@ def initialize_parameters_kmeans(
     kmeans = KMeans(n_clusters=n_states, random_state=random_seed, n_init=10)
     try:
         cluster_labels = kmeans.fit_predict(features)
-    except Exception:
+    except Exception as e:
         warnings.warn(
-            "K-means clustering failed, falling back to random initialization"
+            f"K-means clustering failed ({str(e)}), falling back to random initialization"
         )
-        return initialize_parameters_random(n_states, returns, random_seed)
+        init_probs, trans_mat, emission_params = initialize_parameters_random(
+            n_states, returns, random_seed
+        )
+        fallback_diagnostics = {
+            'method': 'random_fallback',
+            'reason': 'kmeans_failed',
+            'error': str(e),
+            'n_states': n_states,
+            'n_observations': len(returns),
+            'warnings': [f'KMeans clustering failed: {str(e)}']
+        }
+        return init_probs, trans_mat, emission_params, fallback_diagnostics
+
+    # Collect KMeans diagnostics
+    diagnostics = _collect_kmeans_diagnostics(
+        kmeans, features, cluster_labels, n_states, filtered_returns_log
+    )
 
     # Initial probabilities from cluster frequencies
     unique, counts = np.unique(cluster_labels, return_counts=True)
@@ -206,6 +234,7 @@ def initialize_parameters_kmeans(
 
     # Define financial constraints in percentage space
     constrained_means_pct = []
+    constraint_applied = []
     for i, (original_state, raw_mean_log) in enumerate(sorted_cluster_info):
         raw_mean_pct = np.exp(raw_mean_log) - 1
 
@@ -221,9 +250,15 @@ def initialize_parameters_kmeans(
             constrained_pct = np.clip(raw_mean_pct, -0.005, 0.015)
 
         constrained_means_pct.append(constrained_pct)
+        constraint_applied.append(abs(constrained_pct - raw_mean_pct) > 1e-6)
 
     # Convert constrained means back to log space
     constrained_means_log = np.log(np.array(constrained_means_pct) + 1)
+
+    # Add constraint diagnostics
+    diagnostics['constraint_distortion'] = _compute_constraint_distortion(
+        raw_means_pct, constrained_means_pct, constraint_applied, sorted_cluster_info
+    )
 
     # STEP 6: Build final parameters with constrained means and consistent ordering
     emission_params = np.zeros((n_states, 2))
@@ -248,7 +283,209 @@ def initialize_parameters_kmeans(
     # STEP 7: Validate final parameters make financial sense
     _validate_financial_constraints(emission_params, n_states)
 
-    return reordered_initial_probs, reordered_transition_matrix, emission_params
+    # Add warnings to diagnostics
+    diagnostics['warnings'] = _generate_initialization_warnings(diagnostics)
+
+    return reordered_initial_probs, reordered_transition_matrix, emission_params, diagnostics
+
+
+def _collect_kmeans_diagnostics(
+    kmeans, features: np.ndarray, cluster_labels: np.ndarray,
+    n_states: int, returns: np.ndarray
+) -> Dict[str, Any]:
+    """
+    Collect diagnostic information about KMeans clustering quality.
+
+    Args:
+        kmeans: Fitted KMeans object
+        features: Feature array used for clustering
+        cluster_labels: Cluster assignments
+        n_states: Number of states
+        returns: Original returns data
+
+    Returns:
+        Dictionary with clustering diagnostics
+    """
+    diagnostics = {
+        'method': 'kmeans',
+        'n_states': n_states,
+        'n_observations': len(returns),
+        'n_features': features.shape[1] if len(features.shape) > 1 else 1,
+    }
+
+    # Basic KMeans metrics
+    diagnostics['kmeans_inertia'] = kmeans.inertia_
+    diagnostics['kmeans_iterations'] = kmeans.n_iter_
+
+    # Cluster sizes
+    unique, counts = np.unique(cluster_labels, return_counts=True)
+    cluster_sizes = {int(state): int(count) for state, count in zip(unique, counts)}
+    diagnostics['cluster_sizes'] = cluster_sizes
+
+    # Check for imbalanced clusters
+    min_size = min(counts)
+    max_size = max(counts)
+    diagnostics['cluster_balance_ratio'] = float(min_size / max_size) if max_size > 0 else 0.0
+
+    # Quality metrics (only if we have enough data points)
+    if len(returns) >= n_states * 2:
+        try:
+            # Silhouette score: measures how similar an object is to its own cluster
+            # Range: [-1, 1], higher is better
+            # Note: Financial data typically produces 0.10-0.20 (not poor, just overlapping regimes)
+            score = float(silhouette_score(features, cluster_labels))
+            diagnostics['silhouette_score'] = score
+            diagnostics['silhouette_interpretation'] = _interpret_silhouette_for_financial_data(score)
+        except Exception as e:
+            diagnostics['silhouette_score'] = None
+            diagnostics['silhouette_error'] = str(e)
+            diagnostics['silhouette_interpretation'] = 'Unable to compute'
+
+        try:
+            # Calinski-Harabasz score: ratio of between-cluster to within-cluster variance
+            # Higher is better, no fixed range
+            diagnostics['calinski_harabasz_score'] = float(
+                calinski_harabasz_score(features, cluster_labels)
+            )
+        except Exception as e:
+            diagnostics['calinski_harabasz_score'] = None
+            diagnostics['calinski_harabasz_error'] = str(e)
+
+    return diagnostics
+
+
+def _compute_constraint_distortion(
+    raw_means_pct: list,
+    constrained_means_pct: list,
+    constraint_applied: list,
+    sorted_cluster_info: list
+) -> Dict[str, Any]:
+    """
+    Compute metrics about how much financial constraints distorted KMeans results.
+
+    Args:
+        raw_means_pct: Raw cluster means in percentage space
+        constrained_means_pct: Constrained means in percentage space
+        constraint_applied: Boolean list of whether constraint was applied
+        sorted_cluster_info: List of (state, mean) tuples sorted by mean
+
+    Returns:
+        Dictionary with constraint distortion metrics
+    """
+    distortion = {
+        'n_states_constrained': sum(constraint_applied),
+        'states_constrained': [i for i, applied in enumerate(constraint_applied) if applied],
+    }
+
+    # Calculate distortion magnitude for each state
+    state_distortions = []
+    for i, (raw_pct, const_pct) in enumerate(zip(raw_means_pct, constrained_means_pct)):
+        original_state = sorted_cluster_info[i][0]
+        distortion_pct = abs(const_pct - raw_pct)
+        state_distortions.append({
+            'state': int(original_state),
+            'raw_mean_pct': float(raw_pct),
+            'constrained_mean_pct': float(const_pct),
+            'distortion_pct': float(distortion_pct),
+            'distortion_relative': float(distortion_pct / (abs(raw_pct) + 1e-10)),
+        })
+
+    distortion['state_distortions'] = state_distortions
+
+    # Overall distortion metrics
+    distortions_abs = [sd['distortion_pct'] for sd in state_distortions]
+    distortion['max_distortion_pct'] = float(max(distortions_abs))
+    distortion['mean_distortion_pct'] = float(np.mean(distortions_abs))
+
+    return distortion
+
+
+def _interpret_silhouette_for_financial_data(score: float) -> str:
+    """
+    Provide domain-specific interpretation of silhouette scores for financial data.
+
+    Financial returns typically produce lower silhouette scores (0.10-0.20) than
+    other domains due to inherently overlapping regimes. Bull/bear/sideways states
+    have fuzzy boundaries and gradual transitions, not sharp cluster separation.
+
+    Args:
+        score: Silhouette coefficient [-1, 1]
+
+    Returns:
+        Human-readable interpretation string
+    """
+    if score > 0.25:
+        return "Excellent separation for financial data (regimes are well-defined)"
+    elif score > 0.15:
+        return "Good separation for financial regimes (typical for real markets)"
+    elif score > 0.05:
+        return "Typical overlapping market regimes (expected for financial returns)"
+    elif score > 0.0:
+        return "Weak cluster separation (regimes may be poorly defined)"
+    else:
+        return "Very poor clustering (cluster assignments may be incorrect)"
+
+
+def _generate_initialization_warnings(diagnostics: Dict[str, Any]) -> list:
+    """
+    Generate warnings based on initialization diagnostics.
+
+    Args:
+        diagnostics: Diagnostics dictionary from initialization
+
+    Returns:
+        List of warning strings
+    """
+    warnings_list = []
+
+    # Check clustering quality
+    silhouette = diagnostics.get('silhouette_score')
+    if silhouette is not None:
+        # Note: Financial returns typically produce scores of 0.10-0.20 due to overlapping regimes
+        # These thresholds are adjusted for financial time series data
+        if silhouette < 0.05:
+            warnings_list.append(
+                f"Very low cluster separation (silhouette={silhouette:.3f}). "
+                f"Note: Financial returns often produce scores of 0.10-0.20 due to overlapping regimes. "
+                "Consider checking regime persistence and transition probabilities as better quality metrics."
+            )
+        elif silhouette < 0.15:
+            # Informational only - typical for financial data
+            warnings_list.append(
+                f"Cluster separation (silhouette={silhouette:.3f}) is typical for financial data. "
+                "Regimes are inherently overlapping. Validate using regime stability and likelihood."
+            )
+
+    # Check cluster balance
+    balance = diagnostics.get('cluster_balance_ratio', 1.0)
+    if balance < 0.2:
+        warnings_list.append(
+            f"Highly imbalanced clusters (ratio={balance:.3f}). "
+            f"Cluster sizes: {diagnostics.get('cluster_sizes')}. "
+            "Some regimes may be underrepresented."
+        )
+
+    # Check constraint distortion
+    constraint_info = diagnostics.get('constraint_distortion', {})
+    n_constrained = constraint_info.get('n_states_constrained', 0)
+    max_distortion = constraint_info.get('max_distortion_pct', 0)
+
+    if n_constrained > 0:
+        if max_distortion > 0.5:  # >50% distortion
+            warnings_list.append(
+                f"Severe constraint distortion detected: {n_constrained} states constrained, "
+                f"max distortion = {max_distortion:.1%}. "
+                "Financial constraints may be inappropriate for this data. "
+                "Consider initialization_method='random' for non-financial data."
+            )
+        elif max_distortion > 0.2:  # >20% distortion
+            warnings_list.append(
+                f"Moderate constraint distortion: {n_constrained} states constrained, "
+                f"max distortion = {max_distortion:.1%}. "
+                "Verify that data represents financial log returns."
+            )
+
+    return warnings_list
 
 
 def _validate_financial_constraints(emission_params: np.ndarray, n_states: int) -> None:

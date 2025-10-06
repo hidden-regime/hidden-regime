@@ -29,7 +29,7 @@ from hidden_regime.financial.config import FinancialRegimeConfig
 def run_financial_case_study_basic() -> Dict[str, Any]:
     """Run a basic financial regime analysis case study."""
     print("\n" + "=" * 60)
-    print("📊 BASIC FINANCIAL REGIME ANALYSIS")
+    print(" BASIC FINANCIAL REGIME ANALYSIS")
     print("=" * 60)
 
     # Quick analysis configuration
@@ -39,7 +39,7 @@ def run_financial_case_study_basic() -> Dict[str, Any]:
 
     # Note: Config is frozen, output_directory is auto-generated
 
-    print(f"📈 Analyzing {config.ticker} - {config.get_analysis_period_days()} days")
+    print(f" Analyzing {config.ticker} - {config.get_analysis_period_days()} days")
     print(f"💰 Capital: ${config.initial_capital:,.2f}")
     print(f"🎯 Regimes: {config.n_regimes}")
 
@@ -51,7 +51,7 @@ def run_financial_case_study_basic() -> Dict[str, Any]:
 
         execution_time = (datetime.now() - start_time).total_seconds()
 
-        print(f"\n✅ Analysis completed in {execution_time:.1f} seconds")
+        print(f"\n Analysis completed in {execution_time:.1f} seconds")
 
         # Display key results
         if results.analysis_success:
@@ -71,14 +71,14 @@ def run_financial_case_study_basic() -> Dict[str, Any]:
         return {"success": True, "results": results, "execution_time": execution_time}
 
     except Exception as e:
-        print(f"❌ Failed: {e}")
+        print(f" Failed: {e}")
         return {"success": False, "error": str(e)}
 
 
 def run_financial_case_study_comprehensive() -> Dict[str, Any]:
     """Run a comprehensive financial regime analysis case study."""
     print("\n" + "=" * 60)
-    print("📊 COMPREHENSIVE FINANCIAL REGIME ANALYSIS")
+    print(" COMPREHENSIVE FINANCIAL REGIME ANALYSIS")
     print("=" * 60)
 
     # Comprehensive analysis configuration
@@ -92,10 +92,10 @@ def run_financial_case_study_comprehensive() -> Dict[str, Any]:
 
     # Note: Config is frozen, output_directory is auto-generated
 
-    print(f"📈 Analyzing {config.ticker} ({config.start_date} to {config.end_date})")
+    print(f" Analyzing {config.ticker} ({config.start_date} to {config.end_date})")
     print(f"💰 Capital: ${config.initial_capital:,.2f}")
     print(f"🎯 Regimes: {config.n_regimes}")
-    print(f"📊 Strategies: {len(config.signal_strategies)}")
+    print(f" Strategies: {len(config.signal_strategies)}")
     print(f"🔧 Indicators: {len(config.technical_indicators)}")
 
     try:
@@ -106,7 +106,7 @@ def run_financial_case_study_comprehensive() -> Dict[str, Any]:
 
         execution_time = (datetime.now() - start_time).total_seconds()
 
-        print(f"\n✅ Analysis completed in {execution_time:.1f} seconds")
+        print(f"\n Analysis completed in {execution_time:.1f} seconds")
 
         # Display comprehensive results
         if results.analysis_success and results.regime_profiles:
@@ -121,7 +121,7 @@ def run_financial_case_study_comprehensive() -> Dict[str, Any]:
         if results.analysis_success:
             current = results.current_regime_info
             print(
-                f"\n📈 Current State: {current['regime_type']} "
+                f"\n Current State: {current['regime_type']} "
                 f"({current['confidence']:.1%} confidence)"
             )
 
@@ -137,7 +137,7 @@ def run_financial_case_study_comprehensive() -> Dict[str, Any]:
         return {"success": True, "results": results, "execution_time": execution_time}
 
     except Exception as e:
-        print(f"❌ Failed: {e}")
+        print(f" Failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -147,7 +147,7 @@ def run_financial_case_study_comprehensive() -> Dict[str, Any]:
 def run_financial_case_study_single_asset() -> Dict[str, Any]:
     """Run a single-asset optimized financial regime analysis case study."""
     print("\n" + "=" * 60)
-    print("📊 SINGLE-ASSET OPTIMIZED ANALYSIS")
+    print(" SINGLE-ASSET OPTIMIZED ANALYSIS")
     print("=" * 60)
 
     # Single-asset optimized configuration
@@ -161,7 +161,7 @@ def run_financial_case_study_single_asset() -> Dict[str, Any]:
 
     # Note: Config is frozen, output_directory is auto-generated
 
-    print(f"📈 Single-asset focus: {config.ticker}")
+    print(f" Single-asset focus: {config.ticker}")
     print(f"💰 Dedicated capital: ${config.initial_capital:,.2f}")
     print(f"🎯 Max allocation: {config.max_position_pct:.0%}")
     print(f"💸 Transaction costs: {config.transaction_cost_type}")
@@ -174,7 +174,7 @@ def run_financial_case_study_single_asset() -> Dict[str, Any]:
 
         execution_time = (datetime.now() - start_time).total_seconds()
 
-        print(f"\n✅ Analysis completed in {execution_time:.1f} seconds")
+        print(f"\n Analysis completed in {execution_time:.1f} seconds")
 
         # Display single-asset optimized results
         if results.analysis_success:
@@ -197,13 +197,13 @@ def run_financial_case_study_single_asset() -> Dict[str, Any]:
         return {"success": True, "results": results, "execution_time": execution_time}
 
     except Exception as e:
-        print(f"❌ Failed: {e}")
+        print(f" Failed: {e}")
         return {"success": False, "error": str(e)}
 
 
 def main():
     """Run all financial case study examples."""
-    print("🚀 FINANCIAL-FIRST REGIME ANALYSIS SYSTEM")
+    print(" FINANCIAL-FIRST REGIME ANALYSIS SYSTEM")
     print("=" * 80)
     print("Demonstrates intelligent regime characterization and optimized trading")
     print("=" * 80)
@@ -222,12 +222,12 @@ def main():
             result = runner()
             results[name] = result
         except Exception as e:
-            print(f"\n❌ Case study '{name}' failed: {e}")
+            print(f"\n Case study '{name}' failed: {e}")
             results[name] = {"success": False, "error": str(e)}
 
     # Summary
     print("\n" + "=" * 80)
-    print("📊 FINANCIAL CASE STUDY SUMMARY")
+    print(" FINANCIAL CASE STUDY SUMMARY")
     print("=" * 80)
 
     success_count = sum(1 for r in results.values() if r.get("success", False))
@@ -235,16 +235,16 @@ def main():
         r.get("execution_time", 0) for r in results.values() if r.get("success", False)
     )
 
-    print(f"✅ Completed: {success_count}/{len(case_studies)} case studies")
+    print(f" Completed: {success_count}/{len(case_studies)} case studies")
     print(f"⏱️  Total time: {total_time:.1f} seconds")
 
     for name, result in results.items():
         if result.get("success", False):
-            print(f"   ✅ {name.title()}: {result.get('execution_time', 0):.1f}s")
+            print(f"    {name.title()}: {result.get('execution_time', 0):.1f}s")
         else:
-            print(f"   ❌ {name.title()}: {result.get('error', 'Unknown error')}")
+            print(f"    {name.title()}: {result.get('error', 'Unknown error')}")
 
-    print(f"\n💡 Key Advantages of Financial-First Architecture:")
+    print(f"\nNote: Key Advantages of Financial-First Architecture:")
     print(f"   • Intelligent regime characterization (not naive state assumptions)")
     print(f"   • Data-driven signal generation based on actual financial metrics")
     print(f"   • Single-asset optimized position sizing (100% allocation)")
@@ -260,7 +260,7 @@ if __name__ == "__main__":
         results = main()
         print("\n🎉 Financial case study system completed successfully!")
     except Exception as e:
-        print(f"\n❌ Error in financial case study system: {e}")
+        print(f"\n Error in financial case study system: {e}")
         import traceback
 
         traceback.print_exc()

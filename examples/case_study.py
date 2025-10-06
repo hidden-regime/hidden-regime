@@ -91,7 +91,7 @@ class CaseStudyOrchestrator:
         Returns:
             Dictionary with complete case study results
         """
-        print(f"🚀 Starting Case Study: {self.config.ticker}")
+        print(f" Starting Case Study: {self.config.ticker}")
         print("=" * 60)
 
         start_time = datetime.now()
@@ -106,7 +106,7 @@ class CaseStudyOrchestrator:
             self._train_initial_model()
 
             # Phase 3: Evolution Analysis
-            print("\n📈 Phase 3: Evolution Analysis")
+            print("\n Phase 3: Evolution Analysis")
             self._run_evolution_analysis()
 
             # Phase 4: Visualization Generation
@@ -119,7 +119,7 @@ class CaseStudyOrchestrator:
                 self._run_trading_simulation()
 
             # Phase 6: Comparative Analysis
-            print("\n📊 Phase 6: Comparative Analysis")
+            print("\n Phase 6: Comparative Analysis")
             self._run_comparative_analysis()
 
             # Phase 7: Report Generation
@@ -127,7 +127,7 @@ class CaseStudyOrchestrator:
             final_report = self._generate_final_report()
 
             total_time = (datetime.now() - start_time).total_seconds()
-            print(f"\n✅ Case Study Complete! ({total_time:.1f} seconds)")
+            print(f"\n Case Study Complete! ({total_time:.1f} seconds)")
 
             return {
                 "config": self.config,
@@ -140,7 +140,7 @@ class CaseStudyOrchestrator:
             }
 
         except Exception as e:
-            print(f"\n❌ Case Study Failed: {e}")
+            print(f"\n Case Study Failed: {e}")
             import traceback
 
             traceback.print_exc()
@@ -207,7 +207,7 @@ class CaseStudyOrchestrator:
         # Create temporal controller for proper isolation
         self.temporal_controller = TemporalController(self.pipeline, self.full_dataset)
 
-        print("   ✅ Data and pipeline setup complete")
+        print("    Data and pipeline setup complete")
 
     def _assess_data_for_regime_detection(self):
         """Assess data quality and regime detection feasibility."""
@@ -228,26 +228,26 @@ class CaseStudyOrchestrator:
             recommendations = assessment["recommendations"]
 
             if not recommendations["suitable_for_regime_detection"]:
-                print(f"   ⚠️  WARNING: Data may not be suitable for regime detection")
+                print(f"   [WARNING]  WARNING: Data may not be suitable for regime detection")
                 for warning in recommendations["warnings"]:
                     print(f"       • {warning}")
 
                 # Check if user wants to proceed
                 if recommendations["recommended_n_states"] != self.config.n_states:
                     print(
-                        f"   💡 RECOMMENDATION: Use {recommendations['recommended_n_states']} states instead of {self.config.n_states}"
+                        f"   Note: RECOMMENDATION: Use {recommendations['recommended_n_states']} states instead of {self.config.n_states}"
                     )
                     print(
                         f"       Approach: {recommendations['regime_detection_approach']}"
                     )
 
             elif recommendations["warnings"]:
-                print(f"   ⚠️  Data assessment warnings:")
+                print(f"   [WARNING]  Data assessment warnings:")
                 for warning in recommendations["warnings"]:
                     print(f"       • {warning}")
 
             else:
-                print(f"   ✅ Data assessment: Suitable for regime detection")
+                print(f"    Data assessment: Suitable for regime detection")
                 print(
                     f"       Recommended states: {recommendations['recommended_n_states']}"
                 )
@@ -257,7 +257,7 @@ class CaseStudyOrchestrator:
                     print(f"       • {rationale}")
 
         except Exception as e:
-            print(f"   ⚠️  Data assessment failed: {e}")
+            print(f"   [WARNING]  Data assessment failed: {e}")
             print(f"       Proceeding with standard configuration...")
             self.data_assessment = None
 
@@ -271,9 +271,9 @@ class CaseStudyOrchestrator:
         try:
             training_result = self.temporal_controller.update_as_of(training_end)
             print(f"   Model trained on data through {training_end}")
-            print(f"   ✅ Initial model training complete")
+            print(f"    Initial model training complete")
         except Exception as e:
-            print(f"   ⚠️  Training warning: {e}")
+            print(f"   [WARNING]  Training warning: {e}")
             # Continue with available data
 
     def _run_evolution_analysis(self):
@@ -313,7 +313,7 @@ class CaseStudyOrchestrator:
 
                     # Debug logging
                     print(
-                        f"   📊 Stored evolution result for {eval_date} (total: {len(self.evolution_results)})"
+                        f"    Stored evolution result for {eval_date} (total: {len(self.evolution_results)})"
                     )
 
                     # Calculate evolving performance
@@ -329,23 +329,23 @@ class CaseStudyOrchestrator:
                             )
                             perf_metrics["evaluation_date"] = eval_date
                             self.performance_evolution.append(perf_metrics)
-                            print(f"   📈 Performance calculated for {eval_date}")
+                            print(f"    Performance calculated for {eval_date}")
                         except Exception as e:
                             print(
-                                f"   ⚠️  Performance calc warning for {eval_date}: {e}"
+                                f"   [WARNING]  Performance calc warning for {eval_date}: {e}"
                             )
                 else:
-                    print(f"   ⚠️  Pipeline outputs missing for {eval_date}")
+                    print(f"   [WARNING]  Pipeline outputs missing for {eval_date}")
 
             except Exception as e:
-                print(f"   ⚠️  Evolution warning for {eval_date}: {e}")
+                print(f"   [WARNING]  Evolution warning for {eval_date}: {e}")
                 import traceback
 
                 print(f"   📝 Full error trace: {traceback.format_exc()}")
                 continue
 
         print(
-            f"   ✅ Evolution analysis complete ({len(self.evolution_results)} results)"
+            f"    Evolution analysis complete ({len(self.evolution_results)} results)"
         )
 
         # Save evolution data to JSON
@@ -408,12 +408,12 @@ class CaseStudyOrchestrator:
                 print(f"   💾 Performance data saved: {performance_path}")
 
         except Exception as e:
-            print(f"   ⚠️  Data save warning: {e}")
+            print(f"   [WARNING]  Data save warning: {e}")
 
     def _generate_visualizations(self):
         """Phase 4: Generate visualizations and animations."""
         if not self.evolution_results:
-            print("   ⚠️  No evolution results to visualize")
+            print("   [WARNING]  No evolution results to visualize")
             return
 
         print("   Generating visualizations...")
@@ -443,10 +443,10 @@ class CaseStudyOrchestrator:
             )
             static_fig.savefig(static_path, dpi=300, bbox_inches="tight")
             plt.close(static_fig)
-            print(f"   📊 Static analysis saved: {static_path}")
+            print(f"    Static analysis saved: {static_path}")
 
         except Exception as e:
-            print(f"   ⚠️  Static plot warning: {e}")
+            print(f"   [WARNING]  Static plot warning: {e}")
 
         # Generate animations if requested
         if self.config.create_animations and len(regime_data_sequence) > 3:
@@ -484,13 +484,13 @@ class CaseStudyOrchestrator:
                             fps=self.config.animation_fps,
                         )
                     )
-                    print(f"   📈 Performance evolution GIF created")
+                    print(f"    Performance evolution GIF created")
 
             except Exception as e:
-                print(f"   ⚠️  Animation warning: {e}")
+                print(f"   [WARNING]  Animation warning: {e}")
                 # Animation failure is not critical - continue with the rest of the analysis
 
-        print("   ✅ Visualization generation complete")
+        print("    Visualization generation complete")
 
     def _create_simulation_config(self) -> SimulationConfig:
         """Create simulation configuration from case study settings."""
@@ -525,7 +525,7 @@ class CaseStudyOrchestrator:
         """Run capital-based trading simulation."""
         if not self.evolution_results or not self.simulation_config:
             print(
-                "   ⚠️  No evolution results or simulation config for trading simulation"
+                "   [WARNING]  No evolution results or simulation config for trading simulation"
             )
             return
 
@@ -550,22 +550,22 @@ class CaseStudyOrchestrator:
             if self.simulation_results.simulation_success:
                 print(f"   💰 Simulation completed successfully!")
                 print(
-                    f"   📈 Total Return: {self.simulation_results.total_return_pct:.2f}%"
+                    f"    Total Return: {self.simulation_results.total_return_pct:.2f}%"
                 )
-                print(f"   📊 Sharpe Ratio: {self.simulation_results.sharpe_ratio:.3f}")
+                print(f"    Sharpe Ratio: {self.simulation_results.sharpe_ratio:.3f}")
                 print(f"   🏆 Best Strategy: {self.simulation_results.best_strategy}")
                 print(f"   💼 Final Value: ${self.simulation_results.final_value:,.2f}")
 
                 if self.simulation_results.benchmark_comparison:
                     benchmark = self.simulation_results.benchmark_comparison
                     print(
-                        f"   📊 vs {benchmark['benchmark_strategy']}: +{benchmark['excess_return']:.2f}% excess return"
+                        f"    vs {benchmark['benchmark_strategy']}: +{benchmark['excess_return']:.2f}% excess return"
                     )
             else:
-                print(f"   ❌ Simulation failed")
+                print(f"    Simulation failed")
 
         except Exception as e:
-            print(f"   ⚠️  Trading simulation warning: {e}")
+            print(f"   [WARNING]  Trading simulation warning: {e}")
             import traceback
 
             print(f"   📝 Simulation error trace: {traceback.format_exc()}")
@@ -573,7 +573,7 @@ class CaseStudyOrchestrator:
     def _run_comparative_analysis(self):
         """Phase 5: Compare HMM strategy against baselines with proper temporal isolation."""
         if not self.evolution_results:
-            print("   ⚠️  No evolution results for comparison")
+            print("   [WARNING]  No evolution results for comparison")
             return
 
         print("   Running comparative performance analysis...")
@@ -599,19 +599,19 @@ class CaseStudyOrchestrator:
                 n_best_indicators=5,
             )
 
-            print("   ✅ Comparative analysis complete")
+            print("    Comparative analysis complete")
 
             # Print summary
             if "comparison_summary" in self.final_comparison:
                 summary = self.final_comparison["comparison_summary"]
                 if "strategy_ranking" in summary:
                     print(
-                        f"   📊 Top strategy: {summary['strategy_ranking'][0][0]} "
+                        f"    Top strategy: {summary['strategy_ranking'][0][0]} "
                         + f"(Sharpe: {summary['strategy_ranking'][0][1]:.3f})"
                     )
 
         except Exception as e:
-            print(f"   ⚠️  Comparison analysis warning: {e}")
+            print(f"   [WARNING]  Comparison analysis warning: {e}")
             self.final_comparison = {"error": str(e)}
 
     def _generate_final_report(self) -> str:
@@ -872,7 +872,7 @@ def run_case_study_from_config(config: CaseStudyConfig) -> Dict[str, Any]:
 
 def main():
     """Main function for running case studies."""
-    print("📊 Hidden Regime Case Study System")
+    print(" Hidden Regime Case Study System")
     print("=" * 50)
 
     # Example configurations
@@ -892,17 +892,17 @@ def main():
 
     for i, config in enumerate(configs):
         try:
-            print(f"\n🚀 Running Case Study {i+1}: {config.ticker}")
+            print(f"\n Running Case Study {i+1}: {config.ticker}")
             result = run_case_study_from_config(config)
             results[config.ticker] = result
-            print(f"✅ Case Study {i+1} Complete!")
+            print(f" Case Study {i+1} Complete!")
 
         except Exception as e:
-            print(f"❌ Case Study {i+1} Failed: {e}")
+            print(f" Case Study {i+1} Failed: {e}")
             continue
 
     # Summary
-    print(f"\n📊 Case Study Summary:")
+    print(f"\n Case Study Summary:")
     print("=" * 30)
 
     for ticker, result in results.items():
@@ -930,10 +930,10 @@ if __name__ == "__main__":
     try:
         results = main()
         print("\n" + "=" * 50)
-        print("🚀 Case Study System: SUCCESS")
+        print(" Case Study System: SUCCESS")
         print("=" * 50)
     except Exception as e:
-        print(f"\n❌ Error running case studies: {e}")
+        print(f"\n Error running case studies: {e}")
         import traceback
 
         traceback.print_exc()

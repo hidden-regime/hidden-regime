@@ -40,13 +40,13 @@ def run_multi_asset_case_study(
     results = {}
     failed_tickers = []
 
-    print(f"📊 Multi-Asset Case Study")
+    print(f" Multi-Asset Case Study")
     print(f"Analyzing {len(tickers)} assets: {', '.join(tickers)}")
     print(f"Period: {start_date} to {end_date}")
     print("=" * 60)
 
     for i, ticker in enumerate(tickers):
-        print(f"\n🚀 [{i+1}/{len(tickers)}] Analyzing {ticker}...")
+        print(f"\n [{i+1}/{len(tickers)}] Analyzing {ticker}...")
 
         try:
             # Create configuration for this ticker
@@ -81,15 +81,15 @@ def run_multi_asset_case_study(
                         "strategy_ranking"
                     ][0]
                     print(
-                        f"   ✅ Best strategy: {best_strategy[0]} (Sharpe: {best_strategy[1]:.3f})"
+                        f"    Best strategy: {best_strategy[0]} (Sharpe: {best_strategy[1]:.3f})"
                     )
                 else:
-                    print(f"   ✅ Analysis complete (no comparison available)")
+                    print(f"    Analysis complete (no comparison available)")
             else:
-                print(f"   ✅ Analysis complete")
+                print(f"    Analysis complete")
 
         except Exception as e:
-            print(f"   ❌ Failed: {e}")
+            print(f"    Failed: {e}")
             failed_tickers.append(ticker)
             continue
 
@@ -197,7 +197,7 @@ def generate_multi_asset_summary(results: Dict[str, Any]) -> Dict[str, Any]:
 
 def print_multi_asset_summary(multi_asset_results: Dict[str, Any]):
     """Print comprehensive summary of multi-asset analysis."""
-    print(f"\n📊 Multi-Asset Analysis Summary")
+    print(f"\n Multi-Asset Analysis Summary")
     print("=" * 50)
 
     individual_results = multi_asset_results.get("individual_results", {})
@@ -277,7 +277,7 @@ def main():
         print(f"🎉 Multi-asset case study complete!")
 
     except Exception as e:
-        print(f"\n❌ Multi-asset case study failed: {e}")
+        print(f"\n Multi-asset case study failed: {e}")
         import traceback
 
         traceback.print_exc()

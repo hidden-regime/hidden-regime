@@ -95,7 +95,7 @@ class AdvancedStreamingSystem:
             monitor = PerformanceMonitor(asset)
             self.performance_monitors[asset] = monitor
             
-        print(f"✅ Streaming system initialized for {len(assets)} assets")
+        print(f" Streaming system initialized for {len(assets)} assets")
     
     async def start_streaming(self):
         """Start the streaming data processing"""
@@ -152,7 +152,7 @@ class AdvancedStreamingSystem:
                 setattr(self, f'last_price_{asset}', price)
                 
             except Exception as e:
-                print(f"❌ Error processing {asset}: {e}")
+                print(f" Error processing {asset}: {e}")
     
     async def handle_regime_update(self, asset, result):
         """Handle regime updates and trigger downstream actions"""
@@ -290,17 +290,17 @@ class WebSocketDataFeed:
                     self.data_queue.put(parsed_data)
                     
             except Exception as e:
-                print(f"❌ Error parsing WebSocket message: {e}")
+                print(f" Error parsing WebSocket message: {e}")
         
         def on_error(ws, error):
-            print(f"❌ WebSocket error: {error}")
+            print(f" WebSocket error: {error}")
         
         def on_close(ws, close_status_code, close_msg):
             print("🔌 WebSocket connection closed")
             self.running = False
         
         def on_open(ws):
-            print("✅ WebSocket connection opened")
+            print(" WebSocket connection opened")
             
             # Subscribe to symbols
             subscribe_msg = {
@@ -357,7 +357,7 @@ class WebSocketDataFeed:
                     )
                     
             except Exception as e:
-                print(f"❌ Error processing data queue: {e}")
+                print(f" Error processing data queue: {e}")
 
 # Usage example
 async def run_websocket_streaming():
@@ -430,7 +430,7 @@ class AdvancedChangePointDetector:
                 )
                 detection_results[method_name] = result
             except Exception as e:
-                print(f"❌ {method_name} detector error: {e}")
+                print(f" {method_name} detector error: {e}")
                 detection_results[method_name] = {'change_detected': False, 'confidence': 0.0}
         
         # Combine results using ensemble method
@@ -1145,7 +1145,7 @@ def multi_asset_analysis_example():
         
         # Print interesting findings
         if day % 20 == 0:  # Every 20 days
-            print(f"\n📊 Day {day} Multi-Asset Analysis:")
+            print(f"\n Day {day} Multi-Asset Analysis:")
             
             # Individual regimes
             print("Individual Regimes:")
@@ -1203,7 +1203,7 @@ class ModelComparisonFramework:
         comparison_results = {}
         
         for model_id, model_info in self.model_registry.items():
-            print(f"📊 Evaluating {model_id}...")
+            print(f" Evaluating {model_id}...")
             
             try:
                 # Create model instance
@@ -1217,10 +1217,10 @@ class ModelComparisonFramework:
                 comparison_results[model_id] = results
                 model_info['results'].append(results)
                 
-                print(f"✅ {model_id} evaluation complete")
+                print(f" {model_id} evaluation complete")
                 
             except Exception as e:
-                print(f"❌ {model_id} evaluation failed: {e}")
+                print(f" {model_id} evaluation failed: {e}")
                 comparison_results[model_id] = {'error': str(e)}
         
         # Generate comparison report
@@ -1478,7 +1478,7 @@ class ModelComparisonFramework:
                 report['rankings'][criterion] = ranked_models
                 
             except Exception as e:
-                print(f"❌ Error ranking by {criterion}: {e}")
+                print(f" Error ranking by {criterion}: {e}")
         
         # Generate recommendations
         recommendations = self.generate_model_recommendations(comparison_results)
@@ -1621,7 +1621,7 @@ def model_comparison_example():
             print(f"  {i}. {model_id}: {score:.3f}")
     
     # Recommendations
-    print("\n💡 Recommendations:")
+    print("\nNote: Recommendations:")
     for rec in results['recommendations']:
         print(f"  {rec['type'].upper()}: {rec['model']}")
         print(f"    Rationale: {rec['rationale']}")
@@ -1631,7 +1631,7 @@ def model_comparison_example():
         top_model = results['recommendations'][0]['model']
         top_results = results['detailed_results'][top_model]
         
-        print(f"\n📊 Detailed Results for {top_model}:")
+        print(f"\n Detailed Results for {top_model}:")
         print(f"  Training time: {top_results['training']['training_time']:.3f}s")
         print(f"  Validation likelihood: {top_results['validation']['log_likelihood']:.2f}")
         print(f"  Average confidence: {top_results['validation']['avg_confidence']:.2%}")

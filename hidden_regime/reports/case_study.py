@@ -529,14 +529,14 @@ class CaseStudyReportGenerator(MarkdownReportGenerator):
             "",
             "### Visualizations",
             "",
-            f"📊 **Static Analysis**: `plots/{self.case_study_config.ticker}_complete_analysis.png`",
+            f" **Static Analysis**: `plots/{self.case_study_config.ticker}_complete_analysis.png`",
         ]
 
         if self.case_study_config.create_animations:
             output_lines.extend(
                 [
                     f"🎬 **Regime Evolution**: `animations/{self.case_study_config.ticker}_regime_evolution.gif`",
-                    f"📈 **Performance Evolution**: `animations/{self.case_study_config.ticker}_performance_evolution.gif`",
+                    f" **Performance Evolution**: `animations/{self.case_study_config.ticker}_performance_evolution.gif`",
                 ]
             )
 
@@ -546,7 +546,7 @@ class CaseStudyReportGenerator(MarkdownReportGenerator):
                 "### Data Files",
                 "",
                 "📄 **Evolution Results**: `data/evolution_results.json`",
-                "📊 **Performance Metrics**: `data/performance_evolution.json`",
+                " **Performance Metrics**: `data/performance_evolution.json`",
                 "🔍 **Comparison Analysis**: `data/final_comparison.json`",
                 "",
                 "### Reports",

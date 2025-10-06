@@ -21,6 +21,7 @@ from ..utils.exceptions import HMMInferenceError, HMMTrainingError, ValidationEr
 try:
     from .algorithms import HMMAlgorithms
     from .utils import (
+        calculate_regime_statistics,
         check_convergence,
         initialize_parameters_kmeans,
         initialize_parameters_random,
@@ -74,6 +75,13 @@ class HiddenMarkovModel(ModelComponent):
             "parameter_snapshots": [],  # Track parameter evolution during training
             "convergence_metrics": [],  # Track convergence progress
             "fit_timestamps": [],  # Track when model was fitted
+            # Update tracking
+            "update_history": [],  # Track all parameter updates
+            "refit_history": [],   # Track re-initializations
+            "quality_metrics": [], # Track model quality over time
+            "last_update_observation": 0,
+            "observations_since_refit": 0,
+            "fit_observations": None,  # Store fit data for comparison
         }
 
         # Algorithm implementation
@@ -272,7 +280,12 @@ class HiddenMarkovModel(ModelComponent):
 
     def update(self, observations: pd.DataFrame) -> pd.DataFrame:
         """
-        Process observations (fit if first time, then predict).
+        Process observations with adaptive update strategy.
+
+        Behavior depends on config.update_strategy:
+        - "static": Fit once, predict only
+        - "incremental": Smooth online parameter updates
+        - "adaptive_refit": Monitor quality, refit when needed
 
         Args:
             observations: Input observations DataFrame
@@ -280,14 +293,94 @@ class HiddenMarkovModel(ModelComponent):
         Returns:
             DataFrame with predictions
         """
+        # Validate observed signal exists
+        if self.config.observed_signal not in observations.columns:
+            raise ValueError(
+                f"Observed signal '{self.config.observed_signal}' not found in observations. "
+                f"Available columns: {list(observations.columns)}"
+            )
+
         if not self.is_fitted:
             # First time - fit the model
             self.fit(observations)
+            # Store observations for future comparison
+            self.training_history_["fit_observations"] = observations[
+                self.config.observed_signal
+            ].values
+            return self.predict(observations)
 
-        # Always predict on the given observations
-        predictions = self.predict(observations)
+        # Extract new data
+        new_returns = observations[self.config.observed_signal].values
 
-        return predictions
+        # Strategy: Static - just predict
+        if self.config.update_strategy == "static":
+            return self.predict(observations)
+
+        # Strategy: Incremental - smooth updates
+        elif self.config.update_strategy == "incremental":
+            if len(new_returns) >= self.config.incremental_min_observations:
+                self._incremental_update(new_returns)
+                self.training_history_["last_update_observation"] += len(new_returns)
+
+            return self.predict(observations)
+
+        # Strategy: Adaptive Refit - monitor and refit when needed
+        elif self.config.update_strategy == "adaptive_refit":
+            # Track quality
+            try:
+                quality = self._compute_quality_metrics(new_returns)
+                self.training_history_["quality_metrics"].append(quality)
+            except Exception:
+                pass
+
+            self.training_history_["observations_since_refit"] += len(new_returns)
+
+            # Check if refit needed
+            should_refit, reason = self._should_refit(new_returns)
+
+            if should_refit:
+                print(f"Triggering refit: {reason}")
+
+                # Get recent window for refitting
+                if self.config.refit_use_recent_window:
+                    recent_data = self._get_recent_window(observations)
+                else:
+                    recent_data = observations
+
+                # Store old diagnostics
+                old_diag = self.get_initialization_diagnostics()
+
+                # Perform refit
+                self.fit(recent_data)
+
+                # Compare diagnostics
+                new_diag = self.get_initialization_diagnostics()
+
+                # Log refit
+                self.training_history_["refit_history"].append(
+                    {
+                        "timestamp": datetime.now(),
+                        "reason": reason,
+                        "observations_since_last": self.training_history_[
+                            "observations_since_refit"
+                        ],
+                        "old_diagnostics": old_diag,
+                        "new_diagnostics": new_diag,
+                    }
+                )
+
+                self.training_history_["observations_since_refit"] = 0
+
+                # Update stored observations
+                self.training_history_["fit_observations"] = recent_data[
+                    self.config.observed_signal
+                ].values
+
+            return self.predict(observations)
+
+        else:
+            # Unknown strategy - default to static
+            return self.predict(observations)
 
     def plot(self, ax=None, **kwargs) -> plt.Figure:
         """
@@ -460,34 +553,65 @@ class HiddenMarkovModel(ModelComponent):
 
     def _initialize_parameters(self, returns: np.ndarray) -> None:
         """Initialize HMM parameters."""
-        try:
-            if HMM_UTILS_AVAILABLE and self.config.initialization_method == "kmeans":
-                # Use sophisticated initialization
-                initial_probs, transition_matrix, emission_params = (
-                    initialize_parameters_kmeans(
-                        self.n_states, returns, self.config.random_seed
+        initialization_diagnostics = None
+
+        # Custom initialization - don't catch exceptions, let them propagate
+        if self.config.initialization_method == "custom":
+            initial_probs, transition_matrix, means, stds, initialization_diagnostics = (
+                self._initialize_parameters_custom()
+            )
+        else:
+            # Other methods - use try-except with fallback
+            try:
+                if HMM_UTILS_AVAILABLE and self.config.initialization_method == "kmeans":
+                    # Use sophisticated initialization with diagnostics
+                    initial_probs, transition_matrix, emission_params, initialization_diagnostics = (
+                        initialize_parameters_kmeans(
+                            self.n_states, returns, self.config.random_seed
+                        )
                     )
+                    means = emission_params[:, 0]
+                    stds = emission_params[:, 1]
+                else:
+                    # Simple random initialization
+                    initial_probs, transition_matrix, means, stds = (
+                        self._initialize_parameters_simple(returns)
+                    )
+                    initialization_diagnostics = {
+                        'method': 'random' if self.config.initialization_method == 'random' else 'simple',
+                        'n_states': self.n_states,
+                        'n_observations': len(returns),
+                        'warnings': []
+                    }
+            except Exception as e:
+                # Fallback to simple initialization on any error
+                print(
+                    f"Warning: Sophisticated initialization failed ({e}), using simple initialization"
                 )
-                means = emission_params[:, 0]
-                stds = emission_params[:, 1]
-            else:
-                # Simple random initialization
                 initial_probs, transition_matrix, means, stds = (
                     self._initialize_parameters_simple(returns)
                 )
-        except Exception as e:
-            # Fallback to simple initialization on any error
-            print(
-                f"Warning: Sophisticated initialization failed ({e}), using simple initialization"
-            )
-            initial_probs, transition_matrix, means, stds = (
-                self._initialize_parameters_simple(returns)
-            )
+                initialization_diagnostics = {
+                    'method': 'simple_fallback',
+                    'reason': 'initialization_error',
+                    'error': str(e),
+                    'n_states': self.n_states,
+                    'n_observations': len(returns),
+                    'warnings': [f'Initialization failed: {str(e)}']
+                }
 
         self.initial_probs_ = initial_probs
         self.transition_matrix_ = transition_matrix
         self.emission_means_ = means
         self.emission_stds_ = stds
+
+        # Store initialization diagnostics in training history
+        self.training_history_['initialization_diagnostics'] = initialization_diagnostics
+
+        # Print warnings if any
+        if initialization_diagnostics and initialization_diagnostics.get('warnings'):
+            for warning in initialization_diagnostics['warnings']:
+                print(f"Initialization Warning: {warning}")
 
     def _apply_financial_constraints(self, emission_params: np.ndarray) -> np.ndarray:
         """
@@ -555,6 +679,202 @@ class HiddenMarkovModel(ModelComponent):
             stds = np.full(self.n_states, 0.01)  # Default volatility
 
         return initial_probs, transition_matrix, means, stds
+
+    def _initialize_parameters_custom(self) -> tuple:
+        """
+        Initialize parameters from user-specified custom values.
+
+        Provides flexibility for:
+        - Transfer learning from other models
+        - Incorporating domain knowledge
+        - Research reproducibility
+        - Testing with deterministic parameters
+
+        Returns:
+            Tuple of (initial_probs, transition_matrix, means, stds, diagnostics)
+        """
+        import warnings
+
+        # Convert lists to numpy arrays
+        means = np.array(self.config.custom_emission_means, dtype=float)
+        stds = np.array(self.config.custom_emission_stds, dtype=float)
+
+        # Validate parameters
+        self._validate_custom_parameters(means, stds)
+
+        # Handle optional transition matrix
+        if self.config.custom_transition_matrix is not None:
+            transition_matrix = np.array(self.config.custom_transition_matrix, dtype=float)
+            # Validate it's a proper stochastic matrix
+            row_sums = np.sum(transition_matrix, axis=1)
+            if not np.allclose(row_sums, 1.0):
+                warnings.warn(
+                    f"custom_transition_matrix rows don't sum to 1.0 (sums: {row_sums}). "
+                    "Normalizing rows to make it a valid stochastic matrix."
+                )
+                transition_matrix = transition_matrix / row_sums[:, np.newaxis]
+        else:
+            # Create default persistent transition matrix
+            transition_matrix = self._create_persistent_transition_matrix()
+
+        # Handle optional initial probabilities
+        if self.config.custom_initial_probs is not None:
+            initial_probs = np.array(self.config.custom_initial_probs, dtype=float)
+            # Validate sums to 1.0
+            prob_sum = np.sum(initial_probs)
+            if not np.isclose(prob_sum, 1.0):
+                warnings.warn(
+                    f"custom_initial_probs don't sum to 1.0 (sum: {prob_sum}). "
+                    "Normalizing to make them valid probabilities."
+                )
+                initial_probs = initial_probs / prob_sum
+        else:
+            # Default: uniform distribution
+            initial_probs = np.ones(self.n_states) / self.n_states
+
+        # Create initialization diagnostics
+        diagnostics = self._create_custom_init_diagnostics(means, stds, transition_matrix, initial_probs)
+
+        return initial_probs, transition_matrix, means, stds, diagnostics
+
+    def _validate_custom_parameters(self, means: np.ndarray, stds: np.ndarray) -> None:
+        """
+        Validate custom parameters are financially realistic.
+
+        Raises warnings for extreme values but doesn't block them,
+        allowing experts to override if they have specific reasons.
+
+        Args:
+            means: Regime mean returns (log space)
+            stds: Regime volatilities
+        """
+        import warnings
+
+        # Convert log returns to percentage for validation
+        means_pct = np.exp(means) - 1.0
+
+        # Check for extreme mean values
+        max_daily_pct = 0.10  # 10% daily return
+        min_daily_pct = -0.10  # -10% daily return
+
+        extremely_negative = means_pct < min_daily_pct
+        extremely_positive = means_pct > max_daily_pct
+
+        if np.any(extremely_negative):
+            negative_regimes = np.where(extremely_negative)[0]
+            negative_values = means_pct[extremely_negative] * 100
+            warnings.warn(
+                f"Regime(s) {list(negative_regimes)} have extremely negative mean returns "
+                f"(< -10% daily): {list(negative_values)}%. "
+                "This may indicate a data entry error. Typical bear markets are -1% to -3% daily."
+            )
+
+        if np.any(extremely_positive):
+            positive_regimes = np.where(extremely_positive)[0]
+            positive_values = means_pct[extremely_positive] * 100
+            warnings.warn(
+                f"Regime(s) {list(positive_regimes)} have extremely positive mean returns "
+                f"(> +10% daily): {list(positive_values)}%. "
+                "This may indicate a data entry error. Typical bull markets are +0.5% to +2% daily."
+            )
+
+        # Check for extreme volatility values
+        extremely_low_vol = stds < 0.001  # < 0.1% daily
+        extremely_high_vol = stds > 0.15  # > 15% daily
+
+        if np.any(extremely_low_vol):
+            low_vol_regimes = np.where(extremely_low_vol)[0]
+            low_vol_values = stds[extremely_low_vol] * 100
+            warnings.warn(
+                f"Regime(s) {list(low_vol_regimes)} have extremely low volatility "
+                f"(< 0.1% daily): {list(low_vol_values)}%. "
+                "Typical market volatility ranges from 1% to 5% daily."
+            )
+
+        if np.any(extremely_high_vol):
+            high_vol_regimes = np.where(extremely_high_vol)[0]
+            high_vol_values = stds[extremely_high_vol] * 100
+            warnings.warn(
+                f"Regime(s) {list(high_vol_regimes)} have extremely high volatility "
+                f"(> 15% daily): {list(high_vol_values)}%. "
+                "This is unusually high even for crisis periods."
+            )
+
+        # Check for negative or zero volatilities
+        if np.any(stds <= 0):
+            raise ValueError(
+                f"All volatilities must be positive, got: {stds}"
+            )
+
+    def _create_persistent_transition_matrix(self) -> np.ndarray:
+        """
+        Create transition matrix with persistence (diagonal dominance).
+
+        Regimes tend to persist, so diagonal values should be higher.
+        Default: 80% stay, 20% distributed among other states.
+
+        Returns:
+            Transition matrix with shape (n_states, n_states)
+        """
+        transition_matrix = np.zeros((self.n_states, self.n_states))
+
+        # Set diagonal to 0.8 (80% persistence)
+        persistence = 0.8
+        np.fill_diagonal(transition_matrix, persistence)
+
+        # Distribute remaining 20% uniformly among other states
+        if self.n_states > 1:
+            off_diagonal = (1.0 - persistence) / (self.n_states - 1)
+            transition_matrix += off_diagonal
+            np.fill_diagonal(transition_matrix, persistence)  # Restore diagonal
+
+        return transition_matrix
+
+    def _create_custom_init_diagnostics(
+        self,
+        means: np.ndarray,
+        stds: np.ndarray,
+        transition_matrix: np.ndarray,
+        initial_probs: np.ndarray
+    ) -> dict:
+        """
+        Create diagnostics for custom initialization.
+
+        Args:
+            means: Regime mean returns
+            stds: Regime volatilities
+            transition_matrix: State transition probabilities
+            initial_probs: Initial state probabilities
+
+        Returns:
+            Dictionary with initialization diagnostics
+        """
+        # Convert to percentage for readable diagnostics
+        means_pct = (np.exp(means) - 1.0) * 100  # Convert to %
+
+        # Compute persistence (diagonal values)
+        persistence = np.diag(transition_matrix)
+
+        # Compute expected regime durations (1 / (1 - persistence))
+        expected_durations = 1.0 / (1.0 - persistence + 1e-10)
+
+        return {
+            'method': 'custom',
+            'n_states': self.n_states,
+            'regime_characteristics': [
+                {
+                    'state': i,
+                    'mean_return_pct': means_pct[i],
+                    'volatility_pct': stds[i] * 100,
+                    'persistence': persistence[i],
+                    'expected_duration_days': expected_durations[i],
+                }
+                for i in range(self.n_states)
+            ],
+            'transition_matrix': transition_matrix.tolist(),
+            'initial_probs': initial_probs.tolist(),
+            'warnings': [],  # Warnings added during validation
+        }
 
     def _train_baum_welch(self, returns: np.ndarray) -> None:
         """Train using Baum-Welch algorithm."""
@@ -791,6 +1111,272 @@ class HiddenMarkovModel(ModelComponent):
         if np.isinf(returns).any():
             raise ValueError("Returns contain infinite values")
 
+    def _compute_quality_metrics(self, observations: np.ndarray) -> Dict[str, Any]:
+        """
+        Compute current model quality metrics for monitoring.
+
+        Args:
+            observations: Observation sequence
+
+        Returns:
+            Dictionary with quality metrics
+        """
+        # Likelihood-based quality
+        emission_params = np.column_stack([self.emission_means_, self.emission_stds_])
+
+        if HMM_UTILS_AVAILABLE and self._algorithms is not None:
+            _, log_likelihood = self._algorithms.forward_algorithm(
+                observations,
+                self.initial_probs_,
+                self.transition_matrix_,
+                emission_params,
+            )
+        else:
+            # Fallback to simplified likelihood calculation
+            log_likelihood, _, _ = self._forward_backward_with_scaling(observations)
+
+        per_obs_likelihood = log_likelihood / len(observations)
+
+        # Clustering quality (if we have diagnostics)
+        cluster_quality = None
+        init_diag = self.get_initialization_diagnostics()
+        if init_diag:
+            cluster_quality = init_diag.get("silhouette_score")
+
+        return {
+            "log_likelihood_per_obs": per_obs_likelihood,
+            "cluster_quality": cluster_quality,
+            "timestamp": datetime.now(),
+        }
+
+    def _incremental_update(self, new_observations: np.ndarray) -> None:
+        """
+        Perform incremental parameter updates using online Baum-Welch.
+
+        Updates parameters smoothly using exponential moving average without
+        full re-initialization.
+
+        Args:
+            new_observations: New observation sequence
+        """
+        if not HMM_UTILS_AVAILABLE or self._algorithms is None:
+            # Fallback: just skip update if algorithms not available
+            return
+
+        # E-step: Get state responsibilities for new data
+        emission_params = np.column_stack([self.emission_means_, self.emission_stds_])
+
+        try:
+            gamma, xi, _ = self._algorithms.forward_backward_algorithm(
+                new_observations,
+                self.initial_probs_,
+                self.transition_matrix_,
+                emission_params,
+            )
+        except Exception as e:
+            # If forward-backward fails, skip update
+            print(f"Warning: Incremental update failed ({e}), skipping")
+            return
+
+        # M-step: Compute new parameter estimates
+        try:
+            _, new_transition_matrix, new_emission_params = self._algorithms.baum_welch_update(
+                new_observations,
+                gamma,
+                xi,
+                regularization=self.config.min_variance,
+            )
+        except Exception as e:
+            print(f"Warning: Parameter update failed ({e}), skipping")
+            return
+
+        # Store old parameters for change tracking
+        old_means = self.emission_means_.copy()
+        old_stds = self.emission_stds_.copy()
+        old_transitions = self.transition_matrix_.copy()
+
+        # Exponential moving average update
+        lr = self.config.incremental_learning_rate
+
+        # Update emission parameters
+        self.emission_means_ = (1 - lr) * self.emission_means_ + lr * new_emission_params[:, 0]
+        self.emission_stds_ = (1 - lr) * self.emission_stds_ + lr * new_emission_params[:, 1]
+
+        # Update transition matrix more conservatively (half learning rate)
+        self.transition_matrix_ = (1 - lr/2) * self.transition_matrix_ + (lr/2) * new_transition_matrix
+
+        # Calculate parameter change magnitude
+        mean_change = np.linalg.norm(self.emission_means_ - old_means)
+        std_change = np.linalg.norm(self.emission_stds_ - old_stds)
+        transition_change = np.linalg.norm(self.transition_matrix_ - old_transitions)
+
+        # Log update
+        self.training_history_["update_history"].append({
+            "type": "incremental",
+            "observation_count": len(new_observations),
+            "timestamp": datetime.now(),
+            "parameter_changes": {
+                "mean_magnitude": float(mean_change),
+                "std_magnitude": float(std_change),
+                "transition_magnitude": float(transition_change),
+            },
+        })
+
+    def _get_recent_window(self, observations: pd.DataFrame) -> pd.DataFrame:
+        """
+        Get recent observation window for refitting.
+
+        Args:
+            observations: Current observations DataFrame
+
+        Returns:
+            DataFrame with recent window of observations
+        """
+        window_size = self.config.refit_window_observations
+
+        # If we have stored fit observations, combine them
+        if self.training_history_["fit_observations"] is not None:
+            # Get recent from stored + new observations
+            stored_obs = self.training_history_["fit_observations"]
+            new_obs = observations[self.config.observed_signal].values
+
+            # Combine and take last window_size
+            combined = np.concatenate([stored_obs, new_obs])
+            recent = combined[-window_size:]
+
+            return pd.DataFrame({self.config.observed_signal: recent})
+        else:
+            # Just use current observations (limited to window)
+            if len(observations) > window_size:
+                return observations.iloc[-window_size:]
+            else:
+                return observations
+
+    def _detect_distribution_shift(self, new_observations: np.ndarray) -> bool:
+        """
+        Detect if data distribution has shifted significantly.
+
+        Args:
+            new_observations: New observation sequence
+
+        Returns:
+            True if distribution shift detected, False otherwise
+        """
+        # Need historical baseline
+        if self.training_history_["fit_observations"] is None:
+            return False
+
+        historical = self.training_history_["fit_observations"]
+
+        # Take recent window for comparison
+        if len(historical) > 500:
+            historical = historical[-500:]
+
+        if self.config.shift_detection_method == "kolmogorov_smirnov":
+            try:
+                from scipy.stats import ks_2samp
+
+                statistic, p_value = ks_2samp(historical, new_observations)
+                return p_value < self.config.shift_significance_level
+            except Exception:
+                # If KS test fails, fall back to likelihood ratio
+                pass
+
+        # Likelihood ratio method (default)
+        try:
+            # Compare likelihood of new data under current model
+            current_quality = self._compute_quality_metrics(new_observations)
+            current_ll = current_quality["log_likelihood_per_obs"]
+
+            # Compare to baseline likelihood
+            if len(self.training_history_["quality_metrics"]) >= 5:
+                baseline_ll = np.mean(
+                    [q["log_likelihood_per_obs"] for q in self.training_history_["quality_metrics"][-5:]]
+                )
+
+                # Significant drop in likelihood indicates shift
+                if current_ll < baseline_ll * 0.5:  # 50% drop
+                    return True
+
+        except Exception:
+            pass
+
+        return False
+
+    def _should_refit(self, current_observations: np.ndarray) -> tuple:
+        """
+        Determine if model should be re-initialized.
+
+        Respects refit_trigger_mode setting:
+        - "time": Only check time-based triggers
+        - "quality": Only check quality-based triggers
+        - "hybrid": Check all triggers
+
+        Args:
+            current_observations: Current observation sequence
+
+        Returns:
+            Tuple of (should_refit: bool, reason: str)
+        """
+        reasons = []
+        mode = self.config.refit_trigger_mode
+
+        # Time-based triggers (only if mode is 'time' or 'hybrid')
+        if mode in ['time', 'hybrid']:
+            # Time-based trigger (observations)
+            if self.config.refit_interval_observations is not None:
+                if (
+                    self.training_history_["observations_since_refit"]
+                    >= self.config.refit_interval_observations
+                ):
+                    reasons.append(
+                        f"observation_limit_reached ({self.training_history_['observations_since_refit']})"
+                    )
+
+        # Quality-based triggers (only if mode is 'quality' or 'hybrid')
+        if mode in ['quality', 'hybrid']:
+            # Quality degradation trigger
+            if self.config.quality_degradation_threshold > 0:
+                try:
+                    recent_quality = self._compute_quality_metrics(current_observations)
+                    quality_history = self.training_history_["quality_metrics"]
+
+                    if len(quality_history) >= 10:
+                        baseline_quality = np.mean(
+                            [q["log_likelihood_per_obs"] for q in quality_history[-10:]]
+                        )
+                        current_quality = recent_quality["log_likelihood_per_obs"]
+
+                        # Check for degradation
+                        if baseline_quality != 0:
+                            degradation = (baseline_quality - current_quality) / abs(baseline_quality)
+
+                            if degradation > self.config.quality_degradation_threshold:
+                                reasons.append(f"quality_degraded ({degradation:.1%})")
+
+                    # Cluster quality check
+                    cluster_quality = recent_quality.get("cluster_quality")
+                    if cluster_quality is not None:
+                        if cluster_quality < self.config.min_silhouette_threshold:
+                            reasons.append(f"poor_clustering ({cluster_quality:.3f})")
+
+                except Exception as e:
+                    # Don't fail on quality check errors
+                    pass
+
+            # Distribution shift detection (quality-based)
+            if self.config.enable_distribution_shift_detection:
+                try:
+                    if self._detect_distribution_shift(current_observations):
+                        reasons.append("distribution_shift_detected")
+                except Exception:
+                    pass
+
+        should_refit = len(reasons) > 0
+        reason_str = ", ".join(reasons) if reasons else "no_triggers"
+
+        return should_refit, reason_str
+
     def predict_proba(self, observations: pd.DataFrame) -> pd.DataFrame:
         """
         Predict state probabilities for each observation.
@@ -956,31 +1542,40 @@ class HiddenMarkovModel(ModelComponent):
                 predictions["predicted_state"].value_counts().to_dict()
             )
 
-            # Add regime statistics as expected by tests - per state
+            # Add regime statistics using proper duration calculation
             returns = observations[self.config.observed_signal].values
+
+            # Use calculate_regime_statistics for proper duration analysis
+            detailed_stats = calculate_regime_statistics(
+                states=predictions["predicted_state"].values,
+                returns=returns,
+                dates=observations.index.values if hasattr(observations.index, 'values') else None
+            )
+
+            # Extract per-state stats with proper duration
             regime_stats = {}
-
             for state in range(self.n_states):
-                state_mask = predictions["predicted_state"] == state
-                state_returns = returns[state_mask]
-
-                if len(state_returns) > 0:
-                    # Calculate state-specific statistics
+                if state in detailed_stats['regime_stats']:
+                    stats = detailed_stats['regime_stats'][state]
                     regime_stats[state] = {
-                        "mean_duration": float(
-                            state_mask.sum()
-                        ),  # Simplified duration calc
-                        "mean_return": float(np.mean(state_returns)),
-                        "volatility": float(np.std(state_returns)),
-                        "frequency": float(state_mask.sum() / len(predictions)),
+                        "mean_return": stats['mean_return'],
+                        "volatility": stats['std_return'],
+                        "frequency": stats['frequency'],
+                        "mean_duration": stats.get('avg_duration', 0.0),  # Proper average duration
+                        "min_duration": stats.get('min_duration', 0.0),
+                        "max_duration": stats.get('max_duration', 0.0),
+                        "n_episodes": stats.get('n_episodes', 0),
                     }
                 else:
                     # Default values for unused states
                     regime_stats[state] = {
-                        "mean_duration": 0.0,
                         "mean_return": 0.0,
                         "volatility": 0.0,
                         "frequency": 0.0,
+                        "mean_duration": 0.0,
+                        "min_duration": 0.0,
+                        "max_duration": 0.0,
+                        "n_episodes": 0,
                     }
 
             analysis["regime_stats"] = regime_stats
@@ -1019,6 +1614,153 @@ class HiddenMarkovModel(ModelComponent):
             }
 
         return analysis
+
+    def get_quality_metrics(self, observations: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Get consolidated quality metrics for model evaluation.
+
+        Returns 3 key metrics:
+        1. Log-Likelihood - Objective model fit quality (assessed)
+        2. Regime Duration - Descriptive timing characteristic (reported, not judged)
+        3. Regime Persistence - Descriptive stability characteristic (reported, not judged)
+
+        Note: Only log-likelihood is objectively assessed. Persistence and duration
+        are regime characteristics whose suitability depends on your trading strategy
+        and data frequency (day trading vs swing trading, daily vs minute data).
+
+        Args:
+            observations: Data to evaluate
+
+        Returns:
+            Dictionary with:
+                - log_likelihood: Overall model fit (assessed for quality)
+                - regime_durations: {state: avg_duration_days} (descriptive)
+                - regime_persistence: {state: persistence_probability} (descriptive)
+                - overall_assessment: Summary based on log-likelihood only
+        """
+        if not self.is_fitted:
+            raise HMMInferenceError("Model must be fitted")
+
+        # 1. Log-Likelihood (model fit)
+        log_likelihood = self.score(observations)
+        ll_per_obs = log_likelihood / len(observations)
+
+        # 2. Regime Duration (timing)
+        predictions = self.predict(observations)
+        returns = observations[self.config.observed_signal].values
+        regime_stats = calculate_regime_statistics(
+            states=predictions['predicted_state'].values,
+            returns=returns
+        )
+
+        regime_durations = {}
+        for state in range(self.n_states):
+            if state in regime_stats['regime_stats']:
+                regime_durations[state] = regime_stats['regime_stats'][state].get('avg_duration', 0.0)
+            else:
+                regime_durations[state] = 0.0
+
+        # 3. Regime Persistence (diagonal of transition matrix)
+        regime_persistence = {}
+        expected_durations = {}
+        for state in range(self.n_states):
+            persistence = self.transition_matrix_[state, state]
+            regime_persistence[state] = persistence
+            # Expected duration = 1 / (1 - persistence)
+            expected_durations[state] = (
+                1.0 / (1.0 - persistence) if persistence < 1.0 else float('inf')
+            )
+
+        # Overall assessment - only assess log-likelihood (objective model fit)
+        # Persistence and duration are descriptive characteristics that depend on:
+        # - Trading timeframe (day trading vs swing trading)
+        # - Data frequency (minute vs daily)
+        # - Asset characteristics (crypto vs equities, indices vs stocks)
+        avg_duration = np.mean(list(regime_durations.values()))
+        avg_persistence = np.mean(list(regime_persistence.values()))
+
+        quality_issues = []
+        if ll_per_obs < -3.0:
+            quality_issues.append("Low log-likelihood suggests poor model fit")
+
+        if not quality_issues:
+            assessment = "Model fit is good (log-likelihood per observation > -3.0)"
+        else:
+            assessment = f"Model fit issue: {quality_issues[0]}"
+
+        return {
+            "log_likelihood": {
+                "total": log_likelihood,
+                "per_observation": ll_per_obs,
+                "interpretation": "Higher is better (less negative)"
+            },
+            "regime_durations": {
+                "by_state": regime_durations,
+                "average": avg_duration,
+                "interpretation": f"Regimes last {avg_duration:.1f} days on average"
+            },
+            "regime_persistence": {
+                "by_state": regime_persistence,
+                "average": avg_persistence,
+                "expected_durations": expected_durations,
+                "interpretation": f"Average {avg_persistence:.1%} chance of staying in same regime"
+            },
+            "overall_assessment": assessment,
+            "quality_issues": quality_issues
+        }
+
+    def print_quality_report(self, observations: pd.DataFrame) -> None:
+        """
+        Print a formatted quality report with the 3 key metrics.
+
+        Args:
+            observations: Data to evaluate
+        """
+        metrics = self.get_quality_metrics(observations)
+
+        print("\n" + "="*80)
+        print("HMM QUALITY REPORT")
+        print("="*80)
+
+        # 1. Log-Likelihood
+        print(f"\n LOG-LIKELIHOOD (Model Fit)")
+        print(f"   Total: {metrics['log_likelihood']['total']:.2f}")
+        print(f"   Per Observation: {metrics['log_likelihood']['per_observation']:.4f}")
+        print(f"   → {metrics['log_likelihood']['interpretation']}")
+
+        # 2. Regime Duration
+        print(f"\n⏱️  REGIME DURATION (Timing)")
+        print(f"   Average Duration: {metrics['regime_durations']['average']:.1f} days")
+        print(f"   By State:")
+        for state, duration in metrics['regime_durations']['by_state'].items():
+            print(f"      State {state}: {duration:.1f} days")
+        print(f"   → {metrics['regime_durations']['interpretation']}")
+
+        # 3. Regime Persistence
+        print(f"\n🔄 REGIME PERSISTENCE (Stability)")
+        print(f"   Average Persistence: {metrics['regime_persistence']['average']:.1%}")
+        print(f"   By State:")
+        for state, persistence in metrics['regime_persistence']['by_state'].items():
+            exp_dur = metrics['regime_persistence']['expected_durations'][state]
+            exp_str = f"{exp_dur:.1f}" if exp_dur != float('inf') else "∞"
+            print(f"      State {state}: {persistence:.1%} (expected {exp_str} days)")
+        print(f"   → {metrics['regime_persistence']['interpretation']}")
+
+        # Overall Assessment
+        print(f"\n" + "-"*80)
+        print(f"OVERALL ASSESSMENT")
+        print(f"   {metrics['overall_assessment']}")
+        if metrics['quality_issues']:
+            print(f"\n   Issues to Address:")
+            for issue in metrics['quality_issues']:
+                print(f"      • {issue}")
+
+        print(f"\nNote: Persistence and duration are descriptive characteristics.")
+        print(f"      Suitable values depend on your trading timeframe and strategy:")
+        print(f"      • Day trading: Short durations (1-2 days) may be ideal")
+        print(f"      • Swing trading: Medium durations (5-10 days) may be ideal")
+        print(f"      • Position trading: Long durations (weeks) may be ideal")
+        print("="*80 + "\n")
 
     def save_model(self, filepath: str) -> None:
         """
@@ -1291,6 +2033,85 @@ class HiddenMarkovModel(ModelComponent):
                 else None
             ),
         }
+
+    def get_initialization_diagnostics(self) -> Dict[str, Any]:
+        """
+        Get detailed diagnostics about model initialization.
+
+        Returns diagnostic information about KMeans clustering quality,
+        financial constraint distortion, and initialization warnings.
+
+        Returns:
+            Dictionary with initialization diagnostics, or None if not available
+        """
+        return self.training_history_.get('initialization_diagnostics')
+
+    def print_initialization_report(self) -> None:
+        """
+        Print a formatted report of initialization diagnostics.
+
+        Displays KMeans quality metrics, constraint distortion, and warnings
+        in a human-readable format.
+        """
+        diag = self.get_initialization_diagnostics()
+
+        if not diag:
+            print("No initialization diagnostics available")
+            return
+
+        print("\n" + "=" * 70)
+        print(f"INITIALIZATION DIAGNOSTICS")
+        print("=" * 70)
+
+        # Basic info
+        print(f"\nMethod: {diag.get('method', 'unknown')}")
+        print(f"States: {diag.get('n_states', 'N/A')}")
+        print(f"Observations: {diag.get('n_observations', 'N/A')}")
+
+        # KMeans specific metrics
+        if 'kmeans_inertia' in diag:
+            print(f"\n--- KMeans Clustering Quality ---")
+            print(f"Inertia: {diag.get('kmeans_inertia', 'N/A'):.4f}")
+            print(f"Iterations: {diag.get('kmeans_iterations', 'N/A')}")
+
+            sil = diag.get('silhouette_score')
+            if sil is not None:
+                quality = "Excellent" if sil > 0.5 else "Good" if sil > 0.35 else "Moderate" if sil > 0.2 else "Poor"
+                print(f"Silhouette Score: {sil:.3f} ({quality})")
+
+            ch = diag.get('calinski_harabasz_score')
+            if ch is not None:
+                print(f"Calinski-Harabasz Score: {ch:.2f}")
+
+            print(f"\nCluster Sizes: {diag.get('cluster_sizes', {})}")
+            balance = diag.get('cluster_balance_ratio', 1.0)
+            balance_status = "Balanced" if balance > 0.5 else "Moderate" if balance > 0.2 else "Imbalanced"
+            print(f"Cluster Balance: {balance:.3f} ({balance_status})")
+
+        # Constraint distortion
+        if 'constraint_distortion' in diag:
+            distortion = diag['constraint_distortion']
+            print(f"\n--- Financial Constraint Distortion ---")
+            print(f"States Constrained: {distortion.get('n_states_constrained', 0)}/{diag.get('n_states', 'N/A')}")
+            print(f"Max Distortion: {distortion.get('max_distortion_pct', 0):.1%}")
+            print(f"Mean Distortion: {distortion.get('mean_distortion_pct', 0):.1%}")
+
+            if distortion.get('state_distortions'):
+                print(f"\nPer-State Distortion:")
+                for sd in distortion['state_distortions']:
+                    print(f"  State {sd['state']}: {sd['raw_mean_pct']:.2%} → {sd['constrained_mean_pct']:.2%} "
+                          f"(Δ = {sd['distortion_pct']:.2%})")
+
+        # Warnings
+        warnings_list = diag.get('warnings', [])
+        if warnings_list:
+            print(f"\n--- Warnings ({len(warnings_list)}) ---")
+            for i, warning in enumerate(warnings_list, 1):
+                print(f"{i}. {warning}")
+        else:
+            print(f"\n--- No Warnings ---")
+
+        print("=" * 70 + "\n")
 
     def get_detailed_state(self) -> Dict[str, Any]:
         """

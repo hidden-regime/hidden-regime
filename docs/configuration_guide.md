@@ -915,12 +915,12 @@ def validate_configuration_example():
     if results['errors']:
         print("Errors:")
         for error in results['errors']:
-            print(f"  ❌ {error}")
+            print(f"   {error}")
     
     if results['warnings']:
         print("Warnings:")
         for warning in results['warnings']:
-            print(f"  ⚠️  {warning}")
+            print(f"  [WARNING]  {warning}")
     
     if 'performance_metrics' in results:
         perf = results['performance_metrics']
@@ -1494,17 +1494,17 @@ def run_health_check_example():
     if health['issues']:
         print("Issues:")
         for issue in health['issues']:
-            print(f"  ❌ {issue}")
+            print(f"   {issue}")
     
     if health['warnings']:
         print("Warnings:")
         for warning in health['warnings']:
-            print(f"  ⚠️  {warning}")
+            print(f"  [WARNING]  {warning}")
     
     if health['recommendations']:
         print("Recommendations:")
         for rec in health['recommendations']:
-            print(f"  💡 {rec}")
+            print(f"  Note: {rec}")
 ```
 
 This comprehensive Configuration and Tuning Guide provides everything needed to properly configure HMM models for different use cases, optimize performance, and troubleshoot common issues. The guide emphasizes data-driven configuration choices and provides practical tools for validation and optimization.

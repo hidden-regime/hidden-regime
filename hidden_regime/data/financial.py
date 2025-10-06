@@ -157,9 +157,8 @@ class FinancialDataLoader(DataComponent):
             self.config.num_samples is not None
             and len(processed_data) > self.config.num_samples
         ):
-            processed_data = processed_data.tail(self.config.num_samples).reset_index(
-                drop=True
-            )
+            # Preserve DatetimeIndex - don't reset to RangeIndex
+            processed_data = processed_data.tail(self.config.num_samples)
 
         # Validate data quality
         self._validate_data_quality(processed_data, self.config.ticker)

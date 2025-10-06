@@ -560,7 +560,7 @@ class MarkdownReportGenerator(ReportComponent):
                     section.append(f"| {col} | {missing_count} | {percentage:.1f}% |")
         else:
             section.append("### Missing Data")
-            section.append("✅ No missing data detected.")
+            section.append(" No missing data detected.")
 
         # Observation quality (if available)
         if observations is not None and len(observations) > 0:
@@ -575,7 +575,7 @@ class MarkdownReportGenerator(ReportComponent):
                     if missing_count > 0:
                         section.append(f"| {col} | {missing_count} |")
             else:
-                section.append("✅ All observations computed successfully.")
+                section.append(" All observations computed successfully.")
 
         return "\n".join(section)
 

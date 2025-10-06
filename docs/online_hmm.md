@@ -27,11 +27,11 @@ The Online Hidden Markov Model (OnlineHMM) extends the traditional batch HMM app
 
 ### Key Benefits
 
-- **✅ Real-Time Processing**: Process observations as they arrive (< 10ms per observation)
-- **✅ Temporal Consistency**: Maintain stable regime classifications (70%+ consistency)
-- **✅ Memory Efficiency**: Bounded memory usage with exponential forgetting
-- **✅ Adaptive Learning**: Automatically adapt to changing market conditions
-- **✅ Production Ready**: Designed for high-frequency trading and live applications
+- ** Real-Time Processing**: Process observations as they arrive (< 10ms per observation)
+- ** Temporal Consistency**: Maintain stable regime classifications (70%+ consistency)
+- ** Memory Efficiency**: Bounded memory usage with exponential forgetting
+- ** Adaptive Learning**: Automatically adapt to changing market conditions
+- ** Production Ready**: Designed for high-frequency trading and live applications
 
 ### Core Innovation
 
@@ -842,7 +842,7 @@ class CompleteOnlineHMMTradingSystem:
         # Fit initial model
         self.online_hmm.fit(historical_returns, verbose=True)
         
-        print("✅ Model initialization complete")
+        print(" Model initialization complete")
         return self.online_hmm.analyze_regimes(historical_returns)
     
     def process_market_data(self, price, timestamp):

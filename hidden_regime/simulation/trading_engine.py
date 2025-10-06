@@ -147,7 +147,7 @@ class TradingSimulationEngine:
             return True
 
         except Exception as e:
-            print(f"❌ Failed to initialize simulation: {e}")
+            print(f" Failed to initialize simulation: {e}")
             return False
 
     def run_simulation(
@@ -303,7 +303,7 @@ class TradingSimulationEngine:
 
         # Log trade opening
         print(
-            f"📈 Opened position: {shares} shares of {symbol} at ${entry_price:.2f} ({signal_name})"
+            f" Opened position: {shares} shares of {symbol} at ${entry_price:.2f} ({signal_name})"
         )
 
     def _close_position(

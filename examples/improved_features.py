@@ -54,7 +54,7 @@ def print_section_header(title, char="=", width=80):
 
 def analyze_pipeline_results(pipeline, name, show_details=True):
     """Analyze and display results from a pipeline execution."""
-    print(f"\n📊 {name} Results:")
+    print(f"\n {name} Results:")
     print("-" * 50)
 
     # Get component outputs through proper pipeline interface
@@ -102,7 +102,7 @@ def analyze_pipeline_results(pipeline, name, show_details=True):
         }
 
     except Exception as e:
-        print(f"❌ Error analyzing {name}: {e}")
+        print(f" Error analyzing {name}: {e}")
         return None
 
 
@@ -147,7 +147,7 @@ def create_enhanced_features_visualization(results_dict, ticker="NVDA"):
     enhanced_results = results_dict.get("full_enhanced")
 
     if baseline_results is None or enhanced_results is None:
-        print("❌ Cannot create visualization without baseline and enhanced results")
+        print(" Cannot create visualization without baseline and enhanced results")
         return None
 
     baseline_data = baseline_results["data"]
@@ -255,7 +255,7 @@ def create_enhanced_features_visualization(results_dict, ticker="NVDA"):
     plt.savefig(plot_filename, dpi=300, bbox_inches="tight")
     plt.close()
 
-    print(f"✅ Visualization saved as: {plot_filename}")
+    print(f" Visualization saved as: {plot_filename}")
     return plot_filename
 
 
@@ -286,7 +286,7 @@ def create_individual_feature_plots(results_dict, ticker="AAPL"):
     # Get baseline data for reference
     baseline_results = results_dict.get("baseline")
     if baseline_results is None:
-        print("❌ Cannot create individual plots without baseline results")
+        print(" Cannot create individual plots without baseline results")
         return []
 
     baseline_data = baseline_results["data"]
@@ -301,10 +301,10 @@ def create_individual_feature_plots(results_dict, ticker="AAPL"):
                     break
 
         if feature_results is None:
-            print(f"⚠️  No data found for {feature_name}, skipping...")
+            print(f"[WARNING]  No data found for {feature_name}, skipping...")
             continue
 
-        print(f"📊 Creating plot for {feature_name}...")
+        print(f" Creating plot for {feature_name}...")
 
         # Create 3-panel plot for this feature
         fig, axes = plt.subplots(3, 1, figsize=(15, 12))
@@ -314,7 +314,7 @@ def create_individual_feature_plots(results_dict, ticker="AAPL"):
         feature_data = observations[feature_name].dropna()
 
         if len(feature_data) == 0:
-            print(f"⚠️  No valid data for {feature_name}, skipping...")
+            print(f"[WARNING]  No valid data for {feature_name}, skipping...")
             continue
 
         # Panel 1: Price with regime overlay
@@ -483,7 +483,7 @@ def create_individual_feature_plots(results_dict, ticker="AAPL"):
         plt.close()
 
         individual_plot_files.append(plot_filename)
-        print(f"✅ Individual plot saved: {plot_filename}")
+        print(f" Individual plot saved: {plot_filename}")
 
     return individual_plot_files
 
@@ -510,7 +510,7 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
     n_states = 3
     individual_results = {}
 
-    print(f"📈 Analysis Parameters:")
+    print(f" Analysis Parameters:")
     print(f"   Ticker: {ticker}")
     print(f"   Period: {start_date} to {end_date}")
     print(f"   States: {n_states}")
@@ -533,7 +533,7 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
         )
 
     except Exception as e:
-        print(f"❌ Baseline pipeline failed: {e}")
+        print(f" Baseline pipeline failed: {e}")
         baseline_results = None
 
     # =================================================================
@@ -579,7 +579,7 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
             )
 
         except Exception as e:
-            print(f"❌ {feature_name} feature failed: {e}")
+            print(f" {feature_name} feature failed: {e}")
             individual_results[feature_name] = None
 
     # We'll generate individual plots after we have combined results
@@ -624,7 +624,7 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
             )
 
         except Exception as e:
-            print(f"❌ {config_name} configuration failed: {e}")
+            print(f" {config_name} configuration failed: {e}")
             combined_results[config_name] = None
 
     # =================================================================
@@ -646,7 +646,7 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
 
     # Bull market detection comparison
     print_section_header("Bull Market Detection Comparison")
-    print(f"\n📊 {ticker} Bull Market Detection Analysis:")
+    print(f"\n {ticker} Bull Market Detection Analysis:")
     print("(Higher percentages = better bull market identification)")
     print()
 
@@ -701,7 +701,7 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
    • Easy comparison of different approaches
    • Proper separation of concerns
 
-📈 Performance Improvements:
+ Performance Improvements:
    • Enhanced features may improve bull market detection
    • More interpretable regime characteristics
    • Reduced dependence on extreme return thresholds
@@ -722,7 +722,7 @@ Enhanced Features: momentum_strength, trend_persistence, volatility_context, dir
     )
 
     print_section_header("Enhanced Features Example Complete", "=", 80)
-    print("✅ All pipeline configurations tested successfully!")
+    print(" All pipeline configurations tested successfully!")
     print("📁 Check the output directory for generated visualizations and reports.")
 
 

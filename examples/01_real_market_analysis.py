@@ -147,7 +147,7 @@ def create_realistic_sample_data(ticker_name="SAMPLE", n_days=500):
 
 def analyze_stock(ticker, start_date, end_date):
     """Analyze a single stock with comprehensive error handling."""
-    print(f"\\n📈 Analyzing {ticker}...")
+    print(f"\\n Analyzing {ticker}...")
 
     try:
         # Try to load real data
@@ -158,15 +158,15 @@ def analyze_stock(ticker, start_date, end_date):
         raw_data = data_loader.update()
 
         if raw_data.empty:
-            print(f"   ❌ No real data available for {ticker}")
+            print(f"    No real data available for {ticker}")
             raw_data, true_regimes = create_realistic_sample_data(ticker)
             print(f"   📝 Using realistic sample data ({len(raw_data)} days)")
         else:
-            print(f"   ✅ Loaded {len(raw_data)} days of real market data")
+            print(f"    Loaded {len(raw_data)} days of real market data")
             true_regimes = None
 
     except Exception as e:
-        print(f"   ❌ Data loading failed: {e}")
+        print(f"    Data loading failed: {e}")
         raw_data, true_regimes = create_realistic_sample_data(ticker)
         print(f"   📝 Using realistic sample data ({len(raw_data)} days)")
 
@@ -245,7 +245,7 @@ def analyze_stock(ticker, start_date, end_date):
 
 def main():
     """Main analysis function."""
-    print("📊 Real Market Analysis Example")
+    print(" Real Market Analysis Example")
     print("=" * 50)
 
     # Configuration
@@ -260,13 +260,13 @@ def main():
         try:
             result = analyze_stock(ticker, start_date, end_date)
             results[ticker] = result
-            print(f"   ✅ {ticker} analysis complete")
+            print(f"    {ticker} analysis complete")
         except Exception as e:
-            print(f"   ❌ {ticker} analysis failed: {e}")
+            print(f"    {ticker} analysis failed: {e}")
             continue
 
     if not results:
-        print("❌ No successful analyses - exiting")
+        print(" No successful analyses - exiting")
         return
 
     # Generate comprehensive report
@@ -327,7 +327,7 @@ def main():
             "The model analyzes log returns to identify regime patterns and transitions.\\n\\n"
         )
 
-    print(f"✅ Report saved as: {report_filename}")
+    print(f" Report saved as: {report_filename}")
 
     # Create visualizations
     print(f"\\n🎨 Creating visualizations...")
@@ -405,13 +405,13 @@ def main():
             fig.savefig(plot_filename, dpi=300, bbox_inches="tight")
             plt.close(fig)
 
-            print(f"   ✅ {ticker} chart saved as: {plot_filename}")
+            print(f"    {ticker} chart saved as: {plot_filename}")
 
         except Exception as e:
-            print(f"   ❌ {ticker} visualization failed: {e}")
+            print(f"    {ticker} visualization failed: {e}")
 
     # Summary results
-    print(f"\\n📊 Analysis Summary:")
+    print(f"\\n Analysis Summary:")
     print("=" * 30)
 
     for ticker, result in results.items():
@@ -447,10 +447,10 @@ if __name__ == "__main__":
     try:
         results = main()
         print("\\n" + "=" * 50)
-        print("🚀 Real Market Analysis: SUCCESS")
+        print(" Real Market Analysis: SUCCESS")
         print("=" * 50)
     except Exception as e:
-        print(f"\\n❌ Error running analysis: {e}")
+        print(f"\\n Error running analysis: {e}")
         import traceback
 
         traceback.print_exc()

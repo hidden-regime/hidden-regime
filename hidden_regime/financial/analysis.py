@@ -197,14 +197,14 @@ class FinancialRegimeAnalysis:
         Returns:
             Comprehensive financial analysis results
         """
-        print(f"🚀 Starting Financial Regime Analysis: {self.config.ticker}")
+        print(f" Starting Financial Regime Analysis: {self.config.ticker}")
         print("=" * 60)
 
         start_time = time.time()
 
         try:
             # Phase 1: Market Data Loading
-            print("\n📊 Phase 1: Market Data Loading")
+            print("\n Phase 1: Market Data Loading")
             self._load_market_data()
 
             # Phase 2: Regime Detection
@@ -216,13 +216,13 @@ class FinancialRegimeAnalysis:
             self._characterize_regimes()
 
             # Phase 4: Signal Generation
-            print("\n📈 Phase 4: Trading Signal Generation")
+            print("\n Phase 4: Trading Signal Generation")
             self._generate_trading_signals()
 
             # Phase 5: Technical Analysis (if enabled)
             technical_analysis = None
             if self.config.include_technical_indicators:
-                print("\n📊 Phase 5: Technical Analysis")
+                print("\n Phase 5: Technical Analysis")
                 technical_analysis = self._run_technical_analysis()
 
             # Phase 6: Trading Simulation (if enabled)
@@ -251,7 +251,7 @@ class FinancialRegimeAnalysis:
 
             execution_time = time.time() - start_time
             print(
-                f"\n✅ Financial Regime Analysis Complete! ({execution_time:.2f} seconds)"
+                f"\n Financial Regime Analysis Complete! ({execution_time:.2f} seconds)"
             )
 
             return FinancialAnalysisResult(
@@ -276,7 +276,7 @@ class FinancialRegimeAnalysis:
 
         except Exception as e:
             execution_time = time.time() - start_time
-            print(f"\n❌ Financial Regime Analysis Failed: {e}")
+            print(f"\n Financial Regime Analysis Failed: {e}")
             import traceback
 
             traceback.print_exc()
@@ -315,7 +315,7 @@ class FinancialRegimeAnalysis:
         print(
             f"   Loaded {len(self.market_data)} days of data ({training_start} to {self.config.end_date})"
         )
-        print(f"   ✅ Market data loaded successfully")
+        print(f"    Market data loaded successfully")
 
     def _detect_regimes(self):
         """Detect market regimes using HMM."""
@@ -347,7 +347,7 @@ class FinancialRegimeAnalysis:
                 self.temporal_controller.pipeline.analysis_output.copy()
             )
             print(f"   Detected regimes over {len(self.regime_detection)} days")
-            print(f"   ✅ Regime detection completed")
+            print(f"    Regime detection completed")
         else:
             raise AnalysisError("Failed to generate regime detection results")
 
@@ -379,7 +379,7 @@ class FinancialRegimeAnalysis:
                 f"Vol: {profile.annualized_volatility:.1%})"
             )
 
-        print(f"   ✅ Regime characterization completed")
+        print(f"    Regime characterization completed")
 
     def _generate_trading_signals(self):
         """Generate trading signals based on regime characteristics."""
@@ -417,7 +417,7 @@ class FinancialRegimeAnalysis:
                     print(f"   Generated {strategy_name} signals")
 
             except Exception as e:
-                print(f"   ⚠️ Warning: Failed to generate {strategy_name} signals: {e}")
+                print(f"   [WARNING] Warning: Failed to generate {strategy_name} signals: {e}")
                 # Create neutral signals as fallback
                 all_signals[strategy_name] = pd.Series(0.0, index=analysis_data.index)
 
@@ -427,7 +427,7 @@ class FinancialRegimeAnalysis:
         print(
             f"   Generated signals for {len(self.trading_signals.columns)} strategies"
         )
-        print(f"   ✅ Trading signal generation completed")
+        print(f"    Trading signal generation completed")
 
     def _run_technical_analysis(self) -> Dict[str, Any]:
         """Run technical analysis if enabled."""
@@ -451,12 +451,12 @@ class FinancialRegimeAnalysis:
             print(
                 f"   Analyzed {len(self.config.technical_indicators)} technical indicators"
             )
-            print(f"   ✅ Technical analysis completed")
+            print(f"    Technical analysis completed")
 
             return technical_results
 
         except Exception as e:
-            print(f"   ⚠️ Technical analysis warning: {e}")
+            print(f"   [WARNING] Technical analysis warning: {e}")
             return {}
 
     def _run_trading_simulation(self) -> Optional[Any]:
@@ -512,20 +512,20 @@ class FinancialRegimeAnalysis:
                     f"   💰 Simulation successful: {simulation_result.total_return_pct:.2f}% return"
                 )
                 print(f"   🏆 Best strategy: {simulation_result.best_strategy}")
-                print(f"   📊 Sharpe ratio: {simulation_result.sharpe_ratio:.3f}")
+                print(f"    Sharpe ratio: {simulation_result.sharpe_ratio:.3f}")
 
                 # Save trade journals if enabled
                 if self.config.save_trade_journal:
                     self._save_trade_journals(simulation_result)
 
-                print(f"   ✅ Trading simulation completed")
+                print(f"    Trading simulation completed")
             else:
-                print(f"   ❌ Simulation failed")
+                print(f"    Simulation failed")
 
             return simulation_result
 
         except Exception as e:
-            print(f"   ⚠️ Trading simulation warning: {e}")
+            print(f"   [WARNING] Trading simulation warning: {e}")
             return None
 
     def _compare_strategies(
@@ -561,7 +561,7 @@ class FinancialRegimeAnalysis:
                 comparison["excess_return"] = benchmark["excess_return"]
 
         print(f"   Compared {len(self.trading_signals.columns)} strategies")
-        print(f"   ✅ Strategy comparison completed")
+        print(f"    Strategy comparison completed")
 
         return comparison
 
@@ -609,7 +609,7 @@ class FinancialRegimeAnalysis:
             plt.close(static_fig)
             static_plots["regime_analysis"] = static_path
 
-            print(f"   📊 Static plots generated")
+            print(f"    Static plots generated")
 
             # Animations (if enabled)
             if self.config.create_animations:
@@ -687,7 +687,7 @@ class FinancialRegimeAnalysis:
                             f"   🎬 Regime evolution animation saved to {animation_path}"
                         )
                     else:
-                        print(f"   ⚠️ Animation generation failed")
+                        print(f"   [WARNING] Animation generation failed")
 
                     # Save individual frames if requested
                     if self.config.save_individual_frames and output_structure.get(
@@ -706,16 +706,16 @@ class FinancialRegimeAnalysis:
                         print(f"   🖼️ {len(frame_paths)} individual frames saved")
 
                 except Exception as anim_error:
-                    print(f"   ⚠️ Animation generation failed: {anim_error}")
+                    print(f"   [WARNING] Animation generation failed: {anim_error}")
 
                 print(f"   🎬 Animation processing completed")
 
-            print(f"   ✅ Visualization generation completed")
+            print(f"    Visualization generation completed")
 
             return static_plots, animations
 
         except Exception as e:
-            print(f"   ⚠️ Visualization warning: {e}")
+            print(f"   [WARNING] Visualization warning: {e}")
             return None, None
 
     def _generate_report(
@@ -926,7 +926,7 @@ class FinancialRegimeAnalysis:
                     "",
                     f"- **🏆 Best Strategy**: {simulation_results.best_strategy.replace('_', ' ').title()}",
                     f"- **💰 Total Return**: {simulation_results.total_return_pct:.2f}% (${simulation_results.initial_capital:,.0f} → ${getattr(simulation_results, 'final_value', 0):,.0f})",
-                    f"- **📈 Annualized Return**: {getattr(simulation_results, 'annualized_return', 0):.2f}%",
+                    f"- ** Annualized Return**: {getattr(simulation_results, 'annualized_return', 0):.2f}%",
                     f"- **⚡ Sharpe Ratio**: {simulation_results.sharpe_ratio:.3f}",
                     f"- **🔻 Maximum Drawdown**: {simulation_results.max_drawdown_pct:.2f}%",
                     f"- **🎯 Total Trades**: {simulation_results.total_trades}",
@@ -1166,7 +1166,7 @@ class FinancialRegimeAnalysis:
             f.write(report_content)
 
         print(f"   📝 Report saved: {report_path}")
-        print(f"   ✅ Report generation completed")
+        print(f"    Report generation completed")
 
         return report_content
 
@@ -1347,11 +1347,11 @@ class FinancialRegimeAnalysis:
                             )
                             portfolio_df.to_csv(portfolio_path, index=False)
                             print(
-                                f"   📈 {strategy_name}: Portfolio history saved to {portfolio_path}"
+                                f"    {strategy_name}: Portfolio history saved to {portfolio_path}"
                             )
 
         except Exception as e:
-            print(f"   ⚠️ Trade journal saving warning: {e}")
+            print(f"   [WARNING] Trade journal saving warning: {e}")
             import traceback
 
             traceback.print_exc()

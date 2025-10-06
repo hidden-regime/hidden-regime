@@ -101,7 +101,7 @@ def create_sample_data():
 
 def main():
     """Main demonstration function."""
-    print("🚀 Hidden Regime: Basic Regime Detection Example")
+    print(" Hidden Regime: Basic Regime Detection Example")
     print("=" * 55)
 
     # Configuration
@@ -109,7 +109,7 @@ def main():
 
     try:
         # Try to load real market data
-        print(f"\n📊 Attempting to load market data...")
+        print(f"\n Attempting to load market data...")
         data_loader = FinancialDataLoader(
             FinancialDataConfig(
                 ticker="AAPL", start_date="2023-01-01", end_date="2024-01-01"
@@ -119,14 +119,14 @@ def main():
         raw_data = data_loader.update()
 
         if raw_data.empty:
-            print("❌ No real data available, using sample data")
+            print(" No real data available, using sample data")
             raw_data = create_sample_data()
         else:
-            print(f"✅ Loaded {len(raw_data)} days of real market data")
+            print(f" Loaded {len(raw_data)} days of real market data")
             ticker = "AAPL"
 
     except Exception as e:
-        print(f"❌ Data loading failed: {e}")
+        print(f" Data loading failed: {e}")
         print("📝 Using sample data instead")
         raw_data = create_sample_data()
 
@@ -136,7 +136,7 @@ def main():
     observation_component = FinancialObservationGenerator(observation_config)
 
     observations = observation_component.update(raw_data)
-    print(f"✅ Generated {len(observations)} observations")
+    print(f" Generated {len(observations)} observations")
 
     # Create and train HMM model
     print("\n🤖 Training HMM model...")
@@ -147,8 +147,8 @@ def main():
 
     # Train model
     model_output = hmm_model.update(observations)
-    print(f"✅ Model trained successfully")
-    print(f"📊 Generated {len(model_output)} regime predictions")
+    print(f" Model trained successfully")
+    print(f" Generated {len(model_output)} regime predictions")
 
     # Analyze current regime
     current_regime = model_output["predicted_state"].iloc[-1]
@@ -156,8 +156,8 @@ def main():
     if pd.isna(confidence):
         confidence = 0.0
 
-    print(f"📈 Current regime: {current_regime}")
-    print(f"📊 Confidence: {confidence:.1%}")
+    print(f" Current regime: {current_regime}")
+    print(f" Confidence: {confidence:.1%}")
 
     # Basic analysis
     print("\n🔬 Running basic analysis...")
@@ -171,7 +171,7 @@ def main():
 
     financial_analysis = FinancialAnalysis(analysis_config)
     analysis_results = financial_analysis.update(model_output, raw_data, model_component=hmm_model)
-    print(f"✅ Analysis complete - {len(analysis_results)} features generated")
+    print(f" Analysis complete - {len(analysis_results)} features generated")
 
     # Generate report
     print("\n📝 Generating report...")
@@ -204,7 +204,7 @@ def main():
     with open(report_filename, "w") as f:
         f.write(full_report)
 
-    print(f"✅ Report saved as: {report_filename}")
+    print(f" Report saved as: {report_filename}")
 
     # Create basic visualization
     print("\n🎨 Creating visualization...")
@@ -250,14 +250,14 @@ def main():
         fig.savefig(plot_filename, dpi=300, bbox_inches="tight")
         plt.close(fig)
 
-        print(f"✅ Visualization saved as: {plot_filename}")
+        print(f" Visualization saved as: {plot_filename}")
 
     except Exception as e:
-        print(f"❌ Visualization failed: {e}")
+        print(f" Visualization failed: {e}")
         plot_filename = None
 
     # Display results summary
-    print(f"\n📊 Results Summary for {ticker}:")
+    print(f"\n Results Summary for {ticker}:")
     print("=" * 40)
 
     # Regime distribution
@@ -282,13 +282,13 @@ def main():
         print(f"   • Chart: {plot_filename}")
 
     print(f"\n🔧 Demonstrated capabilities:")
-    print(f"   ✅ Financial data loading")
-    print(f"   ✅ Observation generation")
-    print(f"   ✅ HMM model training")
-    print(f"   ✅ Regime detection")
-    print(f"   ✅ Basic analysis")
-    print(f"   ✅ Report generation")
-    print(f"   ✅ Visualization")
+    print(f"    Financial data loading")
+    print(f"    Observation generation")
+    print(f"    HMM model training")
+    print(f"    Regime detection")
+    print(f"    Basic analysis")
+    print(f"    Report generation")
+    print(f"    Visualization")
 
     return {
         "model_output": model_output,
@@ -303,9 +303,9 @@ if __name__ == "__main__":
     try:
         results = main()
         print("\n" + "=" * 55)
-        print("🚀 Basic Regime Detection: SUCCESS")
+        print(" Basic Regime Detection: SUCCESS")
         print("=" * 55)
     except Exception as e:
-        print(f"\n❌ Error running example: {e}")
+        print(f"\n Error running example: {e}")
         print("This may be due to known implementation bugs.")
         print("Check TODOS.md for bug resolution status.")

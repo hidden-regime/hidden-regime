@@ -83,7 +83,7 @@ class SimulationOrchestrator:
                 return self._create_failed_result(symbol, "Invalid input data")
 
             # Generate all trading signals
-            print("📊 Generating trading signals...")
+            print(" Generating trading signals...")
             signals_df = self._generate_all_signals(price_data, regime_data)
 
             if signals_df.empty:
@@ -105,7 +105,7 @@ class SimulationOrchestrator:
             strategy_results = {}
 
             for strategy_name in signals_df.columns:
-                print(f"  📈 Simulating {strategy_name}...")
+                print(f"   Simulating {strategy_name}...")
 
                 # Create strategy-specific signals
                 strategy_signals = pd.DataFrame(
@@ -120,10 +120,10 @@ class SimulationOrchestrator:
                 if strategy_result.get("simulation_success", False):
                     strategy_results[strategy_name] = strategy_result
                     print(
-                        f"    ✅ {strategy_name}: {strategy_result.get('total_return_pct', 0):.2f}% return"
+                        f"     {strategy_name}: {strategy_result.get('total_return_pct', 0):.2f}% return"
                     )
                 else:
-                    print(f"    ❌ {strategy_name}: Simulation failed")
+                    print(f"     {strategy_name}: Simulation failed")
 
             # Analyze results and create final summary
             print("📋 Analyzing simulation results...")
@@ -136,13 +136,13 @@ class SimulationOrchestrator:
             )
 
             execution_time = time.time() - start_time
-            print(f"✅ Simulation completed in {execution_time:.2f} seconds")
+            print(f" Simulation completed in {execution_time:.2f} seconds")
 
             return simulation_result
 
         except Exception as e:
             execution_time = time.time() - start_time
-            print(f"❌ Simulation failed after {execution_time:.2f} seconds: {e}")
+            print(f" Simulation failed after {execution_time:.2f} seconds: {e}")
             return self._create_failed_result(symbol, str(e))
 
     def _create_risk_manager(self) -> RiskManager:
@@ -207,11 +207,11 @@ class SimulationOrchestrator:
                 price_data, additional_data
             )
             print(
-                f"  📊 Generated signals for {len(signals_df.columns)} strategies over {len(signals_df)} days"
+                f"   Generated signals for {len(signals_df.columns)} strategies over {len(signals_df)} days"
             )
             return signals_df
         except Exception as e:
-            print(f"  ❌ Signal generation failed: {e}")
+            print(f"   Signal generation failed: {e}")
             return pd.DataFrame()
 
     def _validate_input_data(
@@ -225,11 +225,11 @@ class SimulationOrchestrator:
             missing = [
                 col for col in required_price_columns if col not in price_data.columns
             ]
-            print(f"❌ Missing required price columns: {missing}")
+            print(f" Missing required price columns: {missing}")
             return False
 
         if len(price_data) < 2:
-            print("❌ Insufficient price data (need at least 2 days)")
+            print(" Insufficient price data (need at least 2 days)")
             return False
 
         # Check regime data if HMM strategies are enabled
@@ -239,7 +239,7 @@ class SimulationOrchestrator:
         if hmm_strategies and regime_data is not None:
             if "predicted_state" not in regime_data.columns:
                 print(
-                    "❌ HMM strategies enabled but no 'predicted_state' in regime data"
+                    " HMM strategies enabled but no 'predicted_state' in regime data"
                 )
                 return False
 

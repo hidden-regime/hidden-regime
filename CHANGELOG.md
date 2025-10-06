@@ -176,13 +176,13 @@ tests/               # Comprehensive test suite
 
 This is the first production-ready release of Hidden Regime, providing a complete toolkit for market regime detection using Hidden Markov Models. The package includes:
 
-**🚀 Production-Ready Components:**
+** Production-Ready Components:**
 - Robust data pipeline with comprehensive validation
 - Numerically stable HMM implementation
 - Real-time regime detection capabilities
 - Extensive testing and documentation
 
-**📊 Proven Performance:**
+** Proven Performance:**
 - Successfully tested on major market indices (SPY, QQQ, etc.)
 - Handles various market conditions and time periods
 - Reliable regime detection with quantified uncertainty
