@@ -12,13 +12,14 @@ import numpy as np
 
 from ..financial.regime_characterizer import RegimeProfile, RegimeType
 
-# Base color mapping for regime types
+# Base color mapping for regime types (colorblind-safe)
+# Source: ColorBrewer2 diverging scheme (Red-Yellow-Blue)
 REGIME_TYPE_COLORS = {
-    RegimeType.BULLISH: "#2E8B57",  # Sea Green
-    RegimeType.BEARISH: "#DC143C",  # Crimson Red
-    RegimeType.SIDEWAYS: "#DAA520",  # Golden Rod
-    RegimeType.CRISIS: "#8B0000",  # Dark Red
-    RegimeType.MIXED: "#9370DB",  # Medium Purple
+    RegimeType.BULLISH: "#4575b4",    # Blue (colorblind safe)
+    RegimeType.BEARISH: "#d73027",    # Red (colorblind safe)
+    RegimeType.SIDEWAYS: "#fee08b",   # Yellow (colorblind safe)
+    RegimeType.CRISIS: "#a50026",     # Dark Red (colorblind safe)
+    RegimeType.MIXED: "#9970ab",      # Purple (colorblind safe)
 }
 
 # Enhanced color variations for multiple regimes of same type
@@ -81,13 +82,14 @@ def create_regime_mapping(regime_profiles: Dict[int, RegimeProfile]) -> Dict[str
             "metadata": {},
         }
 
-    # Group regimes by type for intelligent labeling
-    regimes_by_type = {}
+    # Group regimes by label for intelligent labeling
+    # Use data-driven labels, not enum
+    regimes_by_label = {}
     for state_id, profile in regime_profiles.items():
-        regime_type = profile.regime_type
-        if regime_type not in regimes_by_type:
-            regimes_by_type[regime_type] = []
-        regimes_by_type[regime_type].append((state_id, profile))
+        label = profile.get_display_name()
+        if label not in regimes_by_label:
+            regimes_by_label[label] = []
+        regimes_by_label[label].append((state_id, profile))
 
     # Generate labels and colors
     state_to_label = {}
@@ -96,33 +98,25 @@ def create_regime_mapping(regime_profiles: Dict[int, RegimeProfile]) -> Dict[str
     colors = []
     regime_types = []
 
-    for regime_type, regimes in regimes_by_type.items():
-        # Sort regimes of same type by return (descending)
-        regimes.sort(key=lambda x: x[1].annualized_return, reverse=True)
+    # Process each unique label
+    for label, regimes in regimes_by_label.items():
+        for state_id, profile in regimes:
+            # Use the data-driven label directly
+            display_label = profile.get_display_name()
 
-        # Generate distinct labels for multiple regimes of same type
-        if len(regimes) == 1:
-            state_id, profile = regimes[0]
-            label = _create_single_regime_label(profile)
-            color = REGIME_TYPE_COLORS[regime_type]
-        else:
-            # Multiple regimes of same type - create descriptive labels
-            for i, (state_id, profile) in enumerate(regimes):
-                label = _create_multi_regime_label(profile, i, len(regimes))
-                color = _get_regime_color_variation(regime_type, i)
+            # Get color from profile (already assigned in data-driven classification)
+            # Fallback to pattern-based color if not set
+            if hasattr(profile, 'color') and profile.color:
+                color = profile.color
+            else:
+                color = _get_color_from_label(display_label)
 
-                state_to_label[state_id] = label
-                state_to_color[state_id] = color
-                labels.append(label)
-                colors.append(color)
-                regime_types.append(regime_type)
-            continue
-
-        state_to_label[state_id] = label
-        state_to_color[state_id] = color
-        labels.append(label)
-        colors.append(color)
-        regime_types.append(regime_type)
+            state_to_label[state_id] = display_label
+            state_to_color[state_id] = color
+            labels.append(display_label)
+            colors.append(color)
+            # Store the data-driven label instead of enum
+            regime_types.append(display_label)
 
     # Create ordered lists based on state IDs
     ordered_labels = []
@@ -132,7 +126,8 @@ def create_regime_mapping(regime_profiles: Dict[int, RegimeProfile]) -> Dict[str
     for state_id in sorted(regime_profiles.keys()):
         ordered_labels.append(state_to_label[state_id])
         ordered_colors.append(state_to_color[state_id])
-        ordered_types.append(regime_profiles[state_id].regime_type)
+        # Use data-driven label instead of enum
+        ordered_types.append(regime_profiles[state_id].get_display_name())
 
     return {
         "labels": ordered_labels,
@@ -142,61 +137,63 @@ def create_regime_mapping(regime_profiles: Dict[int, RegimeProfile]) -> Dict[str
         "regime_types": ordered_types,
         "metadata": {
             "n_states": len(regime_profiles),
-            "regimes_by_type": {str(k): len(v) for k, v in regimes_by_type.items()},
-            "has_multiple_same_type": any(len(v) > 1 for v in regimes_by_type.values()),
+            "regimes_by_label": {str(k): len(v) for k, v in regimes_by_label.items()},
+            "has_multiple_same_label": any(len(v) > 1 for v in regimes_by_label.values()),
         },
     }
 
 
+def _get_color_from_label(label: str) -> str:
+    """
+    Get color based on data-driven label string (pattern matching).
+
+    This function supports ANY label, not just predefined ones.
+    Colors are assigned based on keyword patterns in the label.
+    """
+    label_lower = label.lower()
+
+    # Bullish patterns - shades of blue/green
+    if 'strong_bullish' in label_lower or 'very_bullish' in label_lower:
+        return "#006400"  # Dark Green (very strong)
+    elif 'weak_bullish' in label_lower:
+        return "#90EE90"  # Light Green (weak)
+    elif 'bullish' in label_lower:
+        return "#4575b4"  # Blue (standard bullish)
+
+    # Bearish patterns - shades of red
+    elif 'strong_bearish' in label_lower or 'very_bearish' in label_lower:
+        return "#8B0000"  # Dark Red (very strong)
+    elif 'weak_bearish' in label_lower:
+        return "#F08080"  # Light Coral (weak)
+    elif 'bearish' in label_lower:
+        return "#d73027"  # Red (standard bearish)
+
+    # Sideways/neutral patterns - shades of yellow/gold
+    elif 'sideways' in label_lower or 'neutral' in label_lower:
+        return "#fee08b"  # Yellow
+
+    # Crisis patterns - dark red
+    elif 'crisis' in label_lower:
+        return "#a50026"  # Dark Red (crisis)
+
+    # Default for any other label
+    else:
+        return "#9970ab"  # Purple (mixed/unknown)
+
+
 def _create_single_regime_label(profile: RegimeProfile) -> str:
-    """Create label for a single regime of its type."""
-    base_name = profile.regime_type.value.title()
-
-    # Add confidence indicator if low confidence
-    if profile.confidence_score < 0.5:
-        return f"{base_name}*"  # Asterisk indicates low confidence
-
-    return base_name
+    """DEPRECATED: Use profile.get_display_name() instead."""
+    return profile.get_display_name()
 
 
 def _create_multi_regime_label(profile: RegimeProfile, index: int, total: int) -> str:
-    """Create descriptive label for multiple regimes of same type."""
-    base_name = profile.regime_type.value.title()
-
-    # Create descriptive modifiers based on relative performance
-    if profile.regime_type in [RegimeType.BULLISH, RegimeType.BEARISH]:
-        return_pct = profile.annualized_return * 100
-
-        if index == 0:  # Highest return
-            modifier = "Strong"
-        elif index == total - 1:  # Lowest return
-            modifier = "Weak"
-        else:
-            modifier = "Moderate"
-
-        # Include return percentage for clarity
-        return f"{modifier} {base_name} ({return_pct:+.0f}%)"
-
-    elif profile.regime_type == RegimeType.SIDEWAYS:
-        vol_pct = profile.annualized_volatility * 100
-
-        if index == 0:
-            modifier = "Stable"
-        elif index == total - 1:
-            modifier = "Volatile"
-        else:
-            modifier = "Typical"
-
-        return f"{modifier} {base_name} ({vol_pct:.0f}% vol)"
-
-    else:  # CRISIS or MIXED
-        if total > 1:
-            return f"{base_name} {index + 1}"
-        return base_name
+    """DEPRECATED: Use profile.get_display_name() instead."""
+    return profile.get_display_name()
 
 
 def _get_regime_color_variation(regime_type: RegimeType, index: int) -> str:
-    """Get color variation for multiple regimes of same type."""
+    """DEPRECATED: Use _get_color_from_label() with data-driven labels instead."""
+    # Fallback for backward compatibility
     variations = REGIME_COLOR_VARIATIONS.get(
         regime_type, [REGIME_TYPE_COLORS[regime_type]]
     )
@@ -204,7 +201,6 @@ def _get_regime_color_variation(regime_type: RegimeType, index: int) -> str:
     if index < len(variations):
         return variations[index]
     else:
-        # Fallback to base color if we run out of variations
         return REGIME_TYPE_COLORS[regime_type]
 
 
@@ -284,19 +280,19 @@ def format_regime_summary(regime_profiles: Dict[int, RegimeProfile]) -> str:
 
     mapping = create_regime_mapping(regime_profiles)
 
-    # Count regimes by type
-    type_counts = {}
-    for regime_type in mapping["regime_types"]:
-        type_name = regime_type.value.title()
-        type_counts[type_name] = type_counts.get(type_name, 0) + 1
+    # Count regimes by label (data-driven)
+    label_counts = {}
+    for label in mapping["regime_types"]:
+        # label is now a string, not an enum
+        label_counts[label] = label_counts.get(label, 0) + 1
 
     # Format summary
     summary_parts = []
-    for regime_type, count in type_counts.items():
+    for label, count in label_counts.items():
         if count == 1:
-            summary_parts.append(f"{count} {regime_type}")
+            summary_parts.append(f"{count} {label}")
         else:
-            summary_parts.append(f"{count} {regime_type} variants")
+            summary_parts.append(f"{count} {label} variants")
 
     if len(summary_parts) == 1:
         return summary_parts[0]

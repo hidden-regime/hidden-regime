@@ -124,7 +124,11 @@ class FinancialSignalGenerator(SignalGenerator):
     def _get_base_signal_from_regime(self, profile: RegimeProfile) -> float:
         """Get base signal strength from regime financial characteristics."""
 
-        if profile.regime_type == RegimeType.BULLISH:
+        # Use data-driven regime_type_str if available, otherwise fall back to enum
+        regime_label = profile.get_display_name()
+
+        # Check for bullish regimes
+        if 'bullish' in regime_label.lower():
             # Strong positive signal based on regime strength
             # Scale by annualized return and regime strength
             signal_strength = min(
@@ -132,22 +136,25 @@ class FinancialSignalGenerator(SignalGenerator):
             )  # Normalize by 20% return
             return signal_strength * profile.regime_strength
 
-        elif profile.regime_type == RegimeType.BEARISH:
+        # Check for bearish regimes
+        elif 'bearish' in regime_label.lower():
             # Strong negative signal based on regime characteristics
             signal_strength = min(
                 1.0, abs(profile.annualized_return) / 0.15
             )  # Normalize by 15% loss
             return -signal_strength * profile.regime_strength
 
-        elif profile.regime_type == RegimeType.CRISIS:
+        # Check for crisis regimes
+        elif 'crisis' in regime_label.lower():
             # Crisis: strong defensive signal (go to cash)
             return -0.5 * profile.regime_strength
 
-        elif profile.regime_type == RegimeType.SIDEWAYS:
+        # Check for sideways/neutral regimes
+        elif 'sideways' in regime_label.lower() or 'neutral' in regime_label.lower():
             # Sideways: minimal signal (hold current position)
             return 0.0
 
-        else:  # MIXED
+        else:  # MIXED or other
             # Mixed regime: conservative signal based on returns
             if profile.mean_daily_return > 0:
                 return 0.2 * profile.regime_strength
@@ -219,7 +226,7 @@ class FinancialSignalGenerator(SignalGenerator):
 
             summary_lines.extend(
                 [
-                    f"\nState {state_id} ({profile.regime_type.value}):",
+                    f"\nState {state_id} ({profile.get_display_name()}):",
                     f"  Financial Signal: {signal_desc} ({base_signal:.2f})",
                     f"  Return: {profile.annualized_return:.1%}",
                     f"  Volatility: {profile.annualized_volatility:.1%}",
@@ -290,26 +297,28 @@ class AdaptiveSignalGenerator(SignalGenerator):
 
             profile = regime_profiles[regime_state]
 
-            # Select strategy based on regime type
-            if profile.regime_type == RegimeType.BULLISH:
+            # Select strategy based on data-driven regime label
+            regime_label = profile.get_display_name().lower()
+
+            if 'bullish' in regime_label:
                 # Trend following for bull markets
                 signal = self._trend_following_signal(profile, confidence)
 
-            elif profile.regime_type == RegimeType.BEARISH:
+            elif 'bearish' in regime_label:
                 # Defensive strategy for bear markets
                 signal = self._defensive_signal(profile, confidence)
 
-            elif profile.regime_type == RegimeType.SIDEWAYS:
+            elif 'sideways' in regime_label or 'neutral' in regime_label:
                 # Mean reversion for sideways markets
                 signal = self._mean_reversion_signal(
                     profile, confidence, i, aligned_data
                 )
 
-            elif profile.regime_type == RegimeType.CRISIS:
+            elif 'crisis' in regime_label:
                 # Risk-off for crisis periods
                 signal = self._crisis_signal(profile, confidence)
 
-            else:  # MIXED
+            else:
                 # Conservative approach for unclear regimes
                 signal = self._conservative_signal(profile, confidence)
 

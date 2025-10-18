@@ -271,10 +271,14 @@ class HiddenMarkovModel(ModelComponent):
         for i in range(self.n_states):
             results[f"state_{i}_prob"] = state_probs[:, i]
 
-        # Reindex to match original observations (fill NaN rows with default state)
+        # Reindex to match original observations (fill NaN rows with default values)
         results = results.reindex(observations.index)
         results["predicted_state"] = results["predicted_state"].fillna(0).astype(int)
         results["confidence"] = results["confidence"].fillna(0.0)
+
+        # Fill NaN values in state probability columns (default to uniform distribution)
+        for i in range(self.n_states):
+            results[f"state_{i}_prob"] = results[f"state_{i}_prob"].fillna(1.0 / self.n_states)
 
         return results
 

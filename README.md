@@ -1,26 +1,34 @@
 # Hidden Regime
 
-**Market regime detection using Hidden Markov Models for quantitative finance.**
+**Pipeline-based market regime detection using Hidden Markov Models for quantitative finance.**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Hidden Regime is a Python package for detecting and analyzing market regimes using Hidden Markov Models (HMMs). It provides a complete pipeline for regime-based trading analysis, from data loading through model training to trading simulation and reporting.
+Hidden Regime is a Python package for detecting and analyzing market regimes using Hidden Markov Models (HMMs). Built on a **pipeline architecture** that ensures temporal data isolation and rigorous backtesting, Hidden Regime provides three levels of abstraction:
+
+1. **Simple Pipelines** - Quick regime detection with sensible defaults
+2. **Financial Pipelines** - Comprehensive analysis with regime characterization and trading signals
+3. **Market Event Studies** - High-level framework for analyzing regime behavior during market events (crashes, bubbles, sector rotations)
+
+All analysis flows through a consistent pipeline: **Data → Observation → Model → Analysis → Report**, ensuring reproducibility and enabling rigorous verification & validation (V&V) for backtesting.
 
 **FOR EDUCATIONAL PURPOSES ONLY.** _This is not financial advice and should not be considered as such._
 
- Hidden Regime is a mathematical tool designed for educational purposes only to explore financial concepts and analysis techniques. It is not financial advice, and its outputs should not be used to make investment decisions. Always consult with a qualified financial professional before making any investment decisions.
+Hidden Regime is a mathematical tool designed for educational purposes only to explore financial concepts and analysis techniques. It is not financial advice, and its outputs should not be used to make investment decisions. Always consult with a qualified financial professional before making any investment decisions.
 
 ## Features
 
+- **Pipeline Architecture**: Modular Data → Observation → Model → Analysis → Report flow with temporal isolation for V&V backtesting
+- **Three Abstraction Levels**: Simple pipelines, financial pipelines, and market event studies
+- **MarketEventStudy Framework**: High-level API for analyzing regime behavior during market events with multi-ticker support
 - **Hidden Markov Models**: 2-5 state HMMs with Baum-Welch training and Viterbi inference
-- **Financial Data Pipeline**: Robust data loading with yfinance integration and comprehensive validation
-- **Pipeline Architecture**: Modular Data → Observation → Model → Analysis → Report flow
-- **Technical Indicator Comparison**: Compare HMM regime detection against traditional indicators (using `ta` library)
-- **Trading Simulation**: Backtest regime-based strategies with risk management and performance analytics
-- **Case Studies**: Temporal analysis framework for evaluating models over time
-- **Visualization**: Comprehensive plotting for regimes, indicators, and performance metrics
-- **Data Collection**: Track simulation decisions and model evolution for detailed analysis
+- **Regime Characterization**: Automatic financial analysis (returns, volatility, win rates, drawdowns, regime strength)
+- **Temporal Analysis**: Step through historical periods day-by-day with rigorous data isolation
+- **Financial Data Integration**: Robust yfinance data loading with comprehensive validation
+- **Visualization**: Regime plots, animations, snapshots, and interactive charts
+- **Trading Simulation**: Backtest regime-based strategies with risk management
+- **Technical Indicator Comparison**: Compare HMM regime detection against traditional indicators
 - **Reporting**: Generate markdown reports with analysis results and recommendations
 
 ## Installation
@@ -31,25 +39,29 @@ pip install hidden-regime
 
 ## Quick Start
 
-### Basic Regime Detection
+Hidden Regime provides three levels of abstraction - choose based on your needs:
+
+### Level 1: Simple Regime Detection
+
+Quick regime detection with sensible defaults:
 
 ```python
 import hidden_regime as hr
 
-# Create a simple regime detection pipeline
+# Create and run pipeline
 pipeline = hr.create_simple_regime_pipeline('AAPL', n_states=3)
-
-# Run analysis
 result = pipeline.update()
-print(result)
+print(result)  # Shows current regime and confidence
 ```
 
-### Financial Analysis Pipeline
+### Level 2: Financial Analysis Pipeline
+
+Comprehensive analysis with regime characterization and trading signals:
 
 ```python
 import hidden_regime as hr
 
-# Create pipeline with financial analysis
+# Create financial analysis pipeline
 pipeline = hr.create_financial_pipeline(
     ticker='SPY',
     n_states=3,
@@ -57,28 +69,34 @@ pipeline = hr.create_financial_pipeline(
     end_date='2024-01-01'
 )
 
-# Update and get results
+# Run analysis
 result = pipeline.update()
+print(result)  # Shows regime, confidence, returns, volatility, win rates, etc.
 ```
 
-### Direct HMM Usage
+### Level 3: Market Event Study
+
+Analyze regime behavior during market events (crashes, bubbles, etc.):
 
 ```python
-from hidden_regime.models import HiddenMarkovModel, HMMConfig
-from hidden_regime.data import FinancialDataLoader
+import hidden_regime as hr
 
-# Load data
-loader = FinancialDataLoader()
-data = loader.load('AAPL', '2023-01-01', '2024-01-01')
+# Create market event study
+study = hr.MarketEventStudy(
+    ticker='QQQ',
+    training_start='2018-01-01',
+    training_end='2019-12-31',
+    analysis_start='2020-01-01',
+    analysis_end='2020-12-31',
+    n_states=3,
+    key_events={'2020-03-23': 'Market Bottom'},
+    output_dir='output/covid_study'
+)
 
-# Train HMM
-config = HMMConfig.for_market_data(conservative=True)
-hmm = HiddenMarkovModel(config=config)
-hmm.fit(data['log_return'].values)
-
-# Analyze regimes
-analysis = hmm.analyze_regimes(data['log_return'].values)
-print(f"Detected {hmm.n_states} regimes")
+# Run complete analysis
+study.run(create_snapshots=True, create_animations=True)
+study.print_summary()
+study.export_results(format='csv')
 ```
 
 ## Core Concepts
@@ -105,43 +123,64 @@ Data Loading → Observation Generation → Model Training → Analysis → Repo
   Validation      Features              State Inference  Performance   Plots
 ```
 
+Every analysis in Hidden Regime flows through this pipeline. Each component has a clear responsibility:
+
+- **Data**: Loads and validates price data from yfinance with temporal isolation
+- **Observation**: Transforms prices into statistical features (log returns by default)
+- **Model**: Trains HMM using Baum-Welch and performs Viterbi inference for regime prediction
+- **Analysis**: Characterizes regimes (returns, volatility, win rates, drawdowns, regime strength)
+- **Report**: Exports results as markdown reports and visualizations
+
+**You never need to manually chain these components** - the pipeline handles all data flow automatically.
+
+### When to Use What
+
+Choose the right API for your task:
+
+| **Use Case** | **Recommended API** | **Example** |
+|-------------|---------------------|-------------|
+| Quick regime detection | `create_simple_regime_pipeline()` | Identify current market regime |
+| Financial analysis | `create_financial_pipeline()` | Regime returns, volatility, trading signals |
+| Market event study | `MarketEventStudy` | Analyze COVID crash, dot-com bubble, etc. |
+| Trading strategies | `create_trading_pipeline()` | Regime-based position sizing |
+| Academic research | `create_research_pipeline()` | Comprehensive indicator comparison |
+| Temporal backtesting | `create_temporal_controller()` | Day-by-day simulation with V&V isolation |
+| Full customization | Manual pipeline creation | Custom components and configs |
+
 ## Examples
 
-The `examples/` directory contains working demonstrations:
+The `examples/` directory contains working demonstrations. **Most users should start with the financial pipeline or MarketEventStudy examples.**
+
+### Recommended Starting Point
+- **`case_study_covid_2020.py`** - **MarketEventStudy showcase** (135 lines, multi-ticker COVID crash analysis)
+- **`01_real_market_analysis.py`** - Financial pipeline usage with real market data
 
 ### Getting Started
-- **`00_basic_regime_detection.py`** - 3-state HMM with synthetic data
-- **`01_real_market_analysis.py`** - Real stock data analysis
+- **`00_basic_regime_detection.py`** - Manual component usage (understanding pipeline internals)
+- **`01_real_market_analysis.py`** - Using `create_financial_pipeline()` API
 
-### Core Use Cases (v1.0.0 Requirements)
-1. **2-state HMM**: See `00_basic_regime_detection.py` (modify `n_states=2`)
-2. **3-state HMM**: See `00_basic_regime_detection.py` or `01_real_market_analysis.py`
-3. **Current regime analysis**: See `01_real_market_analysis.py`
-4. **Pipeline example**: All examples use the pipeline architecture
-5. **Simple case study**: See `case_study_basic.py`
-6. **Comprehensive case study**: See `case_study_comprehensive.py` (HMM vs indicators)
+### Market Event Studies
+- **`case_study_covid_2020.py`** - COVID crash (QQQ vs CCL, fastest crisis regime in history)
+- **`case_study_template.py`** - Template for creating new event studies
 
 ### Advanced Examples
 - **`02_regime_comparison_analysis.py`** - Compare different regime models
 - **`03_trading_strategy_demo.py`** - Regime-based trading strategies
-- **`04_multi_stock_comparative_study.py`** - Multi-asset analysis
+- **`04_multi_stock_comparative_study.py`** - Multi-asset comparative analysis
 - **`05_advanced_analysis_showcase.py`** - Advanced visualization and analysis
-- **`initialization_methods_demo.py`** - Complete guide to KMeans, Random, and Custom initialization with transfer learning
+- **`initialization_methods_demo.py`** - KMeans, Random, and Custom initialization with transfer learning
 
 ### Running Examples
 
 ```bash
-# Navigate to project directory
-cd /path/to/hidden-regime
+# Recommended: Start with MarketEventStudy
+python examples/case_study_covid_2020.py
 
-# Run basic example
-python examples/00_basic_regime_detection.py
-
-# Run with real market data
+# Or use financial pipeline
 python examples/01_real_market_analysis.py
 
-# Run comprehensive case study
-python examples/case_study_comprehensive.py
+# Basic example (manual component usage)
+python examples/00_basic_regime_detection.py
 ```
 
 ## Documentation
@@ -149,6 +188,83 @@ python examples/case_study_comprehensive.py
 - **[Data Pipeline](hidden_regime/data/README.md)**: Data loading, validation, and preprocessing
 - **[Models](hidden_regime/models/README.md)**: HMM implementation and algorithms
 - **Examples**: See `examples/` directory for working code
+
+## MarketEventStudy Framework
+
+The `MarketEventStudy` class provides a high-level API for analyzing regime behavior during market events. It encapsulates the entire workflow: data loading, model training, temporal analysis, visualization, and metrics computation.
+
+### Basic Usage
+
+```python
+import hidden_regime as hr
+
+study = hr.MarketEventStudy(
+    ticker='QQQ',                    # Single ticker or list of tickers
+    training_start='2018-01-01',     # Train on pre-event period
+    training_end='2019-12-31',
+    analysis_start='2020-01-01',     # Analyze event period
+    analysis_end='2020-12-31',
+    n_states=3,                      # Number of regime states
+    key_events={                     # Optional: dates for snapshots
+        '2020-02-19': 'Market Peak',
+        '2020-03-23': 'Market Bottom'
+    },
+    output_dir='output/covid_study'
+)
+
+# Run complete analysis
+study.run(
+    create_snapshots=True,           # PNG snapshots at key dates
+    create_animations=True,          # GIF showing regime evolution
+    snapshot_window_days=90,         # Window size for snapshots
+    animation_fps=5                  # Animation frame rate
+)
+
+# Print summary metrics
+study.print_summary()
+
+# Export results
+study.export_results(format='csv')   # or 'json'
+```
+
+### Multi-Ticker Analysis
+
+Compare regime behavior across multiple assets:
+
+```python
+study = hr.MarketEventStudy(
+    ticker=['QQQ', 'CCL', 'XLE'],    # Compare tech, travel, energy
+    training_start='2018-01-01',
+    training_end='2019-12-31',
+    analysis_start='2020-01-01',
+    analysis_end='2020-12-31',
+    n_states=3
+)
+
+study.run()
+
+# Get metrics for specific ticker
+qqq_metrics = study.get_metrics('QQQ')
+print(f"Detection lag: {qqq_metrics['detection_lag_days']} days")
+print(f"Crisis days: {qqq_metrics['crisis_days']}")
+```
+
+### What It Does
+
+1. **Trains HMM** on pre-event period (isolates training from analysis)
+2. **Steps through time** day-by-day during event period (temporal V&V isolation)
+3. **Creates visualizations** at key event dates (e.g., market peak, bottom, recovery)
+4. **Computes metrics** (detection lag, regime stability, crisis duration)
+5. **Exports results** to CSV/JSON for further analysis
+
+### Generated Outputs
+
+- **Snapshots**: `{ticker}_snapshot_{date}.png` - Price + regime overlay at key dates
+- **Animations**: `{ticker}_full_analysis.gif` - Full regime evolution over time
+- **Metrics CSV**: `regime_history.csv` - Complete regime timeline with confidence scores
+- **Console Summary**: Detection lag, regime durations, transition counts
+
+See `examples/case_study_covid_2020.py` for a complete working example (135 lines).
 
 ## Configuration
 
@@ -295,38 +411,69 @@ hidden_regime/
 
 ## Use Cases
 
-### Regime-Based Trading
+### Market Event Analysis
 
-Detect market regimes and adjust trading strategies accordingly:
+Analyze regime behavior during crashes, bubbles, or sector rotations:
 
 ```python
+import hidden_regime as hr
+
+study = hr.MarketEventStudy(
+    ticker=['SPY', 'QQQ', 'TLT'],
+    training_start='2018-01-01',
+    training_end='2019-12-31',
+    analysis_start='2020-01-01',
+    analysis_end='2020-12-31',
+    n_states=3,
+    key_events={'2020-03-23': 'Market Bottom'}
+)
+
+study.run(create_snapshots=True, create_animations=True)
+study.print_summary()
+```
+
+### Regime-Based Trading
+
+Detect current market regime and adjust strategies accordingly:
+
+```python
+import hidden_regime as hr
+
 pipeline = hr.create_trading_pipeline('SPY', n_states=4, risk_adjustment=True)
 result = pipeline.update()
 
-# Use result to inform trading decisions
+# Access regime information
+current_regime = result['regime_name'].iloc[-1]
+confidence = result['confidence'].iloc[-1]
+print(f"Current regime: {current_regime} ({confidence:.1%} confidence)")
 ```
 
 ### Research and Analysis
 
-Analyze historical regime behavior across multiple assets:
+Analyze historical regime behavior with comprehensive indicators:
 
 ```python
+import hidden_regime as hr
+
 pipeline = hr.create_research_pipeline('BTC-USD', comprehensive_analysis=True)
 result = pipeline.update()
+
+# Result includes regime characterization, technical indicators, and performance metrics
 ```
 
-### Backtesting
+### Temporal Backtesting
 
-Test regime-based strategies over time:
+Test regime-based strategies with rigorous V&V isolation:
 
 ```python
-from hidden_regime.pipeline import TemporalController
+import hidden_regime as hr
 
-pipeline = hr.create_financial_pipeline('AAPL')
+pipeline = hr.create_financial_pipeline('AAPL', n_states=3)
 data = pipeline.data.get_all_data()
 
+# Step through time day-by-day
 controller = hr.create_temporal_controller(pipeline, data)
-results = controller.step_through_time('2023-01-01', '2024-01-01')
+results = controller.step_through_time('2023-01-01', '2023-12-31')
 ```
 
 ## Contributing

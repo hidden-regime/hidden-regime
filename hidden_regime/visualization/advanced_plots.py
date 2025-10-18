@@ -686,14 +686,17 @@ class InteractivePlotter:
             col=1,
         )
 
-        # Plot 2: Regime timeline
+        # Plot 2: Regime timeline (confidence percentages by regime)
         for regime in range(n_states):
             regime_mask = aligned_data[regime_column] == regime
             if regime_mask.sum() > 0:
+                # Get confidence values for this regime (convert to percentage)
+                confidence_values = aligned_data.loc[regime_mask, confidence_column] * 100
+
                 fig.add_trace(
                     go.Scatter(
                         x=aligned_data.index[regime_mask],
-                        y=[regime] * regime_mask.sum(),
+                        y=confidence_values,  # Plot confidence %, not state IDs
                         mode="markers",
                         name=regime_names[regime],
                         marker=dict(
@@ -726,7 +729,7 @@ class InteractivePlotter:
         )
 
         fig.update_yaxes(title_text="Price", row=1, col=1)
-        fig.update_yaxes(title_text="Regime", row=2, col=1)
+        fig.update_yaxes(title_text="Confidence (%)", row=2, col=1, range=[0, 100])
         fig.update_yaxes(title_text="Confidence", row=3, col=1)
         fig.update_xaxes(title_text="Date", row=3, col=1)
 

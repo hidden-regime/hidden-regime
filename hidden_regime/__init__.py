@@ -93,6 +93,9 @@ from .utils.state_mapping import (
     percent_change_to_log_return,
 )
 
+# Market event study framework
+from .analysis.market_event_study import MarketEventStudy
+
 
 # Convenience functions using pipeline factory
 def create_pipeline(
@@ -346,4 +349,6 @@ __all__ = [
     "create_temporal_controller",
     # Legacy compatibility
     "detect_regimes",
+    # Market event study framework
+    "MarketEventStudy",
 ]

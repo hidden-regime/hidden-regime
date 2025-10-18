@@ -100,7 +100,7 @@ class FinancialAnalysisResult:
         if latest_state in self.regime_profiles:
             profile = self.regime_profiles[latest_state]
             return {
-                "regime_type": profile.regime_type.value,
+                "regime_type": profile.get_display_name(),
                 "confidence": latest_confidence,
                 "expected_return": profile.annualized_return,
                 "volatility": profile.annualized_volatility,
@@ -133,7 +133,7 @@ class FinancialAnalysisResult:
         if latest_state in self.regime_profiles:
             profile = self.regime_profiles[latest_state]
             return {
-                "regime_type": profile.regime_type.value,
+                "regime_type": profile.get_display_name(),
                 "confidence": latest_confidence,
                 "expected_return": profile.annualized_return,
                 "volatility": profile.annualized_volatility,
@@ -374,7 +374,7 @@ class FinancialRegimeAnalysis:
         # Print regime summary
         for state_id, profile in self.regime_profiles.items():
             print(
-                f"   State {state_id}: {profile.regime_type.value} "
+                f"   State {state_id}: {profile.get_display_name()} "
                 f"(Return: {profile.annualized_return:.1%}, "
                 f"Vol: {profile.annualized_volatility:.1%})"
             )
@@ -741,7 +741,7 @@ class FinancialRegimeAnalysis:
             if latest_state in self.regime_profiles:
                 profile = self.regime_profiles[latest_state]
                 current_regime = {
-                    "regime_type": profile.regime_type.value,
+                    "regime_type": profile.get_display_name(),
                     "confidence": latest_confidence,
                     "expected_return": profile.annualized_return,
                     "volatility": profile.annualized_volatility,
@@ -817,7 +817,7 @@ class FinancialRegimeAnalysis:
                 regime_summary.append(
                     {
                         "state": state_id,
-                        "type": profile.regime_type.value.title(),
+                        "type": profile.get_display_name().title(),
                         "return": profile.annualized_return,
                         "volatility": profile.annualized_volatility,
                         "win_rate": profile.win_rate,
@@ -847,7 +847,7 @@ class FinancialRegimeAnalysis:
             report_lines.extend(["", "**Detailed Regime Characterization:**", ""])
 
             for state_id, profile in self.regime_profiles.items():
-                regime_type = profile.regime_type.value.title()
+                regime_type = profile.get_display_name().title()
 
                 # Risk-adjusted metrics
                 sharpe_equivalent = (
@@ -868,43 +868,6 @@ class FinancialRegimeAnalysis:
                         "",
                     ]
                 )
-
-                # Add regime-specific insights
-                if profile.regime_type.value == "bullish":
-                    report_lines.extend(
-                        [
-                            f"  *Bullish periods show strong upward momentum. Recommended strategy: Long positions with trend following.*",
-                            "",
-                        ]
-                    )
-                elif profile.regime_type.value == "bearish":
-                    report_lines.extend(
-                        [
-                            f"  *Bearish periods show sustained decline. Recommended strategy: Defensive positioning or short exposure.*",
-                            "",
-                        ]
-                    )
-                elif profile.regime_type.value == "sideways":
-                    report_lines.extend(
-                        [
-                            f"  *Sideways periods show range-bound behavior. Recommended strategy: Mean reversion or reduced exposure.*",
-                            "",
-                        ]
-                    )
-                elif profile.regime_type.value == "crisis":
-                    report_lines.extend(
-                        [
-                            f"  *Crisis periods show extreme volatility. Recommended strategy: Cash position or defensive hedging.*",
-                            "",
-                        ]
-                    )
-                elif profile.regime_type.value == "mixed":
-                    report_lines.extend(
-                        [
-                            f"  *Mixed periods show uncertain directional bias. Recommended strategy: Reduced position sizing.*",
-                            "",
-                        ]
-                    )
 
         # Add comprehensive simulation results
         if simulation_results and simulation_results.simulation_success:

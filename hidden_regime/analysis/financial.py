@@ -61,6 +61,11 @@ class FinancialAnalysis(AnalysisComponent):
         # Cache for computed statistics
         self._regime_stats_cache = {}
 
+        # Lazy import to avoid circular dependency
+        # FinancialRegimeCharacterizer will be initialized on first use
+        self.regime_characterizer = None
+        self._regime_profiles = {}  # Cache for regime profiles
+
         # Initialize indicator calculator if available
         if INDICATORS_AVAILABLE and self.config.indicator_comparisons:
             self.indicator_analyzer = TechnicalIndicatorAnalyzer()
@@ -149,10 +154,10 @@ class FinancialAnalysis(AnalysisComponent):
         self, analysis: pd.DataFrame, model_component: Optional[Any] = None
     ) -> pd.DataFrame:
         """
-        Add regime name interpretations using data-driven state mapping.
+        Add regime name interpretations using FinancialRegimeCharacterizer.
 
-        This method replaces arbitrary state numbering with regime labels that match
-        the actual emission characteristics of each state.
+        This method uses comprehensive financial analysis to characterize regimes
+        based on actual returns, volatility, win rates, and other market metrics.
         """
         # Check for user-provided regime label override
         force_regime_labels = getattr(self.config, "force_regime_labels", None)
@@ -184,148 +189,105 @@ class FinancialAnalysis(AnalysisComponent):
 
             return analysis
 
-        # STRICT DATA-DRIVEN REQUIREMENT: Model component with emission means must be provided
-        if model_component is None:
-            raise ValidationError(
-                "Model component is required for data-driven regime interpretation. "
-                "Cannot assign meaningful regime labels without model parameters."
+        # DATA-DRIVEN PATH: Use FinancialRegimeCharacterizer for comprehensive analysis
+        # Fall back to simple mapping if raw data is not available
+        if self._last_raw_data is None or "log_return" not in self._last_raw_data.columns:
+            warnings.warn(
+                "Raw data with 'log_return' column not provided. "
+                "Falling back to simple emission means-based regime mapping. "
+                "For full regime characterization, provide raw_data to update() method.",
+                UserWarning,
             )
 
-        if not hasattr(model_component, "emission_means_"):
-            raise ValidationError(
-                "Model component must have 'emission_means_' attribute for regime interpretation. "
-                "Ensure the model has been properly fitted before analysis."
-            )
+            # Fall back to simple state mapping
+            if model_component is None or not hasattr(
+                model_component, "emission_means_"
+            ):
+                raise ValidationError(
+                    "Model component with emission_means_ is required for regime interpretation "
+                    "when raw data is not provided."
+                )
 
-        if model_component.emission_means_ is None:
-            raise ValidationError(
-                "Model emission_means_ is None. Model must be fitted with valid parameters "
-                "before regime interpretation can proceed."
-            )
+            emission_means = model_component.emission_means_
+            if len(emission_means) != self.config.n_states:
+                raise ValidationError(
+                    f"Emission means length ({len(emission_means)}) does not match "
+                    f"configured n_states ({self.config.n_states})"
+                )
 
-        # Validate emission means make sense
-        emission_means = model_component.emission_means_
-        if len(emission_means) != self.config.n_states:
-            raise ValidationError(
-                f"Emission means length ({len(emission_means)}) does not match "
-                f"configured n_states ({self.config.n_states})"
-            )
-
-        # Apply data-driven state mapping based on actual emission means
-        try:
+            # Apply simple state mapping
             analysis = apply_regime_mapping_to_analysis(
                 analysis, emission_means, self.config.n_states
             )
-
-            # Store the mapping for future reference
             self._current_state_mapping = map_states_to_financial_regimes(
                 emission_means, self.config.n_states
             )
 
-            # Validate that the mapping makes financial sense
-            self._validate_regime_mapping(emission_means, self._current_state_mapping)
+            return analysis
+
+        try:
+            # Lazy import to avoid circular dependency
+            if self.regime_characterizer is None:
+                from ..financial.regime_characterizer import (
+                    FinancialRegimeCharacterizer,
+                    RegimeType,
+                )
+
+                self.regime_characterizer = FinancialRegimeCharacterizer(
+                    min_regime_days=5,
+                    return_column="log_return",
+                    price_column="close",
+                )
+                # Store RegimeType for later use
+                self._RegimeType = RegimeType
+
+            # Use FinancialRegimeCharacterizer to analyze regimes
+            regime_profiles = self.regime_characterizer.characterize_regimes(
+                regime_data=analysis, price_data=self._last_raw_data
+            )
+
+            # Store regime profiles for later use
+            self._regime_profiles = regime_profiles
+
+            # Map regime characteristics to analysis DataFrame
+            for state_id, profile in regime_profiles.items():
+                state_mask = analysis["predicted_state"] == state_id
+
+                # Add regime type and name from characterization
+                # Use data-driven label if available, otherwise fall back to enum
+                display_name = profile.get_display_name()
+                analysis.loc[state_mask, "regime_type"] = display_name
+                analysis.loc[state_mask, "regime_name"] = display_name
+
+                # Add financial characteristics from profile
+                analysis.loc[state_mask, "expected_return"] = profile.mean_daily_return
+                analysis.loc[
+                    state_mask, "expected_volatility"
+                ] = profile.daily_volatility
+                analysis.loc[state_mask, "expected_duration"] = profile.avg_duration
+                analysis.loc[state_mask, "win_rate"] = profile.win_rate
+                analysis.loc[state_mask, "max_drawdown"] = profile.max_drawdown
+                analysis.loc[state_mask, "regime_strength"] = profile.regime_strength
+                analysis.loc[
+                    state_mask, "characterization_confidence"
+                ] = profile.confidence_score
+
+            # Store state mapping for reference (use data-driven labels)
+            self._current_state_mapping = {
+                state_id: profile.get_display_name()
+                for state_id, profile in regime_profiles.items()
+            }
 
             return analysis
 
         except Exception as e:
             raise ValidationError(
-                f"Data-driven regime mapping failed: {e}. "
-                f"This indicates either insufficient data, inappropriate model configuration, "
+                f"Regime characterization failed: {e}. "
+                f"This may indicate insufficient data, inappropriate model configuration, "
                 f"or data that doesn't exhibit clear regime structure. "
-                f"Consider: (1) more training data, (2) different n_states, or (3) manual regime override."
+                f"Consider: (1) more training data, (2) different n_states, or (3) checking data quality."
             ) from e
 
-    def _validate_regime_mapping(
-        self, emission_means: np.ndarray, state_mapping: Dict[int, str]
-    ) -> None:
-        """
-        Validate that regime mapping makes financial sense.
-
-        Args:
-            emission_means: Array of emission means in log return space
-            state_mapping: Mapping from state indices to regime names
-
-        Raises:
-            ValidationError: If regime mapping doesn't match financial logic
-        """
-        # Convert log returns to percentage space for validation
-        means_pct = np.exp(emission_means) - 1
-
-        validation_errors = []
-
-        # Check each regime assignment
-        for state_idx, regime_name in state_mapping.items():
-            mean_pct = means_pct[state_idx]
-
-            # Validate Bear regimes have negative returns
-            if "Bear" in regime_name and mean_pct > 0.002:  # More than 0.2% daily
-                validation_errors.append(
-                    f"Bear regime '{regime_name}' (state {state_idx}) has positive return: {mean_pct:.3%} daily. "
-                    f"Bear regimes should have negative expected returns."
-                )
-
-            # Validate Bull regimes have positive returns
-            elif "Bull" in regime_name and mean_pct < -0.002:  # Less than -0.2% daily
-                validation_errors.append(
-                    f"Bull regime '{regime_name}' (state {state_idx}) has negative return: {mean_pct:.3%} daily. "
-                    f"Bull regimes should have positive expected returns."
-                )
-
-            # Validate Crisis regimes have significantly negative returns
-            elif "Crisis" in regime_name and mean_pct > -0.005:  # More than -0.5% daily
-                validation_errors.append(
-                    f"Crisis regime '{regime_name}' (state {state_idx}) has insufficient negative return: {mean_pct:.3%} daily. "
-                    f"Crisis regimes should represent significant market stress."
-                )
-
-            # Validate Euphoric regimes have significantly positive returns
-            elif "Euphoric" in regime_name and mean_pct < 0.015:  # Less than 1.5% daily
-                validation_errors.append(
-                    f"Euphoric regime '{regime_name}' (state {state_idx}) has insufficient positive return: {mean_pct:.3%} daily. "
-                    f"Euphoric regimes should represent exceptional market performance."
-                )
-
-        # Check for reasonable spread between regimes
-        if len(means_pct) >= 2:
-            sorted_means = np.sort(means_pct)
-            spread = sorted_means[-1] - sorted_means[0]
-            if spread < 0.002:  # Less than 0.2% daily return difference
-                validation_errors.append(
-                    f"Very small spread between regime returns ({spread:.3%} daily). "
-                    f"Regimes should represent distinct market behaviors. "
-                    f"Consider reducing n_states or using more diverse training data."
-                )
-
-        # Check for data-driven regime detection failure indicators
-        all_positive = all(mean > 0.001 for mean in means_pct)  # All > 0.1% daily
-        all_negative = all(mean < -0.001 for mean in means_pct)  # All < -0.1% daily
-
-        if all_positive and any(
-            "Bear" in name or "Crisis" in name for name in state_mapping.values()
-        ):
-            validation_errors.append(
-                f"All emission means are positive ({[f'{m:.3%}' for m in means_pct]}), "
-                f"but Bear/Crisis regimes were assigned. This indicates monotonic upward price movement. "
-                f"Consider using fewer states or acknowledging this is a trending market, not regime-switching."
-            )
-
-        if all_negative and any(
-            "Bull" in name or "Euphoric" in name for name in state_mapping.values()
-        ):
-            validation_errors.append(
-                f"All emission means are negative ({[f'{m:.3%}' for m in means_pct]}), "
-                f"but Bull/Euphoric regimes were assigned. This indicates monotonic downward price movement. "
-                f"Consider using fewer states or acknowledging this is a trending market, not regime-switching."
-            )
-
-        # If validation errors found, fail with detailed explanation
-        if validation_errors:
-            error_msg = (
-                f"Regime mapping validation failed with {len(validation_errors)} errors:\n\n"
-                + "\n".join(f"• {error}" for error in validation_errors)
-                + f"\n\nEmission means: {dict(zip(state_mapping.values(), [f'{m:.3%}' for m in means_pct]))}"
-            )
-            raise ValidationError(error_msg)
 
     @staticmethod
     def assess_data_for_regime_detection(
@@ -585,57 +547,35 @@ class FinancialAnalysis(AnalysisComponent):
         return pd.Series(days_in_regime, index=states.index)
 
     def _get_regime_characteristics(self) -> Dict[str, List[float]]:
-        """Get expected regime characteristics based on actual model parameters when available."""
-        # Try to use actual model parameters first
-        if hasattr(self, "_current_state_mapping") and self._last_analysis is not None:
+        """Get expected regime characteristics from stored regime profiles."""
+        # Use stored regime profiles from FinancialRegimeCharacterizer if available
+        if self._regime_profiles:
             try:
-                # Calculate actual characteristics from observed data
-                actual_characteristics = {
+                characteristics = {
                     "return": [],
                     "volatility": [],
                     "duration": [],
                 }
 
+                # Get characteristics in state ID order
                 for state_idx in range(self.config.n_states):
-                    state_mask = self._last_analysis["predicted_state"] == state_idx
-                    if state_mask.any():
-                        # Get actual returns for this state from raw data
-                        if (
-                            self._last_raw_data is not None
-                            and "log_return" in self._last_raw_data.columns
-                        ):
-                            regime_dates = self._last_analysis[state_mask].index
-                            regime_returns = self._last_raw_data.loc[
-                                regime_dates, "log_return"
-                            ]
-
-                            # Calculate actual characteristics
-                            actual_return = regime_returns.mean()
-                            actual_volatility = regime_returns.std()
-
-                            actual_characteristics["return"].append(actual_return)
-                            actual_characteristics["volatility"].append(
-                                actual_volatility
-                            )
-
-                            # Calculate actual duration
-                            actual_duration = self._calculate_regime_duration(state_idx)
-                            actual_characteristics["duration"].append(actual_duration)
-                        else:
-                            # Fallback to defaults for this state
-                            actual_characteristics["return"].append(0.0)
-                            actual_characteristics["volatility"].append(0.015)
-                            actual_characteristics["duration"].append(10.0)
+                    if state_idx in self._regime_profiles:
+                        profile = self._regime_profiles[state_idx]
+                        characteristics["return"].append(profile.mean_daily_return)
+                        characteristics["volatility"].append(profile.daily_volatility)
+                        characteristics["duration"].append(profile.avg_duration)
                     else:
-                        # No data for this state, use defaults
-                        actual_characteristics["return"].append(0.0)
-                        actual_characteristics["volatility"].append(0.015)
-                        actual_characteristics["duration"].append(10.0)
+                        # Fallback for missing states
+                        characteristics["return"].append(0.0)
+                        characteristics["volatility"].append(0.015)
+                        characteristics["duration"].append(10.0)
 
-                return actual_characteristics
+                return characteristics
 
             except Exception as e:
-                warnings.warn(f"Failed to calculate actual regime characteristics: {e}")
+                warnings.warn(
+                    f"Failed to retrieve regime characteristics from profiles: {e}"
+                )
 
         # Fallback to default characteristics based on financial knowledge
         if self.config.n_states == 3:
@@ -1107,7 +1047,7 @@ class FinancialAnalysis(AnalysisComponent):
         return pd.Series(agreement, index=regime_signals.index)
 
     def _add_trading_signals(self, analysis: pd.DataFrame) -> pd.DataFrame:
-        """Add trading signals based on regime analysis."""
+        """Add trading signals based on regime analysis using RegimeType enum."""
         # Simple position sizing based on regime and confidence
         position_signals = []
 
@@ -1115,18 +1055,29 @@ class FinancialAnalysis(AnalysisComponent):
             regime_type = row["regime_type"]
             confidence = row["confidence"]
 
-            if regime_type == "Crisis":
+            # Use regime type values for consistent matching
+            if regime_type == "crisis":
                 signal = -0.5 * confidence  # Defensive position
-            elif regime_type == "Bear":
+            elif regime_type == "bearish":
                 signal = -0.3 * confidence  # Short position
-            elif regime_type == "Sideways":
+            elif regime_type == "sideways":
                 signal = 0.1 * confidence  # Minimal position
-            elif regime_type == "Bull":
+            elif regime_type == "bullish":
                 signal = 0.8 * confidence  # Long position
-            elif regime_type == "Euphoric":
-                signal = 0.5 * confidence  # Reduced position (risk management)
+            elif regime_type == "mixed":
+                signal = 0.0  # No clear signal for mixed regimes
             else:
-                signal = 0.0
+                # Legacy support for old regime names
+                if "Bear" in str(regime_type):
+                    signal = -0.3 * confidence
+                elif "Bull" in str(regime_type):
+                    signal = 0.8 * confidence
+                elif "Crisis" in str(regime_type):
+                    signal = -0.5 * confidence
+                elif "Sideways" in str(regime_type):
+                    signal = 0.1 * confidence
+                else:
+                    signal = 0.0
 
             # Apply risk adjustment if enabled
             if self.config.risk_adjustment:
@@ -1196,6 +1147,12 @@ class FinancialAnalysis(AnalysisComponent):
 
         # Color map for regimes
         regime_colors = {
+            "crisis": "red",
+            "bearish": "orange",
+            "sideways": "gray",
+            "bullish": "green",
+            "mixed": "purple",
+            # Legacy support
             "Crisis": "red",
             "Bear": "orange",
             "Sideways": "gray",
@@ -1246,6 +1203,12 @@ class FinancialAnalysis(AnalysisComponent):
 
         # Color map for regimes
         regime_colors = {
+            "crisis": "red",
+            "bearish": "orange",
+            "sideways": "gray",
+            "bullish": "green",
+            "mixed": "purple",
+            # Legacy support
             "Crisis": "red",
             "Bear": "orange",
             "Sideways": "gray",
@@ -1427,3 +1390,12 @@ class FinancialAnalysis(AnalysisComponent):
             return performance_metrics.get("duration_analysis", {})
         except Exception:
             return None
+
+    def get_regime_profiles(self) -> Optional[Dict[int, Any]]:
+        """
+        Get regime profiles for visualization color consistency.
+
+        Returns:
+            Dictionary mapping state IDs to RegimeProfile objects, or None if not available
+        """
+        return self._regime_profiles if hasattr(self, '_regime_profiles') else None
