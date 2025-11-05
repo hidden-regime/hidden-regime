@@ -49,6 +49,7 @@ class TestDatetimeIndexConsistency:
 
         return data
 
+    @pytest.mark.integration
     @patch("hidden_regime.data.financial.yf.Ticker")
     def test_num_samples_preserves_datetime_index(self, mock_ticker_class):
         """Test that num_samples config preserves DatetimeIndex (not RangeIndex)."""
@@ -71,6 +72,7 @@ class TestDatetimeIndexConsistency:
         # Verify timezone is preserved
         assert result.index.tz is not None, "Timezone should be preserved"
 
+    @pytest.mark.integration
     @patch("hidden_regime.data.financial.yf.Ticker")
     def test_start_date_preserves_datetime_index(self, mock_ticker_class):
         """Test that start_date config preserves DatetimeIndex."""
@@ -96,6 +98,7 @@ class TestDatetimeIndexConsistency:
         # Verify timezone is preserved
         assert result.index.tz is not None, "Timezone should be preserved"
 
+    @pytest.mark.integration
     @patch("hidden_regime.data.financial.yf.Ticker")
     def test_index_type_consistency_between_configs(self, mock_ticker_class):
         """Test that num_samples and start_date produce the same index type."""
@@ -160,6 +163,7 @@ class TestTimezoneHandling:
 
         return data
 
+    @pytest.mark.integration
     @patch("hidden_regime.data.financial.yf.Ticker")
     def test_timezone_aware_data_handling(self, mock_ticker_class):
         """Test that timezone-aware data is handled correctly."""
@@ -183,6 +187,7 @@ class TestTimezoneHandling:
         assert "log_return" in result.columns
         assert not result["price"].isna().any()
 
+    @pytest.mark.integration
     @patch("hidden_regime.data.financial.yf.Ticker")
     def test_timezone_naive_data_handling(self, mock_ticker_class):
         """Test that timezone-naive data is handled correctly."""
@@ -205,6 +210,7 @@ class TestTimezoneHandling:
         assert "log_return" in result.columns
         assert not result["price"].isna().any()
 
+    @pytest.mark.integration
     @patch("hidden_regime.data.financial.yf.Ticker")
     def test_datetime_operations_work_with_both_types(self, mock_ticker_class):
         """Test that datetime operations work with both timezone types."""
@@ -273,6 +279,7 @@ class TestDatetimeIndexIntegration:
 
         return data
 
+    @pytest.mark.integration
     @patch("hidden_regime.data.financial.yf.Ticker")
     def test_slicing_with_datetime_index(self, mock_ticker_class):
         """Test that slicing operations work with DatetimeIndex."""
@@ -294,6 +301,7 @@ class TestDatetimeIndexIntegration:
         assert len(subset) <= len(result)
         assert isinstance(subset.index, pd.DatetimeIndex)
 
+    @pytest.mark.integration
     @patch("hidden_regime.data.financial.yf.Ticker")
     def test_merging_with_datetime_index(self, mock_ticker_class):
         """Test that merging operations work with DatetimeIndex."""

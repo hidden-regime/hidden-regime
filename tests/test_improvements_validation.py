@@ -61,6 +61,7 @@ class TestImprovementsValidation:
 
         return data
 
+    @pytest.mark.e2e
     def test_automatic_financial_pipeline(self, mock_financial_data):
         """Test that financial data pipeline automatically calculates required columns."""
         with patch("yfinance.Ticker") as mock_ticker:
@@ -103,6 +104,9 @@ class TestImprovementsValidation:
                 data_output["log_return"].values, expected_log_return.values, decimal=6
             )
 
+    @pytest.mark.integration
+
+
     def test_kmeans_initialization_default(self):
         """Test that kmeans is now the default initialization method."""
         # Test default config
@@ -119,6 +123,7 @@ class TestImprovementsValidation:
         balanced = HMMConfig.create_balanced()
         assert balanced.initialization_method == "kmeans"
 
+    @pytest.mark.e2e
     def test_data_driven_state_interpretation(self, mock_financial_data):
         """Test that state interpretation matches actual emission characteristics."""
         with patch("yfinance.Ticker") as mock_ticker:
@@ -161,6 +166,9 @@ class TestImprovementsValidation:
                 expected_regimes = {"Bear", "Sideways", "Bull"}
                 assert unique_regimes.issubset(expected_regimes)
 
+    @pytest.mark.unit
+
+
     def test_financial_utility_functions(self):
         """Test the financial utility conversion functions."""
         # Test percentage to log return conversion
@@ -177,6 +185,9 @@ class TestImprovementsValidation:
         # Test specific values
         assert abs(percent_change_to_log_return(0.05) - np.log(1.05)) < 1e-10
         assert abs(log_return_to_percent_change(np.log(1.05)) - 0.05) < 1e-10
+
+    @pytest.mark.unit
+
 
     def test_state_mapping_consistency(self):
         """Test that state mapping uses threshold-based classification consistently."""
@@ -197,6 +208,7 @@ class TestImprovementsValidation:
         assert "Sideways" in mapping_2[2]  # +0.02% daily = Sideways
         assert "Bull" in mapping_2[0]  # +1.5% daily = Bull
 
+    @pytest.mark.e2e
     def test_integration_with_mock_data(self, mock_financial_data):
         """Test complete integration with realistic mock data."""
         with patch("yfinance.Ticker") as mock_ticker:

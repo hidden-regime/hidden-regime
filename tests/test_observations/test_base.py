@@ -26,6 +26,7 @@ class TestBaseObservationGenerator:
         defaults.update(kwargs)
         return ObservationConfig(**defaults)
 
+    @pytest.mark.unit
     def test_base_observation_generator_initialization(self):
         """Test BaseObservationGenerator initialization."""
         from hidden_regime.config.observation import ObservationConfig
@@ -38,6 +39,7 @@ class TestBaseObservationGenerator:
         assert obs_gen.last_data is None
         assert obs_gen.last_observations is None
 
+    @pytest.mark.unit
     def test_base_observation_generator_default_window_size(self):
         """Test default generator configuration."""
         from hidden_regime.config.observation import ObservationConfig
@@ -47,6 +49,7 @@ class TestBaseObservationGenerator:
         assert obs_gen.config is not None
         assert len(obs_gen.generators) == 1
 
+    @pytest.mark.unit
     def test_invalid_generator_config(self):
         """Test invalid generator configuration handling."""
         from hidden_regime.config.observation import ObservationConfig
@@ -67,6 +70,7 @@ class TestBaseObservationGenerator:
             config = ObservationConfig(generators=[123])  # Invalid type
             config.validate()
 
+    @pytest.mark.unit
     def test_update_with_insufficient_data(self):
         """Test update with empty data."""
         from hidden_regime.config.observation import ObservationConfig
@@ -81,6 +85,7 @@ class TestBaseObservationGenerator:
         with pytest.raises(ValidationError, match="Input data cannot be empty"):
             obs_gen.update(data)
 
+    @pytest.mark.integration
     def test_update_with_valid_data(self):
         """Test update with valid data."""
         from hidden_regime.config.observation import ObservationConfig
@@ -116,6 +121,7 @@ class TestBaseObservationGenerator:
             result["log_return"][mask].values, expected_returns[mask].values
         )
 
+    @pytest.mark.integration
     def test_calculate_log_returns(self):
         """Test log return calculation."""
         obs_gen = BaseObservationGenerator(self.create_observation_config())
@@ -127,6 +133,7 @@ class TestBaseObservationGenerator:
         np.testing.assert_array_almost_equal(log_returns.values, expected.values)
         assert log_returns.name == "log_return"
 
+    @pytest.mark.integration
     def test_calculate_volatility(self):
         """Test volatility calculation."""
         obs_gen = BaseObservationGenerator(self.create_observation_config())
@@ -145,6 +152,7 @@ class TestBaseObservationGenerator:
         # Later values should be calculated
         assert not pd.isna(volatility.iloc[-1])
 
+    @pytest.mark.unit
     def test_add_feature_validation(self):
         """Test feature addition validation."""
         obs_gen = BaseObservationGenerator(self.create_observation_config())
@@ -161,6 +169,7 @@ class TestBaseObservationGenerator:
         with pytest.raises(ValueError, match="Unknown feature type"):
             obs_gen.add_feature("invalid_feature")
 
+    @pytest.mark.unit
     def test_remove_feature(self):
         """Test feature removal."""
         obs_gen = BaseObservationGenerator(self.create_observation_config())
@@ -174,6 +183,7 @@ class TestBaseObservationGenerator:
         # Removing non-existent feature should not raise error
         obs_gen.remove_feature("non_existent")
 
+    @pytest.mark.integration
     def test_generate_features_with_multiple_features(self):
         """Test feature generation with multiple features."""
         obs_gen = BaseObservationGenerator(self.create_observation_config())
@@ -198,6 +208,7 @@ class TestBaseObservationGenerator:
         assert not result["volatility"].isna().all()
         assert not result["momentum"].isna().all()
 
+    @pytest.mark.integration
     def test_caching_behavior(self):
         """Test caching of intermediate calculations."""
         obs_gen = BaseObservationGenerator(self.create_observation_config())
@@ -216,6 +227,7 @@ class TestBaseObservationGenerator:
         result2 = obs_gen.update(data)
         pd.testing.assert_frame_equal(result1, result2)
 
+    @pytest.mark.integration
     def test_update_incremental_data(self):
         """Test incremental data updates."""
         obs_gen = BaseObservationGenerator(self.create_observation_config())
@@ -245,6 +257,7 @@ class TestBaseObservationGenerator:
         # New result should have one more row
         assert len(result2) == len(result1) + 1
 
+    @pytest.mark.unit
     def test_missing_data_handling(self):
         """Test handling of missing data."""
         obs_gen = BaseObservationGenerator(self.create_observation_config())
@@ -258,6 +271,7 @@ class TestBaseObservationGenerator:
         with pytest.raises(ValidationError, match="Data contains missing values"):
             obs_gen.update(data)
 
+    @pytest.mark.unit
     def test_empty_data_handling(self):
         """Test handling of empty data."""
         obs_gen = BaseObservationGenerator(self.create_observation_config())
@@ -267,6 +281,7 @@ class TestBaseObservationGenerator:
         with pytest.raises(ValidationError, match="Input data cannot be empty"):
             obs_gen.update(empty_data)
 
+    @pytest.mark.integration
     def test_plot_functionality(self):
         """Test plotting functionality."""
         obs_gen = BaseObservationGenerator(self.create_observation_config())
@@ -294,6 +309,7 @@ class TestBaseObservationGenerator:
         with pytest.raises(ValueError, match="Feature 'invalid' not found"):
             obs_gen.plot(observations=observations, features=["invalid"])
 
+    @pytest.mark.integration
     def test_serialization_support(self):
         """Test pickle serialization support."""
         import pickle

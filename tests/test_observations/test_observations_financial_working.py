@@ -24,6 +24,9 @@ from hidden_regime.utils.exceptions import ValidationError
 class TestFinancialObservationGeneratorWorking:
     """Working tests for FinancialObservationGenerator that focus on coverage."""
 
+    @pytest.mark.unit
+
+
     def test_initialization(self):
         """Test basic initialization."""
         config = FinancialObservationConfig(generators=["log_return"])
@@ -33,6 +36,9 @@ class TestFinancialObservationGeneratorWorking:
         assert len(generator.generators) == 1
         assert generator.last_data is None
         assert generator.last_observations is None
+
+    @pytest.mark.unit
+
 
     def test_config_validation_integration(self):
         """Test that configuration validation works."""
@@ -54,6 +60,9 @@ class TestFinancialObservationGeneratorWorking:
         assert len(generator1.generators) == 2
         assert len(generator2.generators) == 2
         assert generator2.config.include_volume_features == True
+
+    @pytest.mark.unit
+
 
     def test_preset_configurations(self):
         """Test preset configuration creation."""
@@ -79,6 +88,9 @@ class TestFinancialObservationGeneratorWorking:
         generator_minimal = FinancialObservationGenerator(minimal_config)
         assert minimal_config.generators == ["log_return"]
         assert minimal_config.normalize_features == False
+
+    @pytest.mark.integration
+
 
     def test_basic_observation_generation(self):
         """Test basic observation generation functionality."""
@@ -108,6 +120,9 @@ class TestFinancialObservationGeneratorWorking:
         assert "close" in observations.columns  # Original data preserved
         assert generator.last_observations is not None
         assert generator.last_data is not None
+
+    @pytest.mark.integration
+
 
     def test_multiple_financial_indicators(self):
         """Test generation of multiple financial indicators."""
@@ -151,6 +166,9 @@ class TestFinancialObservationGeneratorWorking:
         assert len(vol_values) > 0
         assert (vol_values >= 0).all()
 
+    @pytest.mark.integration
+
+
     def test_macd_indicator(self):
         """Test MACD indicator generation."""
         config = FinancialObservationConfig(
@@ -179,6 +197,9 @@ class TestFinancialObservationGeneratorWorking:
             assert np.isfinite(macd_data["macd_signal"].values).any()
             assert np.isfinite(macd_data["macd_histogram"].values).any()
 
+    @pytest.mark.integration
+
+
     def test_bollinger_bands_indicator(self):
         """Test Bollinger Bands indicator generation."""
         config = FinancialObservationConfig(
@@ -205,6 +226,9 @@ class TestFinancialObservationGeneratorWorking:
             assert np.isfinite(bb_data["bb_upper"].values).any()
             assert np.isfinite(bb_data["bb_middle"].values).any()
             assert np.isfinite(bb_data["bb_lower"].values).any()
+
+    @pytest.mark.integration
+
 
     def test_volume_indicators(self):
         """Test volume-based indicators."""
@@ -237,6 +261,9 @@ class TestFinancialObservationGeneratorWorking:
         if len(vol_sma) > 0:
             assert (vol_sma > 0).all()
 
+    @pytest.mark.integration
+
+
     def test_volume_indicators_without_volume_data(self):
         """Test volume indicators when volume data not available."""
         config = FinancialObservationConfig(
@@ -263,6 +290,9 @@ class TestFinancialObservationGeneratorWorking:
         assert observations["volume_sma"].isna().all()
         assert observations["volume_ratio"].isna().all()
 
+    @pytest.mark.integration
+
+
     def test_normalization_functionality(self):
         """Test feature normalization."""
         config = FinancialObservationConfig(
@@ -286,6 +316,9 @@ class TestFinancialObservationGeneratorWorking:
                 50, abs=10
             )  # RSI normally centers around 50
 
+    @pytest.mark.integration
+
+
     def test_plot_method_no_observations(self):
         """Test plot method when no observations generated."""
         config = FinancialObservationConfig(generators=["log_return"])
@@ -298,6 +331,9 @@ class TestFinancialObservationGeneratorWorking:
 
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
+
+    @pytest.mark.integration
+
 
     def test_plot_method_with_observations(self):
         """Test plot method with generated observations."""
@@ -329,6 +365,9 @@ class TestFinancialObservationGeneratorWorking:
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
 
+    @pytest.mark.unit
+
+
     def test_error_handling_empty_data(self):
         """Test error handling for empty data."""
         config = FinancialObservationConfig(generators=["log_return"])
@@ -343,6 +382,9 @@ class TestFinancialObservationGeneratorWorking:
         # The error might be about missing price column or empty data
         error_msg = str(exc_info.value).lower()
         assert "empty" in error_msg or "not found" in error_msg
+
+    @pytest.mark.unit
+
 
     def test_error_handling_missing_price_column(self):
         """Test error handling when required price column missing."""
@@ -362,6 +404,9 @@ class TestFinancialObservationGeneratorWorking:
 
         assert "missing_price" in str(exc_info.value)
         assert "not found" in str(exc_info.value)
+
+    @pytest.mark.unit
+
 
     def test_error_handling_missing_volume_column(self):
         """Test error handling when volume features enabled but volume column missing."""
@@ -383,12 +428,18 @@ class TestFinancialObservationGeneratorWorking:
         assert "missing_volume" in str(exc_info.value)
         assert "not found" in str(exc_info.value)
 
+    @pytest.mark.unit
+
+
     def test_error_handling_invalid_generator(self):
         """Test error handling for invalid generators."""
         # Invalid generator name should raise error during config validation
         with pytest.raises(Exception):  # Could be ConfigurationError or ValidationError
             config = FinancialObservationConfig(generators=["invalid_generator"])
             config.validate()
+
+    @pytest.mark.integration
+
 
     def test_get_observation_info_no_observations(self):
         """Test get_observation_info when no observations generated."""
@@ -398,6 +449,9 @@ class TestFinancialObservationGeneratorWorking:
         info = generator.get_observation_info()
         assert "status" in info
         assert "No observations" in info["status"]
+
+    @pytest.mark.integration
+
 
     def test_get_observation_info_with_observations(self):
         """Test get_observation_info with generated observations."""
@@ -418,6 +472,9 @@ class TestFinancialObservationGeneratorWorking:
         assert "date_range" in info
         assert "generators_used" in info
         assert "missing_values" in info
+
+    @pytest.mark.integration
+
 
     def test_average_price_generation(self):
         """Test average price calculation."""
@@ -447,6 +504,9 @@ class TestFinancialObservationGeneratorWorking:
         assert (avg_prices >= 90).all()  # Should be in reasonable range
         assert (avg_prices <= 120).all()
 
+    @pytest.mark.integration
+
+
     def test_builtin_generator_resolution(self):
         """Test that built-in generators are properly resolved."""
         config = FinancialObservationConfig(generators=["log_return", "price_change"])
@@ -464,6 +524,9 @@ class TestFinancialObservationGeneratorWorking:
 
 class TestFinancialObservationGeneratorCoverage:
     """Additional tests to improve code coverage."""
+
+    @pytest.mark.unit
+
 
     def test_edge_case_data_patterns(self):
         """Test generator behavior with edge case data."""
@@ -487,6 +550,9 @@ class TestFinancialObservationGeneratorCoverage:
         if len(vol_values) > 0:
             assert (vol_values == 0).all() or vol_values.isna().all()
 
+    @pytest.mark.unit
+
+
     def test_normalization_edge_cases(self):
         """Test normalization with edge cases."""
         config = FinancialObservationConfig(generators=["rsi"], normalize_features=True)
@@ -500,6 +566,9 @@ class TestFinancialObservationGeneratorCoverage:
 
         # Should handle short series without crashing
         assert "rsi" in observations.columns
+
+    @pytest.mark.unit
+
 
     def test_various_price_column_configurations(self):
         """Test with different price column configurations."""
@@ -518,6 +587,9 @@ class TestFinancialObservationGeneratorCoverage:
 
         assert "log_return" in observations.columns
         assert "adj_close" in observations.columns
+
+    @pytest.mark.integration
+
 
     def test_complex_generator_combinations(self):
         """Test complex combinations of generators."""
@@ -558,6 +630,9 @@ class TestFinancialObservationGeneratorCoverage:
 
         # Check that original data is preserved
         assert "close" in observations.columns
+
+    @pytest.mark.unit
+
 
     def test_generator_error_handling(self):
         """Test error handling within generators."""

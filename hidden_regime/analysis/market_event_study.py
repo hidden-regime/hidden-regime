@@ -523,7 +523,8 @@ class MarketEventStudy:
 
             # Mark current date
             axes[0].axvline(
-                snapshot_date, color="red", linestyle="--", linewidth=2, alpha=0.8
+                snapshot_date, color="red", linestyle="--", linewidth=2, alpha=0.8,
+                label="Current Date"
             )
 
             # Get current regime info
@@ -555,12 +556,14 @@ class MarketEventStudy:
                 color="purple",
             )
             axes[1].axvline(
-                snapshot_date, color="red", linestyle="--", linewidth=2, alpha=0.8
+                snapshot_date, color="red", linestyle="--", linewidth=2, alpha=0.8,
+                label="Current Date"
             )
             axes[1].set_ylabel("Confidence", fontsize=12)
             axes[1].set_xlabel("Date", fontsize=12)
             axes[1].set_ylim(0, 1)
             axes[1].grid(True, alpha=0.3)
+            axes[1].legend()
 
             plt.tight_layout()
 
@@ -1721,6 +1724,166 @@ class MarketEventStudy:
                 return None
 
         return None
+
+    def create_full_timeline_visualization(self, save: bool = True) -> Optional[str]:
+        """
+        Create full-period regime timeline visualization showing all tickers/assets.
+
+        Displays the entire analysis period with colored background regions indicating
+        HMM-detected regimes, price line overlay, and vertical event markers.
+
+        Similar to the 2008_timeline.png reference image.
+
+        Args:
+            save: Whether to save the figure to disk
+
+        Returns:
+            Path to saved PNG file, or None if no tickers to visualize
+        """
+        if not self.tickers or not self.results:
+            print("No results available for timeline visualization")
+            return None
+
+        # Prepare figure with subplots (one per ticker)
+        n_tickers = len(self.tickers)
+        fig, axes = plt.subplots(n_tickers, 1, figsize=(16, 3.5 * n_tickers))
+
+        # Handle single ticker case (axes won't be an array)
+        if n_tickers == 1:
+            axes = [axes]
+
+        # Color mapping for regime names
+        regime_color_map = {
+            'bullish': '#4575b4',      # Blue
+            'bearish': '#d73027',      # Red
+            'sideways': '#fee08b',     # Yellow/Gold
+            'crisis': '#a50026',       # Dark Red
+        }
+
+        # Track y-axis limits across all subplots
+        all_prices = []
+        for ticker in self.tickers:
+            if ticker in self.results:
+                history = self.results[ticker].get('regime_history')
+                if history is not None and 'price' in history.columns:
+                    all_prices.extend(history['price'].values)
+
+        if all_prices:
+            price_min = np.min(all_prices)
+            price_max = np.max(all_prices)
+            y_lower = price_min * 0.9
+            y_upper = price_max * 1.1
+        else:
+            y_lower, y_upper = None, None
+
+        # Plot each ticker
+        for idx, ticker in enumerate(self.tickers):
+            if ticker not in self.results:
+                continue
+
+            analysis_results = self.results[ticker]
+            history = analysis_results.get('regime_history')
+
+            if history is None or len(history) == 0:
+                continue
+
+            ax = axes[idx]
+
+            # Plot price line
+            ax.plot(
+                history.index,
+                history['price'],
+                'k-',
+                linewidth=1.5,
+                label='Price',
+                zorder=3
+            )
+
+            # Color background by regime
+            current_regime = None
+            regime_start = None
+
+            for date in history.index:
+                regime_name = history.loc[date, 'regime_name'].lower()
+
+                # Start new regime region if needed
+                if regime_name != current_regime:
+                    if regime_start is not None and current_regime is not None:
+                        # End previous regime region
+                        color = regime_color_map.get(current_regime, '#cccccc')
+                        ax.axvspan(regime_start, date, color=color, alpha=0.15, zorder=1)
+
+                    current_regime = regime_name
+                    regime_start = date
+
+            # Handle last regime region
+            if regime_start is not None and current_regime is not None:
+                color = regime_color_map.get(current_regime, '#cccccc')
+                ax.axvspan(regime_start, history.index[-1] + pd.Timedelta(days=1),
+                          color=color, alpha=0.15, zorder=1)
+
+            # Add vertical lines at key events with labels
+            for event_date_str, event_name in self.key_events.items():
+                event_date = pd.to_datetime(event_date_str)
+                if history.index[0] <= event_date <= history.index[-1]:
+                    ax.axvline(event_date, color='red', linestyle='--', linewidth=1.5,
+                             alpha=0.6, zorder=2)
+
+                    # Add event name label on the line (simple red text, no box)
+                    y_pos = ax.get_ylim()[1] * 0.90  # Position near top
+                    ax.text(event_date, y_pos, event_name, rotation=90,
+                           verticalalignment='top', horizontalalignment='right',
+                           color='red', fontsize=8)
+
+            # Format subplot
+            if y_lower is not None and y_upper is not None:
+                ax.set_ylim(y_lower, y_upper)
+
+            # Add ticker label on the left side
+            y_pos = ax.get_ylim()[1] * 0.95
+            ax.text(history.index[0], y_pos, ticker, fontsize=11,
+                   fontweight='bold', verticalalignment='top',
+                   bbox=dict(boxstyle='round,pad=0.5', facecolor='white',
+                            edgecolor='black', alpha=0.8))
+
+            # Set y-axis label with ticker and price info
+            ax.set_ylabel(f'{ticker} Price ($)', fontsize=11, fontweight='bold')
+            ax.grid(True, alpha=0.3, zorder=0)
+
+        # Format x-axis (date labels)
+        fig.text(0.5, 0.02, 'Date', ha='center', fontsize=12, fontweight='bold')
+
+        # Add legend for regimes
+        from matplotlib.patches import Patch
+        legend_elements = [
+            Patch(facecolor='#4575b4', alpha=0.15, label='Bullish'),
+            Patch(facecolor='#fee08b', alpha=0.15, label='Sideways'),
+            Patch(facecolor='#d73027', alpha=0.15, label='Bearish'),
+            Patch(facecolor='#a50026', alpha=0.15, label='Crisis'),
+        ]
+        fig.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(0.99, 0.99),
+                  fontsize=10, title='Regime Types')
+
+        # Add title
+        fig.suptitle(
+            f'{", ".join(self.tickers)} - HMM-Detected Regime Timeline\n'
+            f'Colored regions indicate regimes | Dashed lines mark key events',
+            fontsize=14, fontweight='bold', y=0.995
+        )
+
+        plt.tight_layout(rect=[0, 0.03, 1, 0.99])
+
+        # Save figure
+        if save:
+            filename = f"full_timeline_visualization.png"
+            filepath = self.output_dir / filename
+            plt.savefig(filepath, dpi=200, bbox_inches='tight')
+            print(f"\nSaved full-period timeline visualization: {filename}")
+            plt.close()
+            return str(filepath)
+        else:
+            plt.show()
+            return None
 
     def _print_section(self, title: str):
         """Print formatted section header."""

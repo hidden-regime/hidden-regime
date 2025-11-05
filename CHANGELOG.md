@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-11-04
+
+### Added
+- **Model Context Protocol (MCP) Server**
+  - FastMCP-based server for AI assistant integration (Claude Desktop, others)
+  - 3 core tools: `detect_regime`, `get_regime_statistics`, `get_transition_probabilities`
+  - 2 resource endpoints: `regime://{ticker}/current`, `regime://{ticker}/transitions`
+  - Rich temporal context: regime duration, expected transitions, confidence scores
+  - Comprehensive 805-line documentation with examples and troubleshooting guide
+
+- **Case Study Scripts** (3 historical market events)
+  - `examples/case_study_dotcom_2000.py` - Dot-com bubble analysis (1999-2003)
+  - `examples/case_study_2008_financial_crisis.py` - 2008 crisis analysis (2005-2009)
+  - `examples/case_study_covid_2020.py` - COVID-19 rapid regime shift (2019-2021)
+  - All scripts produce detailed regime analysis, regime transitions, and performance metrics
+
+- **Enhanced Observation Features**
+  - `momentum_strength`: Bull/bear momentum detection (23.8% improvement in bull market detection)
+  - `trend_persistence`: Sideways regime identification
+  - `volatility_context`: Crisis period detection
+  - `directional_consistency`: Return sign patterns for regime interpretation
+
+- **Test Infrastructure Improvements**
+  - 36 test files with comprehensive coverage
+  - Test markers: unit, integration, e2e, network, slow, performance
+  - Enhanced error handling and validation testing
+  - MCP tool testing (tools, resources, error cases)
+
+### Changed
+- Enhanced MCP server with caching support and error recovery
+- Improved regime interpretation with financial context features
+- More robust yfinance integration with retry logic
+
+### Fixed
+- Test compatibility issues with enhanced observation features
+- MCP resource response formatting and error messages
+- Case study script data alignment and validation
+
+### Documentation
+- Added comprehensive README_MCP.md (22K) with quick start, tool docs, scenarios, troubleshooting
+- Updated examples/README.md with case study documentation
+- Added example Claude conversations showing MCP usage patterns
+
 ## [1.0.0] - 2025-09-30
 
 ### Added

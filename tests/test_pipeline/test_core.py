@@ -298,6 +298,9 @@ Market analysis completed successfully with {len(analysis)} analysis points.
 class TestPipelineCore:
     """Test cases for Pipeline core functionality."""
 
+    @pytest.mark.unit
+
+
     def test_pipeline_initialization(self):
         """Test basic pipeline initialization."""
         data_comp = MockDataComponent()
@@ -323,6 +326,9 @@ class TestPipelineCore:
         assert isinstance(pipeline.component_outputs, dict)
         assert len(pipeline.component_outputs) == 0
 
+    @pytest.mark.unit
+
+
     def test_pipeline_initialization_with_report(self):
         """Test pipeline initialization with optional report component."""
         data_comp = MockDataComponent()
@@ -340,6 +346,9 @@ class TestPipelineCore:
         )
 
         assert pipeline.report is report_comp
+
+    @pytest.mark.integration
+
 
     def test_successful_pipeline_update_without_report(self):
         """Test complete pipeline update without report component."""
@@ -385,6 +394,9 @@ class TestPipelineCore:
         assert "Current Date" in result
         assert "Current Regime" in result
 
+    @pytest.mark.integration
+
+
     def test_successful_pipeline_update_with_report(self):
         """Test complete pipeline update with report component."""
         data_comp = MockDataComponent()
@@ -415,6 +427,9 @@ class TestPipelineCore:
         # Verify report output stored
         assert "report" in pipeline.component_outputs
 
+    @pytest.mark.integration
+
+
     def test_pipeline_raw_data_passing_with_support(self):
         """Test raw data is passed to analysis component when supported."""
         data_comp = MockDataComponent()
@@ -435,6 +450,9 @@ class TestPipelineCore:
         assert analysis_comp.received_raw_data is not None
         assert not analysis_comp.received_raw_data.empty
         assert "close" in analysis_comp.received_raw_data.columns
+
+    @pytest.mark.integration
+
 
     def test_pipeline_raw_data_fallback_without_support(self):
         """Test fallback when analysis component doesn't support raw_data parameter."""
@@ -462,6 +480,9 @@ class TestPipelineCore:
         assert isinstance(result, str)
         assert "Analysis Results" in result
 
+    @pytest.mark.integration
+
+
     def test_pipeline_update_with_current_date(self):
         """Test pipeline update with current_date parameter."""
         data_comp = MockDataComponent()
@@ -481,6 +502,9 @@ class TestPipelineCore:
 
         assert isinstance(result, str)
         assert pipeline.update_count == 1
+
+    @pytest.mark.integration
+
 
     def test_pipeline_error_handling_data_failure(self):
         """Test error handling when data component fails."""
@@ -505,6 +529,9 @@ class TestPipelineCore:
         assert model_comp.update_count == 0
         assert analysis_comp.update_count == 0
 
+    @pytest.mark.integration
+
+
     def test_pipeline_error_handling_empty_data(self):
         """Test error handling when data component returns empty data."""
         data_comp = MockDataComponent(return_empty=True)
@@ -521,6 +548,9 @@ class TestPipelineCore:
 
         with pytest.raises(ValueError, match="No data available from data component"):
             pipeline.update()
+
+    @pytest.mark.integration
+
 
     def test_pipeline_error_handling_empty_observations(self):
         """Test error handling when observation component returns empty data."""
@@ -539,6 +569,9 @@ class TestPipelineCore:
         with pytest.raises(ValueError, match="No observations generated from data"):
             pipeline.update()
 
+    @pytest.mark.integration
+
+
     def test_pipeline_error_handling_empty_model_output(self):
         """Test error handling when model component returns empty output."""
         data_comp = MockDataComponent()
@@ -555,6 +588,9 @@ class TestPipelineCore:
 
         with pytest.raises(ValueError, match="No predictions generated from model"):
             pipeline.update()
+
+    @pytest.mark.integration
+
 
     def test_get_component_output(self):
         """Test getting component outputs."""
@@ -587,6 +623,9 @@ class TestPipelineCore:
         assert isinstance(model_output, pd.DataFrame)
         assert "close" in data_output.columns
         assert "predicted_state" in model_output.columns
+
+    @pytest.mark.integration
+
 
     def test_get_summary_stats(self):
         """Test pipeline summary statistics."""
@@ -622,6 +661,9 @@ class TestPipelineCore:
         assert "data_shape" in stats
         assert "model_output_shape" in stats
 
+    @pytest.mark.unit
+
+
     def test_pipeline_state_persistence(self):
         """Test pipeline state tracking across updates."""
         data_comp = MockDataComponent()
@@ -653,6 +695,9 @@ class TestPipelineCore:
         # Verify components called again
         assert data_comp.update_count == 2
         assert model_comp.update_count == 2
+
+    @pytest.mark.unit
+
 
     def test_pipeline_string_representation(self):
         """Test pipeline string representation."""
@@ -690,6 +735,9 @@ class TestPipelineCore:
         repr_str = repr(pipeline_with_report)
         assert "Report: MockReportComponent" in repr_str
 
+    @pytest.mark.integration
+
+
     def test_pipeline_serialization_support(self):
         """Test pipeline serialization/deserialization support."""
         import pickle
@@ -722,6 +770,9 @@ class TestPipelineCore:
         # Verify logger was recreated
         assert hasattr(restored_pipeline, "logger")
         assert restored_pipeline.logger is not None
+
+    @pytest.mark.integration
+
 
     def test_multiple_updates_performance(self):
         """Test pipeline performance with multiple updates."""

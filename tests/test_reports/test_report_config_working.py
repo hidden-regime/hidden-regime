@@ -19,6 +19,9 @@ from hidden_regime.utils.exceptions import ConfigurationError
 class TestReportConfigWorking:
     """Working tests for ReportConfig that focus on coverage."""
 
+    @pytest.mark.unit
+
+
     def test_default_initialization(self):
         """Test default initialization."""
         config = ReportConfig()
@@ -40,6 +43,9 @@ class TestReportConfigWorking:
         assert config.llm_provider is None
         assert config.title is None
         assert config.template_style == "professional"
+
+    @pytest.mark.unit
+
 
     def test_custom_initialization(self):
         """Test initialization with custom parameters."""
@@ -75,6 +81,9 @@ class TestReportConfigWorking:
         assert config.title == "Custom Analysis Report"
         assert config.template_style == "minimal"
 
+    @pytest.mark.unit
+
+
     def test_validation_success(self):
         """Test successful validation."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -84,6 +93,9 @@ class TestReportConfigWorking:
 
             # Should not raise any exceptions
             config.validate()
+
+    @pytest.mark.unit
+
 
     def test_validation_output_directory_creation(self):
         """Test output directory creation during validation."""
@@ -97,6 +109,9 @@ class TestReportConfigWorking:
             config = ReportConfig(output_dir=new_dir)
             assert os.path.exists(new_dir)
 
+    @pytest.mark.unit
+
+
     def test_validation_invalid_output_directory(self):
         """Test validation with invalid output directory."""
         # Test that invalid directory raises error during construction
@@ -104,6 +119,9 @@ class TestReportConfigWorking:
             ReportConfig(output_dir="/root/definitely/does/not/exist/and/cannot/create")
 
         assert "Cannot create output directory" in str(exc_info.value)
+
+    @pytest.mark.unit
+
 
     def test_validation_plot_dpi_limits(self):
         """Test validation of plot DPI limits."""
@@ -122,6 +140,9 @@ class TestReportConfigWorking:
         for dpi in valid_dpis:
             config_valid = ReportConfig(plot_dpi=dpi)
             config_valid.validate()  # Should not raise
+
+    @pytest.mark.unit
+
 
     def test_validation_llm_configuration(self):
         """Test validation of LLM configuration."""
@@ -145,6 +166,9 @@ class TestReportConfigWorking:
             )
             config_valid.validate()  # Should not raise
 
+    @pytest.mark.unit
+
+
     def test_create_component(self):
         """Test component creation."""
         config = ReportConfig()
@@ -152,6 +176,9 @@ class TestReportConfigWorking:
 
         assert isinstance(component, MarkdownReportGenerator)
         assert component.config is config
+
+    @pytest.mark.unit
+
 
     def test_get_output_directory(self):
         """Test output directory retrieval."""
@@ -166,6 +193,9 @@ class TestReportConfigWorking:
 
         assert output_dir == tempfile.gettempdir()
 
+    @pytest.mark.unit
+
+
     def test_get_plot_filename(self):
         """Test plot filename generation."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -175,6 +205,9 @@ class TestReportConfigWorking:
             expected_filename = os.path.join(temp_dir, "test_plot.svg")
 
             assert filename == expected_filename
+
+    @pytest.mark.unit
+
 
     def test_get_report_filename(self):
         """Test report filename generation."""
@@ -198,6 +231,9 @@ class TestReportConfigWorking:
 
                 assert filename == expected_filename
 
+    @pytest.mark.unit
+
+
     def test_create_minimal_config(self):
         """Test creation of minimal configuration."""
         config = ReportConfig.create_minimal()
@@ -214,6 +250,9 @@ class TestReportConfigWorking:
 
         # Should validate successfully
         config.validate()
+
+    @pytest.mark.unit
+
 
     def test_create_comprehensive_config(self):
         """Test creation of comprehensive configuration."""
@@ -235,6 +274,9 @@ class TestReportConfigWorking:
         # Should validate successfully
         config.validate()
 
+    @pytest.mark.unit
+
+
     def test_create_presentation_config(self):
         """Test creation of presentation configuration."""
         config = ReportConfig.create_presentation()
@@ -254,6 +296,9 @@ class TestReportConfigWorking:
         # Should validate successfully
         config.validate()
 
+    @pytest.mark.unit
+
+
     def test_all_output_formats(self):
         """Test all supported output formats."""
         formats = ["markdown", "html", "pdf", "json"]
@@ -267,6 +312,9 @@ class TestReportConfigWorking:
                 config_with_dir = ReportConfig(output_format=fmt, output_dir=temp_dir)
                 filename = config_with_dir.get_report_filename()
                 assert filename.endswith(f".{fmt}" if fmt != "markdown" else ".md")
+
+    @pytest.mark.unit
+
 
     def test_all_plot_formats(self):
         """Test all supported plot formats."""
@@ -282,6 +330,9 @@ class TestReportConfigWorking:
                 filename = config_with_dir.get_plot_filename("test")
                 assert filename.endswith(f".{fmt}")
 
+    @pytest.mark.unit
+
+
     def test_all_template_styles(self):
         """Test all supported template styles."""
         styles = ["professional", "academic", "minimal"]
@@ -295,6 +346,9 @@ class TestReportConfigWorking:
 
 class TestReportConfigCoverage:
     """Additional tests to improve code coverage."""
+
+    @pytest.mark.unit
+
 
     def test_edge_case_configurations(self):
         """Test edge case configurations."""
@@ -330,6 +384,9 @@ class TestReportConfigCoverage:
         enabled_config = ReportConfig(**enabled_params)
         enabled_config.validate()  # Should be valid
 
+    @pytest.mark.unit
+
+
     def test_filename_generation_edge_cases(self):
         """Test filename generation with edge cases."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -352,6 +409,9 @@ class TestReportConfigCoverage:
             assert "plot_with_underscores" in plot_filename
             assert plot_filename.endswith(".png")
 
+    @pytest.mark.unit
+
+
     def test_config_inheritance(self):
         """Test that ReportConfig properly inherits from BaseConfig."""
         config = ReportConfig()
@@ -362,6 +422,9 @@ class TestReportConfigCoverage:
 
         # Should be able to call parent validation
         config.validate()
+
+    @pytest.mark.unit
+
 
     def test_configuration_combinations(self):
         """Test various configuration combinations."""
@@ -406,6 +469,9 @@ class TestReportConfigCoverage:
         assert presentation_config.output_format == "html"
         assert presentation_config.plot_format == "svg"
 
+    @pytest.mark.unit
+
+
     def test_directory_creation_permissions(self):
         """Test directory creation under different scenarios."""
         # Test creating directory in temp location (should work)
@@ -426,6 +492,9 @@ class TestReportConfigCoverage:
         # Clean up
         os.rmdir(test_dir)
 
+    @pytest.mark.integration
+
+
     def test_component_creation_integration(self):
         """Test integration between config and component creation."""
         # Test that created component receives the configuration
@@ -442,6 +511,9 @@ class TestReportConfigCoverage:
         assert component.config.title == "Integration Test Report"
         assert component.config.template_style == "academic"
         assert component.config.include_trading_signals == True
+
+    @pytest.mark.integration
+
 
     def test_comprehensive_workflow(self):
         """Test comprehensive configuration workflow."""

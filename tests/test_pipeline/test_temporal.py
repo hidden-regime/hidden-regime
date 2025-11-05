@@ -42,6 +42,9 @@ class TestTemporalDataStub:
             index=dates,
         )
 
+    @pytest.mark.unit
+
+
     def test_temporal_data_stub_initialization(self):
         """Test TemporalDataStub initialization."""
         data = self.create_sample_data(50)
@@ -53,6 +56,9 @@ class TestTemporalDataStub:
 
         # Should be a copy, not the same object
         assert stub.filtered_data is not data
+
+    @pytest.mark.integration
+
 
     def test_get_all_data_returns_copy(self):
         """Test that get_all_data returns a copy of filtered data."""
@@ -67,6 +73,9 @@ class TestTemporalDataStub:
         assert result1 is not result2
         assert result1 is not stub.filtered_data
 
+    @pytest.mark.integration
+
+
     def test_update_ignores_current_date(self):
         """Test that update method ignores current_date parameter."""
         data = self.create_sample_data(40)
@@ -79,6 +88,9 @@ class TestTemporalDataStub:
 
         pd.testing.assert_frame_equal(result1, result2)
         pd.testing.assert_frame_equal(result2, result3)
+
+    @pytest.mark.integration
+
 
     def test_temporal_data_isolation(self):
         """Test that data stub prevents access to future data."""
@@ -97,6 +109,9 @@ class TestTemporalDataStub:
         # Should not have access to future data
         future_dates = full_data.iloc[50:].index
         assert not any(date in result.index for date in future_dates)
+
+    @pytest.mark.integration
+
 
     def test_plot_functionality(self):
         """Test plotting functionality."""
@@ -138,6 +153,9 @@ class TestTemporalController:
             index=dates,
         )
 
+    @pytest.mark.unit
+
+
     def test_temporal_controller_initialization(self):
         """Test TemporalController initialization."""
         pipeline = self.create_mock_pipeline()
@@ -151,6 +169,9 @@ class TestTemporalController:
         assert controller.access_log == []
         assert controller.original_data is None
 
+    @pytest.mark.unit
+
+
     def test_temporal_controller_invalid_index(self):
         """Test TemporalController with invalid index."""
         pipeline = self.create_mock_pipeline()
@@ -162,6 +183,9 @@ class TestTemporalController:
 
         with pytest.raises(ValueError, match="Dataset must have DatetimeIndex"):
             TemporalController(pipeline, invalid_dataset)
+
+    @pytest.mark.integration
+
 
     def test_update_as_of_date(self):
         """Test updating as of a specific date."""
@@ -186,6 +210,9 @@ class TestTemporalController:
         # Should return the pipeline result
         assert result == "Analysis Result"
 
+    @pytest.mark.integration
+
+
     def test_update_as_of_date_no_data(self):
         """Test updating as of date with no available data."""
         pipeline = self.create_mock_pipeline()
@@ -198,6 +225,9 @@ class TestTemporalController:
 
         with pytest.raises(ValueError, match="No data available up to"):
             controller.update_as_of(early_date)
+
+    @pytest.mark.integration
+
 
     def test_step_through_time_daily(self):
         """Test stepping through time with daily frequency."""
@@ -224,6 +254,9 @@ class TestTemporalController:
         # Should have multiple access log entries
         assert len(controller.access_log) == len(results)
 
+    @pytest.mark.integration
+
+
     def test_step_through_time_weekly(self):
         """Test stepping through time with weekly frequency."""
         pipeline = self.create_mock_pipeline()
@@ -247,6 +280,9 @@ class TestTemporalController:
 
         assert len(results) <= len(daily_results)
 
+    @pytest.mark.integration
+
+
     def test_temporal_isolation_enforcement(self):
         """Test that temporal isolation prevents data leakage."""
         pipeline = self.create_mock_pipeline()
@@ -269,6 +305,9 @@ class TestTemporalController:
         assert log_entry["data_end"] <= pd.to_datetime(early_date)
         assert log_entry["num_observations"] < len(dataset)
 
+    @pytest.mark.integration
+
+
     def test_data_component_restoration(self):
         """Test that original data component is restored after updates."""
         pipeline = self.create_mock_pipeline()
@@ -283,6 +322,9 @@ class TestTemporalController:
         # Data component should be restored
         assert pipeline.data is original_data
         assert controller.original_data is not None
+
+    @pytest.mark.e2e
+
 
     def test_audit_trail_completeness(self):
         """Test that complete audit trail is maintained."""
@@ -312,6 +354,9 @@ class TestTemporalController:
             assert log_entry["as_of_date"] == dates[i]
             assert log_entry["total_dataset_size"] == len(dataset)
 
+    @pytest.mark.integration
+
+
     def test_exception_handling_with_restoration(self):
         """Test that data component is restored even if pipeline update fails."""
         pipeline = self.create_mock_pipeline()
@@ -330,6 +375,9 @@ class TestTemporalController:
         # Data component should still be restored
         assert pipeline.data is original_data
 
+    @pytest.mark.integration
+
+
     def test_chronological_ordering(self):
         """Test that dataset is sorted chronologically."""
         pipeline = self.create_mock_pipeline()
@@ -344,6 +392,9 @@ class TestTemporalController:
 
         # Dataset should be sorted in controller
         assert controller.full_dataset.index.is_monotonic_increasing
+
+    @pytest.mark.integration
+
 
     def test_performance_with_large_dataset(self):
         """Test performance with larger dataset."""
@@ -367,6 +418,9 @@ class TestTemporalController:
         # Should complete in reasonable time
         assert end_time - start_time < 10.0  # Less than 10 seconds
         assert len(results) > 0
+
+    @pytest.mark.integration
+
 
     def test_data_coverage_calculation(self):
         """Test data coverage calculation in audit log."""

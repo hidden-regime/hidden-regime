@@ -63,6 +63,10 @@ visualization = [
     "plotly>=5.0.0",
     "Pillow>=9.0.0",
 ]
+mcp = [
+    "fastmcp>=2.0.0",
+    "pydantic>=2.0.0",
+]
 dev = [
     "pytest>=8.4.2",
     "pytest-cov>=7.0.0",
@@ -87,7 +91,7 @@ docs = [
     "sphinx-autodoc-typehints>=3.2.0",
 ]
 all = [
-    "hidden-regime[visualization,dev,docs]",
+    "hidden-regime[visualization,mcp,dev,docs]",
 ]
 
 [project.urls]
@@ -102,9 +106,10 @@ Changelog = "https://github.com/hidden-regime/hidden-regime/blob/main/CHANGELOG.
 
 [project.scripts]
 hidden-regime = "hidden_regime.cli:main"
+hidden-regime-mcp = "hidden_regime_mcp.server:main"
 
 [tool.setuptools]
-packages = ["hidden_regime", "hidden_regime.config", "hidden_regime.data", "hidden_regime.models", "hidden_regime.utils", "hidden_regime.visualization"]
+packages = ["hidden_regime", "hidden_regime.config", "hidden_regime.data", "hidden_regime.models", "hidden_regime.utils", "hidden_regime.visualization", "hidden_regime_mcp"]
 include-package-data = true
 
 [tool.setuptools.dynamic]
@@ -231,12 +236,15 @@ asyncio_mode = "auto"
 markers = [
     "unit: Unit tests (fast, isolated)",
     "integration: Integration tests (slower, requires components)",
+    "e2e: End-to-end tests (slowest, full system)",
+    "fast: Fast tests (automatically added to unit tests)",
     "performance: Performance and benchmark tests (slow)",
     "slow: Slow running tests",
     "network: Tests that require network access",
     "models: Tests related to HMM models",
     "data: Tests related to data loading and processing",
     "asyncio: Asynchronous tests requiring asyncio support",
+    "property: Property-based tests using Hypothesis",
 ]
 filterwarnings = [
     "ignore::UserWarning:yfinance.*",

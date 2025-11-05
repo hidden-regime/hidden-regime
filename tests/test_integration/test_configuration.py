@@ -23,6 +23,7 @@ from hidden_regime.utils.exceptions import ConfigurationError
 class TestConfigurationValidation:
     """Test configuration validation for all config classes."""
 
+    @pytest.mark.unit
     def test_hmm_config_validation_valid(self):
         """Test valid HMM configuration passes validation."""
         config = HMMConfig(
@@ -42,6 +43,7 @@ class TestConfigurationValidation:
         assert config.max_iterations == 100
         assert config.tolerance == 1e-6
 
+    @pytest.mark.unit
     def test_hmm_config_validation_invalid_n_states(self):
         """Test invalid n_states raises ConfigurationError."""
         with pytest.raises(ConfigurationError, match="n_states must be at least 2"):
@@ -52,6 +54,7 @@ class TestConfigurationValidation:
             config = HMMConfig(n_states=15)
             config.validate()
 
+    @pytest.mark.unit
     def test_hmm_config_validation_invalid_tolerance(self):
         """Test invalid tolerance raises ConfigurationError."""
         with pytest.raises(ConfigurationError, match="tolerance must be positive"):
@@ -62,6 +65,7 @@ class TestConfigurationValidation:
             config = HMMConfig(tolerance=0.0)
             config.validate()
 
+    @pytest.mark.unit
     def test_hmm_config_validation_invalid_forgetting_factor(self):
         """Test invalid forgetting factor raises ConfigurationError."""
         with pytest.raises(
@@ -76,6 +80,7 @@ class TestConfigurationValidation:
             config = HMMConfig(forgetting_factor=1.5)
             config.validate()
 
+    @pytest.mark.unit
     def test_hmm_config_validation_invalid_adaptation_rate(self):
         """Test invalid adaptation rate raises ConfigurationError."""
         with pytest.raises(
@@ -90,6 +95,7 @@ class TestConfigurationValidation:
             config = HMMConfig(adaptation_rate=0.8)
             config.validate()
 
+    @pytest.mark.unit
     def test_financial_data_config_validation_valid(self):
         """Test valid financial data configuration."""
         config = FinancialDataConfig(
@@ -108,12 +114,14 @@ class TestConfigurationValidation:
         assert config.start_date == "2023-01-01"
         assert config.end_date == "2023-12-31"
 
+    @pytest.mark.unit
     def test_financial_data_config_validation_empty_ticker(self):
         """Test empty ticker raises validation error."""
         with pytest.raises((ConfigurationError, ValueError), match="ticker|empty"):
             config = FinancialDataConfig(ticker="")
             config.validate()
 
+    @pytest.mark.unit
     def test_financial_observation_config_validation(self):
         """Test financial observation configuration validation."""
         config = FinancialObservationConfig.create_default_financial()
@@ -126,6 +134,7 @@ class TestConfigurationValidation:
         assert hasattr(config, "price_column")
         assert hasattr(config, "volume_column")
 
+    @pytest.mark.unit
     def test_financial_analysis_config_validation(self):
         """Test financial analysis configuration validation."""
         config = FinancialAnalysisConfig.create_comprehensive_financial()
@@ -136,6 +145,7 @@ class TestConfigurationValidation:
         # Verify n_states is set correctly
         assert hasattr(config, "n_states")
 
+    @pytest.mark.unit
     def test_report_config_validation(self):
         """Test report configuration validation."""
         config = ReportConfig.create_comprehensive()
@@ -152,6 +162,7 @@ class TestConfigurationValidation:
 class TestConfigurationPresets:
     """Test configuration preset creation and properties."""
 
+    @pytest.mark.unit
     def test_hmm_config_conservative_preset(self):
         """Test conservative HMM preset has expected properties."""
         config = HMMConfig.create_conservative()
@@ -164,6 +175,7 @@ class TestConfigurationPresets:
         assert config.enable_change_detection == False
         assert config.max_iterations == 200
 
+    @pytest.mark.unit
     def test_hmm_config_aggressive_preset(self):
         """Test aggressive HMM preset has expected properties."""
         config = HMMConfig.create_aggressive()
@@ -177,6 +189,7 @@ class TestConfigurationPresets:
         assert config.change_detection_threshold == 2.0
         assert config.max_iterations == 50
 
+    @pytest.mark.unit
     def test_hmm_config_balanced_preset(self):
         """Test balanced HMM preset has expected properties."""
         config = HMMConfig.create_balanced()
@@ -189,6 +202,7 @@ class TestConfigurationPresets:
         assert config.enable_change_detection == True
         assert config.max_iterations == 100
 
+    @pytest.mark.unit
     def test_preset_configurations_all_valid(self):
         """Test all preset configurations pass validation."""
         presets = [
@@ -201,6 +215,7 @@ class TestConfigurationPresets:
             # Should not raise exception
             preset.validate()
 
+    @pytest.mark.unit
     def test_financial_observation_config_presets(self):
         """Test financial observation configuration presets."""
         config = FinancialObservationConfig.create_default_financial()
@@ -213,6 +228,7 @@ class TestConfigurationPresets:
         assert hasattr(config, "price_column")
         assert config.price_column == "close"
 
+    @pytest.mark.unit
     def test_financial_analysis_config_presets(self):
         """Test financial analysis configuration presets."""
         config = FinancialAnalysisConfig.create_comprehensive_financial()
@@ -227,6 +243,7 @@ class TestConfigurationPresets:
 class TestConfigurationSerialization:
     """Test configuration serialization and deserialization."""
 
+    @pytest.mark.unit
     def test_hmm_config_to_dict_and_back(self):
         """Test HMM config serialization to dict and back."""
         original_config = HMMConfig.create_aggressive()
@@ -245,6 +262,7 @@ class TestConfigurationSerialization:
         assert restored_config.tolerance == original_config.tolerance
         assert restored_config.adaptation_rate == original_config.adaptation_rate
 
+    @pytest.mark.unit
     def test_hmm_config_json_serialization(self):
         """Test HMM config JSON serialization."""
         original_config = HMMConfig.create_balanced()
@@ -265,6 +283,7 @@ class TestConfigurationSerialization:
         assert restored_config.n_states == original_config.n_states
         assert restored_config.tolerance == original_config.tolerance
 
+    @pytest.mark.unit
     def test_financial_data_config_serialization(self):
         """Test financial data config serialization."""
         original_config = FinancialDataConfig(
@@ -284,6 +303,7 @@ class TestConfigurationSerialization:
         assert restored_config.start_date == original_config.start_date
         assert restored_config.end_date == original_config.end_date
 
+    @pytest.mark.unit
     def test_config_file_save_and_load(self):
         """Test saving and loading config to/from file."""
         original_config = HMMConfig.create_conservative()
@@ -307,6 +327,7 @@ class TestConfigurationSerialization:
 class TestConfigurationIntegration:
     """Test configuration integration with pipeline creation."""
 
+    @pytest.mark.integration
     def test_pipeline_creation_with_custom_configs(self):
         """Test pipeline creation using custom configuration objects."""
         # Create custom configurations
@@ -338,6 +359,7 @@ class TestConfigurationIntegration:
         assert pipeline.model.config.n_states == 4
         assert pipeline.model.config.tolerance == 1e-4  # aggressive preset
 
+    @pytest.mark.integration
     def test_configuration_error_propagation_in_pipeline(self):
         """Test that configuration errors are caught during config creation."""
         # Test that invalid config creation raises error immediately
@@ -354,6 +376,7 @@ class TestConfigurationIntegration:
         )
         assert pipeline is not None
 
+    @pytest.mark.integration
     def test_factory_function_validation(self):
         """Test that factory functions validate parameters."""
         # Test invalid n_states
@@ -370,6 +393,7 @@ class TestConfigurationIntegration:
 class TestConfigurationCaching:
     """Test configuration caching and cache key generation."""
 
+    @pytest.mark.unit
     def test_hmm_config_cache_key_generation(self):
         """Test HMM config generates consistent cache keys."""
         config1 = HMMConfig.create_balanced()
@@ -385,6 +409,7 @@ class TestConfigurationCaching:
         key3 = config3.get_cache_key()
         assert key1 != key3
 
+    @pytest.mark.unit
     def test_cache_key_includes_relevant_parameters(self):
         """Test cache key changes when relevant parameters change."""
         config = HMMConfig.create_balanced()

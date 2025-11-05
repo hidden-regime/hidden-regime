@@ -45,6 +45,7 @@ def create_mock_model_component(n_states=3):
 class TestFinancialAnalysisWorking:
     """Working tests for FinancialAnalysis that focus on coverage."""
 
+    @pytest.mark.unit
     def test_initialization(self):
         """Test basic initialization."""
         config = FinancialAnalysisConfig()
@@ -58,6 +59,7 @@ class TestFinancialAnalysisWorking:
         assert analyzer._regime_stats_cache == {}
         assert analyzer.performance_analyzer is not None
 
+    @pytest.mark.unit
     def test_config_validation_integration(self):
         """Test that configuration validation works."""
         # Valid configs
@@ -79,6 +81,7 @@ class TestFinancialAnalysisWorking:
         assert analyzer2.config.n_states == 4
         assert len(analyzer2.config.regime_labels) == 4
 
+    @pytest.mark.unit
     def test_config_regime_labels_validation(self):
         """Test regime labels validation."""
         # Valid regime labels
@@ -95,6 +98,7 @@ class TestFinancialAnalysisWorking:
             )
             invalid_config.validate()
 
+    @pytest.mark.integration
     def test_basic_analysis_functionality(self):
         """Test basic analysis functionality."""
         config = FinancialAnalysisConfig()
@@ -132,6 +136,7 @@ class TestFinancialAnalysisWorking:
         assert "confidence" in analysis.columns
         assert analyzer._last_model_output is not None
 
+    @pytest.mark.integration
     def test_analysis_with_raw_data(self):
         """Test analysis with raw price data."""
         config = FinancialAnalysisConfig(
@@ -175,6 +180,7 @@ class TestFinancialAnalysisWorking:
         assert len(analysis) == 50
         assert analyzer._last_raw_data is not None
 
+    @pytest.mark.unit
     def test_error_handling_empty_model_output(self):
         """Test error handling for empty model output."""
         config = FinancialAnalysisConfig()
@@ -187,6 +193,7 @@ class TestFinancialAnalysisWorking:
 
         assert "empty" in str(exc_info.value).lower()
 
+    @pytest.mark.unit
     def test_error_handling_missing_required_columns(self):
         """Test error handling for missing required columns."""
         config = FinancialAnalysisConfig()
@@ -209,6 +216,7 @@ class TestFinancialAnalysisWorking:
         assert "confidence" in str(exc_info.value).lower()
         assert "missing" in str(exc_info.value).lower()
 
+    @pytest.mark.integration
     def test_plot_method_no_analysis(self):
         """Test plot method when no analysis performed."""
         config = FinancialAnalysisConfig()
@@ -222,6 +230,7 @@ class TestFinancialAnalysisWorking:
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
 
+    @pytest.mark.integration
     def test_plot_method_with_analysis(self):
         """Test plot method with analysis results."""
         config = FinancialAnalysisConfig()
@@ -251,6 +260,7 @@ class TestFinancialAnalysisWorking:
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
 
+    @pytest.mark.integration
     def test_regime_interpretation_functionality(self):
         """Test regime interpretation functionality."""
         config = FinancialAnalysisConfig(regime_labels=["Bear", "Sideways", "Bull"])
@@ -275,6 +285,7 @@ class TestFinancialAnalysisWorking:
         assert "confidence" in analysis.columns
         # May include additional interpretation columns depending on implementation
 
+    @pytest.mark.integration
     def test_performance_metrics_calculation(self):
         """Test performance metrics calculation."""
         config = FinancialAnalysisConfig(
@@ -311,6 +322,7 @@ class TestFinancialAnalysisWorking:
         assert isinstance(analysis, pd.DataFrame)
         assert len(analysis) == 100
 
+    @pytest.mark.unit
     def test_indicator_availability_handling(self):
         """Test handling of indicator availability."""
         config = FinancialAnalysisConfig(
@@ -324,6 +336,7 @@ class TestFinancialAnalysisWorking:
         assert hasattr(analyzer, "indicator_comparator")
         assert hasattr(analyzer, "_indicators_cache")
 
+    @pytest.mark.integration
     def test_various_configuration_options(self):
         """Test analysis with various configuration options."""
         configs_to_test = [
@@ -378,6 +391,7 @@ class TestFinancialAnalysisWorking:
 class TestFinancialAnalysisCoverage:
     """Additional tests to improve code coverage."""
 
+    @pytest.mark.unit
     def test_config_indicator_validation(self):
         """Test indicator validation in configuration."""
         # Valid indicators
@@ -393,6 +407,7 @@ class TestFinancialAnalysisCoverage:
             )
             invalid_config.validate()
 
+    @pytest.mark.unit
     def test_position_sizing_method_validation(self):
         """Test position sizing method validation."""
         # Valid methods
@@ -407,6 +422,7 @@ class TestFinancialAnalysisCoverage:
             config = FinancialAnalysisConfig(position_sizing_method=method)
             config.validate()  # Should not raise
 
+    @pytest.mark.integration
     def test_edge_case_regime_states(self):
         """Test analysis with edge case regime states."""
         config = FinancialAnalysisConfig(n_states=5)
@@ -431,6 +447,7 @@ class TestFinancialAnalysisCoverage:
         assert isinstance(analysis, pd.DataFrame)
         assert analysis["predicted_state"].nunique() == 5
 
+    @pytest.mark.integration
     def test_low_confidence_scenarios(self):
         """Test analysis with low confidence scenarios."""
         config = FinancialAnalysisConfig()
@@ -454,6 +471,7 @@ class TestFinancialAnalysisCoverage:
         assert isinstance(analysis, pd.DataFrame)
         assert (analysis["confidence"] < 0.7).any()  # Confirms low confidence present
 
+    @pytest.mark.integration
     def test_analysis_information_retrieval(self):
         """Test information retrieval methods."""
         config = FinancialAnalysisConfig()
@@ -481,6 +499,7 @@ class TestFinancialAnalysisCoverage:
         assert analyzer._last_model_output is not None
         assert len(analyzer._last_model_output) == 20
 
+    @pytest.mark.e2e
     def test_complex_analysis_workflow(self):
         """Test complex analysis workflow with multiple features."""
         config = FinancialAnalysisConfig(

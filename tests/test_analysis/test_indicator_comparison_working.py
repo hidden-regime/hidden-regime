@@ -24,6 +24,7 @@ from hidden_regime.utils.exceptions import ValidationError
 class TestIndicatorPerformanceComparatorWorking:
     """Working tests for IndicatorPerformanceComparator that focus on coverage."""
 
+    @pytest.mark.unit
     def test_initialization(self):
         """Test basic initialization."""
         comparator = IndicatorPerformanceComparator()
@@ -39,6 +40,7 @@ class TestIndicatorPerformanceComparatorWorking:
         comparator_custom = IndicatorPerformanceComparator(config)
         assert comparator_custom.config.n_states == 4
 
+    @pytest.mark.unit
     def test_initialization_with_custom_config(self):
         """Test initialization with custom configuration."""
         config = FinancialAnalysisConfig(
@@ -50,6 +52,7 @@ class TestIndicatorPerformanceComparatorWorking:
         assert "rsi" in comparator.config.indicator_comparisons
         assert "macd" in comparator.config.indicator_comparisons
 
+    @pytest.mark.unit
     def test_agreement_thresholds_structure(self):
         """Test agreement thresholds are properly configured."""
         comparator = IndicatorPerformanceComparator()
@@ -63,6 +66,7 @@ class TestIndicatorPerformanceComparatorWorking:
         thresholds = list(comparator.agreement_thresholds.values())
         assert thresholds == sorted(thresholds, reverse=True)
 
+    @pytest.mark.unit
     def test_indicator_params_structure(self):
         """Test indicator parameters are properly configured."""
         comparator = IndicatorPerformanceComparator()
@@ -79,6 +83,7 @@ class TestIndicatorPerformanceComparatorWorking:
             assert indicator in comparator.indicator_params
             assert isinstance(comparator.indicator_params[indicator], dict)
 
+    @pytest.mark.integration
     def test_basic_comparison_functionality(self):
         """Test basic comparison functionality."""
         comparator = IndicatorPerformanceComparator()
@@ -105,6 +110,7 @@ class TestIndicatorPerformanceComparatorWorking:
         assert "regime_indicator_matrix" in comparison
         assert "statistical_tests" in comparison
 
+    @pytest.mark.integration
     def test_comparison_with_raw_data(self):
         """Test comparison with raw OHLCV data."""
         comparator = IndicatorPerformanceComparator()
@@ -142,6 +148,7 @@ class TestIndicatorPerformanceComparatorWorking:
         assert "indicator_analysis" in comparison
         # May include calculated indicators depending on implementation success
 
+    @pytest.mark.unit
     def test_error_handling_empty_analysis_results(self):
         """Test error handling for empty analysis results."""
         comparator = IndicatorPerformanceComparator()
@@ -153,6 +160,7 @@ class TestIndicatorPerformanceComparatorWorking:
 
         assert "empty" in str(exc_info.value).lower()
 
+    @pytest.mark.unit
     def test_error_handling_missing_predicted_state(self):
         """Test error handling for missing predicted_state column."""
         comparator = IndicatorPerformanceComparator()
@@ -171,6 +179,7 @@ class TestIndicatorPerformanceComparatorWorking:
 
         assert "predicted_state" in str(exc_info.value).lower()
 
+    @pytest.mark.unit
     def test_rsi_calculation(self):
         """Test RSI calculation functionality."""
         comparator = IndicatorPerformanceComparator()
@@ -194,6 +203,7 @@ class TestIndicatorPerformanceComparatorWorking:
                 assert (rsi_values >= 0).all()
                 assert (rsi_values <= 100).all()
 
+    @pytest.mark.unit
     def test_macd_calculation(self):
         """Test MACD calculation functionality."""
         comparator = IndicatorPerformanceComparator()
@@ -217,6 +227,7 @@ class TestIndicatorPerformanceComparatorWorking:
             for col in expected_columns:
                 assert col in macd_data.columns
 
+    @pytest.mark.unit
     def test_bollinger_bands_calculation(self):
         """Test Bollinger Bands calculation functionality."""
         comparator = IndicatorPerformanceComparator()
@@ -247,6 +258,7 @@ class TestIndicatorPerformanceComparatorWorking:
                 assert (non_nan_data["upper_band"] >= non_nan_data["middle_band"]).all()
                 assert (non_nan_data["middle_band"] >= non_nan_data["lower_band"]).all()
 
+    @pytest.mark.unit
     def test_moving_average_calculation(self):
         """Test moving average calculation functionality."""
         comparator = IndicatorPerformanceComparator()
@@ -269,6 +281,7 @@ class TestIndicatorPerformanceComparatorWorking:
             for col in expected_columns:
                 assert col in ma_data.columns
 
+    @pytest.mark.unit
     def test_stochastic_calculation(self):
         """Test Stochastic oscillator calculation functionality."""
         comparator = IndicatorPerformanceComparator()
@@ -299,6 +312,7 @@ class TestIndicatorPerformanceComparatorWorking:
                 assert (d_values >= 0).all()
                 assert (d_values <= 100).all()
 
+    @pytest.mark.unit
     def test_williams_r_calculation(self):
         """Test Williams %R calculation functionality."""
         comparator = IndicatorPerformanceComparator()
@@ -324,6 +338,7 @@ class TestIndicatorPerformanceComparatorWorking:
                 assert (wr_values >= -100).all()
                 assert (wr_values <= 0).all()
 
+    @pytest.mark.unit
     def test_indicator_calculation_error_handling(self):
         """Test error handling in indicator calculations."""
         comparator = IndicatorPerformanceComparator()
@@ -347,6 +362,7 @@ class TestIndicatorPerformanceComparatorWorking:
         stoch_result = comparator._calculate_stochastic_detailed(incomplete_data, {})
         assert stoch_result is None  # Should return None for missing required columns
 
+    @pytest.mark.integration
     def test_summary_generation(self):
         """Test comparison summary generation."""
         comparator = IndicatorPerformanceComparator()
@@ -374,6 +390,7 @@ class TestIndicatorPerformanceComparatorWorking:
         assert summary["indicators_requested"] == indicators
         assert summary["regime_summary"]["n_states"] == 3
 
+    @pytest.mark.unit
     def test_correlation_metrics_calculation(self):
         """Test correlation metrics calculation."""
         comparator = IndicatorPerformanceComparator()
@@ -404,6 +421,7 @@ class TestIndicatorPerformanceComparatorWorking:
             assert key in corr_metrics
             assert isinstance(corr_metrics[key], float)
 
+    @pytest.mark.unit
     def test_classification_metrics_calculation(self):
         """Test classification metrics calculation."""
         comparator = IndicatorPerformanceComparator()
@@ -434,6 +452,7 @@ class TestIndicatorPerformanceComparatorWorking:
             assert isinstance(class_metrics[key], float)
             assert 0 <= class_metrics[key] <= 1
 
+    @pytest.mark.integration
     def test_confidence_weighted_agreement(self):
         """Test confidence-weighted agreement calculation."""
         comparator = IndicatorPerformanceComparator()
@@ -458,6 +477,7 @@ class TestIndicatorPerformanceComparatorWorking:
             assert key in weighted_metrics
             assert isinstance(weighted_metrics[key], float)
 
+    @pytest.mark.integration
     def test_temporal_agreement_analysis(self):
         """Test temporal agreement analysis."""
         comparator = IndicatorPerformanceComparator()
@@ -485,6 +505,7 @@ class TestIndicatorPerformanceComparatorWorking:
 
         assert temporal_metrics["periods_analyzed"] == 60
 
+    @pytest.mark.unit
     def test_performance_rating(self):
         """Test performance rating calculation."""
         comparator = IndicatorPerformanceComparator()
@@ -512,6 +533,7 @@ class TestIndicatorPerformanceComparatorWorking:
         assert rating["rating"] in ["excellent", "good", "moderate", "poor"]
         assert 0 <= rating["composite_score"] <= 1
 
+    @pytest.mark.integration
     def test_plot_functionality(self):
         """Test plot generation functionality."""
         comparator = IndicatorPerformanceComparator()
@@ -540,6 +562,7 @@ class TestIndicatorPerformanceComparatorWorking:
 class TestIndicatorPerformanceComparatorCoverage:
     """Additional tests to improve code coverage."""
 
+    @pytest.mark.integration
     def test_various_indicator_combinations(self):
         """Test analysis with various indicator combinations."""
         comparator = IndicatorPerformanceComparator()
@@ -569,6 +592,7 @@ class TestIndicatorPerformanceComparatorCoverage:
             assert "summary" in comparison
             assert comparison["summary"]["indicators_requested"] == indicators
 
+    @pytest.mark.integration
     def test_edge_case_data_patterns(self):
         """Test with edge case data patterns."""
         comparator = IndicatorPerformanceComparator()
@@ -588,6 +612,7 @@ class TestIndicatorPerformanceComparatorCoverage:
         assert isinstance(comparison, dict)
         assert comparison["summary"]["regime_summary"]["n_states"] == 1
 
+    @pytest.mark.unit
     def test_insufficient_data_handling(self):
         """Test handling of insufficient data scenarios."""
         comparator = IndicatorPerformanceComparator()
@@ -606,6 +631,7 @@ class TestIndicatorPerformanceComparatorCoverage:
         assert isinstance(comparison, dict)
         assert comparison["summary"]["total_observations"] == 5
 
+    @pytest.mark.integration
     def test_missing_confidence_column(self):
         """Test analysis when confidence column is missing."""
         comparator = IndicatorPerformanceComparator()
@@ -624,6 +650,7 @@ class TestIndicatorPerformanceComparatorCoverage:
         assert isinstance(comparison, dict)
         assert "summary" in comparison
 
+    @pytest.mark.unit
     def test_error_handling_in_calculations(self):
         """Test error handling in various calculations."""
         comparator = IndicatorPerformanceComparator()
@@ -644,6 +671,7 @@ class TestIndicatorPerformanceComparatorCoverage:
         comparison = comparator.compare_regime_vs_indicators(problem_data)
         assert isinstance(comparison, dict)
 
+    @pytest.mark.unit
     def test_unknown_indicator_handling(self):
         """Test handling of unknown indicators."""
         comparator = IndicatorPerformanceComparator()
@@ -665,6 +693,7 @@ class TestIndicatorPerformanceComparatorCoverage:
         assert isinstance(comparison, dict)
         assert "summary" in comparison
 
+    @pytest.mark.integration
     def test_signal_strength_analysis_edge_cases(self):
         """Test signal strength analysis with edge cases."""
         comparator = IndicatorPerformanceComparator()
@@ -687,6 +716,7 @@ class TestIndicatorPerformanceComparatorCoverage:
         )
         assert isinstance(strength_analysis_extreme, dict)
 
+    @pytest.mark.e2e
     def test_comprehensive_workflow(self):
         """Test comprehensive analysis workflow."""
         comparator = IndicatorPerformanceComparator()

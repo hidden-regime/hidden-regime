@@ -44,6 +44,7 @@ def mock_yfinance_data():
 class TestFactoryFunctions:
     """Test high-level factory functions that users interact with."""
 
+    @pytest.mark.integration
     def test_create_financial_pipeline_basic(self):
         """Test basic financial pipeline creation with minimal parameters."""
         pipeline = hr.create_financial_pipeline("AAPL", n_states=3)
@@ -53,6 +54,7 @@ class TestFactoryFunctions:
         assert pipeline.data.config.ticker == "AAPL"
         assert pipeline.data.config.source == "yfinance"
 
+    @pytest.mark.integration
     def test_create_financial_pipeline_custom_config(self):
         """Test financial pipeline creation with custom configuration."""
         pipeline = hr.create_financial_pipeline(
@@ -69,6 +71,7 @@ class TestFactoryFunctions:
         assert pipeline.model.config.observed_signal == "close_price"
         assert pipeline.model.config.initialization_method == "kmeans"
 
+    @pytest.mark.integration
     def test_create_financial_pipeline_date_range(self):
         """Test financial pipeline creation with specific date range."""
         start_date = "2023-01-01"
@@ -81,6 +84,7 @@ class TestFactoryFunctions:
         assert pipeline.data.config.start_date == start_date
         assert pipeline.data.config.end_date == end_date
 
+    @pytest.mark.integration
     def test_create_hmm_config_presets(self):
         """Test HMM configuration preset creation."""
         conservative = HMMConfig.create_conservative()
@@ -102,6 +106,7 @@ class TestFactoryFunctions:
         assert balanced.adaptation_rate == 0.05
         assert balanced.enable_change_detection == True
 
+    @pytest.mark.integration
     def test_pipeline_with_preset_config(self):
         """Test pipeline creation using preset configurations."""
         # Test using aggressive preset config overrides
@@ -124,6 +129,7 @@ class TestFactoryFunctions:
 class TestUserWorkflows:
     """Test complete user workflows from start to finish."""
 
+    @pytest.mark.e2e
     @patch("yfinance.download")
     def test_complete_analysis_workflow(self, mock_download, mock_yfinance_data):
         """Test complete analysis workflow from pipeline creation to results."""
@@ -157,6 +163,7 @@ class TestUserWorkflows:
         # (exact structure depends on HMM implementation)
         assert hasattr(model_output, "__len__") or hasattr(model_output, "shape")
 
+    @pytest.mark.e2e
     @patch("yfinance.download")
     def test_temporal_analysis_workflow(self, mock_download, mock_yfinance_data):
         """Test temporal analysis workflow for backtesting."""
@@ -213,6 +220,7 @@ class TestUserWorkflows:
             assert isinstance(result["report"], str)
             assert len(result["report"]) > 0
 
+    @pytest.mark.e2e
     @patch("yfinance.download")
     def test_configuration_validation_workflow(self, mock_download, mock_yfinance_data):
         """Test configuration validation during pipeline creation."""
@@ -245,6 +253,7 @@ class TestPipelineIntegration:
         """Create a sample pipeline for testing."""
         return hr.create_financial_pipeline("AAPL", n_states=3, period="6mo")
 
+    @pytest.mark.integration
     @patch("yfinance.download")
     def test_data_loading_integration(
         self, mock_download, sample_pipeline, mock_yfinance_data
@@ -265,6 +274,7 @@ class TestPipelineIntegration:
         assert isinstance(all_data, pd.DataFrame)
         assert len(all_data) == len(data)
 
+    @pytest.mark.integration
     @patch("yfinance.download")
     def test_observation_generation_integration(
         self, mock_download, sample_pipeline, mock_yfinance_data
@@ -308,6 +318,7 @@ class TestPipelineIntegration:
             valid_count = np.sum(~np.isnan(observations))
             assert valid_count > observations.size * 0.5
 
+    @pytest.mark.integration
     @patch("yfinance.download")
     def test_model_training_integration(
         self, mock_download, sample_pipeline, mock_yfinance_data
@@ -342,12 +353,14 @@ class TestPipelineIntegration:
 class TestErrorHandling:
     """Test error handling in factory functions and workflows."""
 
+    @pytest.mark.integration
     def test_invalid_ticker_handling(self):
         """Test handling of invalid ticker symbols."""
         # Test that invalid ticker raises ConfigurationError during pipeline creation
         with pytest.raises(Exception):  # Should raise ConfigurationError
             hr.create_financial_pipeline("INVALID_TICKER", n_states=3)
 
+    @pytest.mark.integration
     def test_insufficient_data_handling(self):
         """Test handling of insufficient data scenarios."""
         with patch("yfinance.download") as mock_download:
@@ -373,6 +386,7 @@ class TestErrorHandling:
             with pytest.raises(Exception):  # Should raise training error
                 pipeline.run()
 
+    @pytest.mark.integration
     def test_configuration_error_propagation(self):
         """Test that configuration errors are properly propagated."""
         # Test configuration validation in factory function

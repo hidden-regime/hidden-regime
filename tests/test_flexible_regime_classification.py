@@ -28,6 +28,9 @@ from hidden_regime.utils.state_mapping import (
 class TestFlexibleRegimeClassification:
     """Test flexible threshold-based regime classification."""
 
+    @pytest.mark.unit
+
+
     def test_threshold_based_classification(self):
         """Test that thresholds correctly classify regimes."""
         test_cases = [
@@ -43,6 +46,9 @@ class TestFlexibleRegimeClassification:
             assert (
                 regime == expected_regime
             ), f"Return {return_pct:.1%} should be {expected_regime}, got {regime}"
+
+    @pytest.mark.unit
+
 
     def test_flexible_state_mapping_no_forced_categories(self):
         """Test that state mapping doesn't force arbitrary categories."""
@@ -67,6 +73,9 @@ class TestFlexibleRegimeClassification:
                 abs(return_pct) <= 0.05
             ), f"State {state_idx} ({regime_name}) has extreme return: {return_pct:.2%}"
 
+    @pytest.mark.unit
+
+
     def test_duplicate_regime_handling(self):
         """Test handling of multiple states in same regime category."""
         # Two bull-type regimes
@@ -82,6 +91,9 @@ class TestFlexibleRegimeClassification:
         assert mapping[0] == "Sideways"
         assert mapping[1] == "Weak Bull"  # Lower return bull
         assert mapping[2] == "Strong Bull"  # Higher return bull
+
+    @pytest.mark.unit
+
 
     def test_variable_state_counts(self):
         """Test that mapping works correctly for different numbers of states."""
@@ -113,6 +125,9 @@ class TestFlexibleRegimeClassification:
         assert "Bull" in mapping_5[2]  # Some type of bull
         assert "Bull" in mapping_5[3]  # Some type of bull
         assert mapping_5[4] == "Euphoric"
+
+    @pytest.mark.integration
+
 
     def test_constrained_kmeans_prevents_extreme_centers(self):
         """Test that constrained kmeans prevents unrealistic regime centers."""
@@ -148,6 +163,9 @@ class TestFlexibleRegimeClassification:
 
         # Highest should be positive but not extreme
         assert sorted_means[-1] >= 0.001 and sorted_means[-1] <= 0.05
+
+    @pytest.mark.integration
+
 
     def test_integration_with_pipeline(self):
         """Test that the new approach works in full pipeline integration."""
@@ -234,6 +252,9 @@ class TestFlexibleRegimeClassification:
                     np.diff(means_pct) >= -0.01
                 ), "States not properly ordered by return"
 
+    @pytest.mark.unit
+
+
     def test_financial_domain_warnings(self):
         """Test that financial domain validation produces appropriate warnings."""
         # Test extreme regime detection
@@ -264,6 +285,9 @@ class TestFlexibleRegimeClassification:
             assert mapping[1] == "Bear"  # -1% daily
             assert mapping[2] == "Sideways"  # 0.1% daily
 
+    @pytest.mark.unit
+
+
     def test_edge_cases(self):
         """Test edge cases and boundary conditions."""
         # All positive returns (growth stock scenario)
@@ -285,6 +309,9 @@ class TestFlexibleRegimeClassification:
         # Should get Crisis, Bear, Bear or similar
         assert "Crisis" in mapping_negative[0] or "Bear" in mapping_negative[0]
         assert "Bear" in mapping_negative[1] or "Bear" in mapping_negative[2]
+
+    @pytest.mark.integration
+
 
     def test_analysis_integration(self):
         """Test that analysis integration uses actual regime characteristics."""

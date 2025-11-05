@@ -19,7 +19,7 @@ from hidden_regime.pipeline.temporal import TemporalController
 class TestRealDataIntegration:
     """Test pipeline functionality with real financial data."""
 
-    @pytest.mark.integration
+    @pytest.mark.e2e
     @pytest.mark.slow
     @pytest.mark.network
     def test_spy_analysis_basic(self):
@@ -63,7 +63,7 @@ class TestRealDataIntegration:
             else:
                 raise
 
-    @pytest.mark.integration
+    @pytest.mark.e2e
     @pytest.mark.slow
     @pytest.mark.network
     def test_multiple_assets_analysis(self):
@@ -112,7 +112,7 @@ class TestRealDataIntegration:
                         reports[i] != reports[j]
                     ), f"Assets {list(results_dict.keys())[i]} and {list(results_dict.keys())[j]} have identical reports"
 
-    @pytest.mark.integration
+    @pytest.mark.e2e
     @pytest.mark.slow
     @pytest.mark.network
     def test_temporal_analysis_real_data(self):
@@ -189,7 +189,7 @@ class TestRealDataIntegration:
             else:
                 raise
 
-    @pytest.mark.integration
+    @pytest.mark.e2e
     @pytest.mark.slow
     @pytest.mark.network
     def test_different_observation_signals(self):
@@ -236,7 +236,7 @@ class TestRealDataIntegration:
                     warnings.warn(f"Signal {signal} failed: {e}")
                     continue
 
-    @pytest.mark.integration
+    @pytest.mark.e2e
     @pytest.mark.slow
     @pytest.mark.network
     def test_hmm_config_presets_real_data(self):
@@ -316,7 +316,7 @@ class TestRealDataIntegration:
 class TestRealDataEdgeCases:
     """Test edge cases and robustness with real data."""
 
-    @pytest.mark.integration
+    @pytest.mark.e2e
     @pytest.mark.slow
     @pytest.mark.network
     def test_volatile_period_analysis(self):
@@ -363,7 +363,7 @@ class TestRealDataEdgeCases:
             else:
                 raise
 
-    @pytest.mark.integration
+    @pytest.mark.e2e
     @pytest.mark.slow
     @pytest.mark.network
     def test_small_cap_vs_large_cap(self):
@@ -416,7 +416,7 @@ class TestRealDataEdgeCases:
             else:
                 raise
 
-    @pytest.mark.integration
+    @pytest.mark.e2e
     @pytest.mark.slow
     @pytest.mark.network
     def test_recent_data_availability(self):

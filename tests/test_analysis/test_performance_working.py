@@ -23,6 +23,7 @@ from hidden_regime.utils.exceptions import ValidationError
 class TestRegimePerformanceAnalyzerWorking:
     """Working tests for RegimePerformanceAnalyzer that focus on coverage."""
 
+    @pytest.mark.unit
     def test_initialization(self):
         """Test basic initialization."""
         analyzer = RegimePerformanceAnalyzer()
@@ -30,6 +31,7 @@ class TestRegimePerformanceAnalyzerWorking:
         assert analyzer.regime_stats_cache == {}
         assert analyzer.transition_stats_cache == {}
 
+    @pytest.mark.integration
     def test_basic_performance_analysis(self):
         """Test basic performance analysis functionality."""
         analyzer = RegimePerformanceAnalyzer()
@@ -56,6 +58,7 @@ class TestRegimePerformanceAnalyzerWorking:
         assert "stability_metrics" in performance_report
         assert "summary" in performance_report
 
+    @pytest.mark.integration
     def test_performance_analysis_with_raw_data(self):
         """Test performance analysis with raw price data."""
         analyzer = RegimePerformanceAnalyzer()
@@ -95,6 +98,7 @@ class TestRegimePerformanceAnalyzerWorking:
         assert "regime_performance" in performance_report
         assert isinstance(performance_report, dict)
 
+    @pytest.mark.integration
     def test_regime_distribution_analysis(self):
         """Test regime distribution analysis."""
         analyzer = RegimePerformanceAnalyzer()
@@ -127,6 +131,7 @@ class TestRegimePerformanceAnalyzerWorking:
         assert abs(distribution["state_percentages"][1] - 44.44) < 0.1
         assert abs(distribution["state_percentages"][2] - 22.22) < 0.1
 
+    @pytest.mark.integration
     def test_transition_analysis(self):
         """Test regime transition analysis."""
         analyzer = RegimePerformanceAnalyzer()
@@ -147,6 +152,7 @@ class TestRegimePerformanceAnalyzerWorking:
         assert isinstance(transition_analysis, dict)
         # May include transition matrix, transition counts, etc.
 
+    @pytest.mark.integration
     def test_duration_analysis(self):
         """Test regime duration analysis."""
         analyzer = RegimePerformanceAnalyzer()
@@ -167,6 +173,7 @@ class TestRegimePerformanceAnalyzerWorking:
         assert isinstance(duration_analysis, dict)
         # Should include average durations, duration distributions, etc.
 
+    @pytest.mark.integration
     def test_confidence_analysis(self):
         """Test confidence metrics analysis."""
         analyzer = RegimePerformanceAnalyzer()
@@ -195,6 +202,7 @@ class TestRegimePerformanceAnalyzerWorking:
         assert isinstance(confidence_analysis, dict)
         # Should include confidence statistics, distributions, etc.
 
+    @pytest.mark.unit
     def test_error_handling_empty_results(self):
         """Test error handling for empty analysis results."""
         analyzer = RegimePerformanceAnalyzer()
@@ -206,6 +214,7 @@ class TestRegimePerformanceAnalyzerWorking:
 
         assert "empty" in str(exc_info.value).lower()
 
+    @pytest.mark.integration
     def test_stability_metrics_analysis(self):
         """Test model stability metrics analysis."""
         analyzer = RegimePerformanceAnalyzer()
@@ -231,6 +240,7 @@ class TestRegimePerformanceAnalyzerWorking:
         # Check that stability analysis was performed
         assert isinstance(stability_metrics, dict)
 
+    @pytest.mark.unit
     def test_performance_summary_generation(self):
         """Test performance summary generation."""
         analyzer = RegimePerformanceAnalyzer()
@@ -251,6 +261,7 @@ class TestRegimePerformanceAnalyzerWorking:
         assert isinstance(summary, dict)
         # Summary should contain key performance indicators
 
+    @pytest.mark.integration
     def test_regime_performance_with_returns(self):
         """Test regime performance analysis with return calculations."""
         analyzer = RegimePerformanceAnalyzer()
@@ -294,6 +305,7 @@ class TestRegimePerformanceAnalyzerWorking:
 class TestRegimePerformanceAnalyzerCoverage:
     """Additional tests to improve code coverage."""
 
+    @pytest.mark.integration
     def test_various_data_patterns(self):
         """Test analyzer with various data patterns."""
         analyzer = RegimePerformanceAnalyzer()
@@ -311,6 +323,7 @@ class TestRegimePerformanceAnalyzerCoverage:
         performance_report = analyzer.analyze_regime_performance(single_state_results)
         assert performance_report["regime_distribution"]["unique_states"] == 1
 
+    @pytest.mark.integration
     def test_missing_regime_name_column(self):
         """Test analysis when regime_name column is missing."""
         analyzer = RegimePerformanceAnalyzer()
@@ -331,6 +344,7 @@ class TestRegimePerformanceAnalyzerCoverage:
         assert isinstance(performance_report, dict)
         assert "regime_distribution" in performance_report
 
+    @pytest.mark.unit
     def test_missing_predicted_state_column(self):
         """Test error handling when predicted_state column is missing."""
         analyzer = RegimePerformanceAnalyzer()
@@ -351,6 +365,7 @@ class TestRegimePerformanceAnalyzerCoverage:
         # Should handle missing column gracefully
         assert "error" in distribution or "total_periods" in distribution
 
+    @pytest.mark.integration
     def test_edge_case_confidence_values(self):
         """Test analysis with edge case confidence values."""
         analyzer = RegimePerformanceAnalyzer()
@@ -371,6 +386,7 @@ class TestRegimePerformanceAnalyzerCoverage:
         # Should handle edge confidence values
         assert isinstance(confidence_analysis, dict)
 
+    @pytest.mark.unit
     def test_cache_functionality(self):
         """Test cache functionality."""
         analyzer = RegimePerformanceAnalyzer()
@@ -395,6 +411,7 @@ class TestRegimePerformanceAnalyzerCoverage:
         assert hasattr(analyzer, "regime_stats_cache")
         assert hasattr(analyzer, "transition_stats_cache")
 
+    @pytest.mark.integration
     def test_large_dataset_performance(self):
         """Test performance with larger dataset."""
         analyzer = RegimePerformanceAnalyzer()
@@ -416,6 +433,7 @@ class TestRegimePerformanceAnalyzerCoverage:
         assert performance_report["regime_distribution"]["total_periods"] == 500
         assert performance_report["regime_distribution"]["unique_states"] == 4
 
+    @pytest.mark.integration
     def test_datetime_index_handling(self):
         """Test handling of different datetime index formats."""
         analyzer = RegimePerformanceAnalyzer()

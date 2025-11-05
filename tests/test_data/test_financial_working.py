@@ -23,6 +23,7 @@ from hidden_regime.utils.exceptions import DataLoadError
 class TestFinancialDataLoaderWorking:
     """Working tests for FinancialDataLoader that focus on coverage."""
 
+    @pytest.mark.unit
     def test_initialization(self):
         """Test basic initialization."""
         config = FinancialDataConfig(ticker="AAPL", source="yfinance")
@@ -34,6 +35,7 @@ class TestFinancialDataLoaderWorking:
         assert loader._cache == {}
         assert loader._last_data is None
 
+    @pytest.mark.unit
     def test_config_validation_integration(self):
         """Test that configuration validation works."""
         # Valid config
@@ -44,6 +46,7 @@ class TestFinancialDataLoaderWorking:
         # Config validation (tests validate method)
         config.validate()  # Should not raise
 
+    @pytest.mark.integration
     def test_plot_method_no_data(self):
         """Test plot method with no data."""
         config = FinancialDataConfig(ticker="TEST")
@@ -57,6 +60,7 @@ class TestFinancialDataLoaderWorking:
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
 
+    @pytest.mark.unit
     def test_string_representation(self):
         """Test string representation."""
         config = FinancialDataConfig(ticker="AAPL")
@@ -66,6 +70,7 @@ class TestFinancialDataLoaderWorking:
         assert "FinancialDataLoader" in repr_str
         assert "AAPL" in str(loader.config)  # Indirect test
 
+    @pytest.mark.unit
     def test_serialization(self):
         """Test pickle serialization."""
         import pickle
@@ -79,6 +84,7 @@ class TestFinancialDataLoaderWorking:
 
         assert restored.config.ticker == "AAPL"
 
+    @pytest.mark.unit
     @patch("hidden_regime.data.financial.yf.Ticker")
     def test_error_handling_empty_data(self, mock_ticker_class):
         """Test error handling for empty data."""
@@ -92,6 +98,7 @@ class TestFinancialDataLoaderWorking:
         with pytest.raises(DataLoadError):
             loader.update()
 
+    @pytest.mark.unit
     @patch("hidden_regime.data.financial.yf.Ticker")
     def test_error_handling_yfinance_exception(self, mock_ticker_class):
         """Test error handling for yfinance exceptions."""
@@ -105,6 +112,7 @@ class TestFinancialDataLoaderWorking:
         with pytest.raises(DataLoadError):
             loader.update()
 
+    @pytest.mark.unit
     @patch("hidden_regime.data.financial.yf.Ticker")
     def test_insufficient_data_error(self, mock_ticker_class):
         """Test error handling for insufficient data."""
@@ -137,6 +145,7 @@ class TestFinancialDataLoaderWorking:
         # Note: 5 raw rows become 4 processed rows due to NaN removal for pct_change/log_return
         assert "Insufficient data for AAPL: 4 < 10" in str(exc_info.value)
 
+    @pytest.mark.unit
     def test_cache_functionality(self):
         """Test that cache mechanisms are in place."""
         config = FinancialDataConfig(ticker="AAPL")
@@ -148,6 +157,7 @@ class TestFinancialDataLoaderWorking:
         # Test cache key generation indirectly by checking _load_data structure
         # (We can't easily test the full flow due to the processing bug)
 
+    @pytest.mark.unit
     def test_get_all_data_method_exists(self):
         """Test that get_all_data method exists and is callable."""
         config = FinancialDataConfig(ticker="AAPL")
@@ -157,6 +167,7 @@ class TestFinancialDataLoaderWorking:
         assert hasattr(loader, "get_all_data")
         assert callable(loader.get_all_data)
 
+    @pytest.mark.unit
     def test_update_method_exists(self):
         """Test that update method exists and accepts current_date parameter."""
         config = FinancialDataConfig(ticker="AAPL")
@@ -172,6 +183,7 @@ class TestFinancialDataLoaderWorking:
         sig = inspect.signature(loader.update)
         assert "current_date" in sig.parameters
 
+    @pytest.mark.unit
     @patch("hidden_regime.data.financial.YFINANCE_AVAILABLE", False)
     def test_yfinance_unavailable_error(self):
         """Test error when yfinance is not available."""
@@ -182,6 +194,7 @@ class TestFinancialDataLoaderWorking:
 
         assert "yfinance is not installed" in str(exc_info.value)
 
+    @pytest.mark.unit
     def test_unsupported_source_error(self):
         """Test error for unsupported data source."""
         # This test needs to bypass config validation to test the loader's error handling
@@ -196,6 +209,7 @@ class TestFinancialDataLoaderWorking:
 
         assert "Unsupported data source" in str(exc_info.value)
 
+    @pytest.mark.unit
     def test_validate_data_quality_method(self):
         """Test data quality validation method."""
         config = FinancialDataConfig(ticker="QUALITY")
@@ -221,6 +235,7 @@ class TestFinancialDataLoaderWorking:
             loader._validate_data_quality(invalid_price_data, "TEST")
         assert "Invalid price values" in str(exc_info.value)
 
+    @pytest.mark.unit
     def test_validate_inputs_method(self):
         """Test input validation method."""
         config = FinancialDataConfig(ticker="AAPL")
@@ -238,6 +253,7 @@ class TestFinancialDataLoaderWorking:
         with pytest.raises(ValidationError):
             loader._validate_inputs(None, "2023-01-01", "2023-12-31")
 
+    @pytest.mark.integration
     def test_process_raw_data_structure(self):
         """Test that _process_raw_data method handles basic structure."""
         config = FinancialDataConfig(ticker="AAPL")
@@ -254,6 +270,7 @@ class TestFinancialDataLoaderWorking:
         # The method should complete without crashing
         assert isinstance(result, pd.DataFrame)
 
+    @pytest.mark.integration
     @patch("hidden_regime.data.financial.yf.Ticker")
     def test_load_from_yfinance_retry_logic(self, mock_ticker_class):
         """Test retry logic in _load_from_yfinance."""
@@ -295,6 +312,7 @@ class TestFinancialDataLoaderWorking:
 class TestFinancialDataLoaderCoverage:
     """Additional tests to improve code coverage."""
 
+    @pytest.mark.unit
     def test_config_properties_coverage(self):
         """Test various configuration properties."""
         # Test with different configurations
@@ -312,6 +330,7 @@ class TestFinancialDataLoaderCoverage:
             # Test config validation
             config.validate()
 
+    @pytest.mark.unit
     def test_date_handling_edge_cases(self):
         """Test date handling edge cases."""
         config = FinancialDataConfig(ticker="AAPL")
@@ -326,6 +345,7 @@ class TestFinancialDataLoaderCoverage:
         loader._validate_inputs("AAPL", "2023-01-01", None)
         loader._validate_inputs("AAPL", None, "2023-12-31")
 
+    @pytest.mark.unit
     def test_error_message_coverage(self):
         """Test different error message paths."""
         config = FinancialDataConfig(ticker="AAPL")

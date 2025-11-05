@@ -53,6 +53,7 @@ class TestPerformanceBenchmarks:
         initial_memory = process.memory_info().rss / 1024 / 1024  # MB
         return process, initial_memory
 
+    @pytest.mark.e2e
     @patch("yfinance.Ticker")
     @pytest.mark.slow
     @pytest.mark.performance
@@ -99,6 +100,7 @@ class TestPerformanceBenchmarks:
         assert data_output is not None
         assert len(data_output) == len(large_mock_data)
 
+    @pytest.mark.e2e
     @patch("yfinance.Ticker")
     @pytest.mark.slow
     @pytest.mark.performance
@@ -128,6 +130,7 @@ class TestPerformanceBenchmarks:
             avg_prediction_time < 0.1
         ), f"Prediction too slow: {avg_prediction_time:.4f}s per prediction"  # Increased from 0.01s
 
+    @pytest.mark.e2e
     @patch("yfinance.Ticker")
     @pytest.mark.slow
     @pytest.mark.performance
@@ -181,6 +184,7 @@ class TestPerformanceBenchmarks:
                 successful_steps >= 1
             ), f"Too many temporal steps failed: {successful_steps}"  # Reduced from 5
 
+    @pytest.mark.e2e
     @patch("yfinance.Ticker")
     def test_memory_efficiency_multiple_models(
         self, mock_ticker, large_mock_data, process_monitor
@@ -214,6 +218,7 @@ class TestPerformanceBenchmarks:
         # Clean up
         del pipelines
 
+    @pytest.mark.e2e
     @patch("yfinance.Ticker")
     def test_convergence_speed(self, mock_ticker, large_mock_data):
         """Test model convergence speed with different configurations."""
@@ -286,6 +291,7 @@ class TestScalabilityTests:
             index=dates,
         )
 
+    @pytest.mark.e2e
     @pytest.mark.parametrize("num_days", [50, 100, 250, 500])
     def test_data_size_scalability(self, num_days):
         """Test performance scaling with different data sizes."""
@@ -324,6 +330,7 @@ class TestScalabilityTests:
                 training_time < expected_max_time
             ), f"Training time {training_time:.2f}s too slow for {num_days} days"
 
+    @pytest.mark.e2e
     @pytest.mark.parametrize("n_states", [2, 3, 4, 5])
     def test_model_complexity_scalability(self, n_states):
         """Test performance scaling with different model complexities."""
@@ -361,6 +368,7 @@ class TestScalabilityTests:
 class TestRobustnessTests:
     """Test robustness under various conditions."""
 
+    @pytest.mark.e2e
     def test_numerical_stability_extreme_values(self):
         """Test numerical stability with extreme input values."""
         # Create data with extreme values
@@ -412,6 +420,7 @@ class TestRobustnessTests:
             # Additional validation could be added here if needed
             # For now, just ensuring the pipeline doesn't crash with extreme values
 
+    @pytest.mark.e2e
     def test_missing_data_handling(self):
         """Test handling of missing data points."""
         # Create data with missing values

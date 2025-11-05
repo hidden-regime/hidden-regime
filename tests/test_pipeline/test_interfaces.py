@@ -25,10 +25,16 @@ from hidden_regime.utils.exceptions import ValidationError
 class TestDataComponent:
     """Test DataComponent interface."""
 
+    @pytest.mark.unit
+
+
     def test_data_component_is_abstract(self):
         """Test that DataComponent cannot be instantiated directly."""
         with pytest.raises(TypeError):
             DataComponent()
+
+    @pytest.mark.unit
+
 
     def test_data_component_interface_definition(self):
         """Test DataComponent interface definition."""
@@ -43,6 +49,9 @@ class TestDataComponent:
 
         assert "self" in params
         assert "current_date" in params
+
+    @pytest.mark.integration
+
 
     def test_concrete_data_component_implementation(self):
         """Test concrete implementation of DataComponent."""
@@ -78,6 +87,9 @@ class TestDataComponent:
         assert len(result) == 10
         assert "close" in result.columns
 
+    @pytest.mark.integration
+
+
     def test_data_component_current_date_parameter(self):
         """Test DataComponent with current_date parameter."""
 
@@ -111,10 +123,16 @@ class TestDataComponent:
 class TestObservationComponent:
     """Test ObservationComponent interface."""
 
+    @pytest.mark.unit
+
+
     def test_observation_component_is_abstract(self):
         """Test that ObservationComponent cannot be instantiated directly."""
         with pytest.raises(TypeError):
             ObservationComponent()
+
+    @pytest.mark.unit
+
 
     def test_observation_component_interface_definition(self):
         """Test ObservationComponent interface definition."""
@@ -128,6 +146,9 @@ class TestObservationComponent:
 
         assert "self" in params
         assert "data" in params
+
+    @pytest.mark.integration
+
 
     def test_concrete_observation_component_implementation(self):
         """Test concrete implementation of ObservationComponent."""
@@ -172,10 +193,16 @@ class TestObservationComponent:
 class TestModelComponent:
     """Test ModelComponent interface."""
 
+    @pytest.mark.unit
+
+
     def test_model_component_is_abstract(self):
         """Test that ModelComponent cannot be instantiated directly."""
         with pytest.raises(TypeError):
             ModelComponent()
+
+    @pytest.mark.unit
+
 
     def test_model_component_interface_definition(self):
         """Test ModelComponent interface definition."""
@@ -189,6 +216,9 @@ class TestModelComponent:
 
         assert "self" in params
         assert "observations" in params
+
+    @pytest.mark.integration
+
 
     def test_concrete_model_component_implementation(self):
         """Test concrete implementation of ModelComponent."""
@@ -248,10 +278,16 @@ class TestModelComponent:
 class TestAnalysisComponent:
     """Test AnalysisComponent interface."""
 
+    @pytest.mark.unit
+
+
     def test_analysis_component_is_abstract(self):
         """Test that AnalysisComponent cannot be instantiated directly."""
         with pytest.raises(TypeError):
             AnalysisComponent()
+
+    @pytest.mark.unit
+
 
     def test_analysis_component_interface_definition(self):
         """Test AnalysisComponent interface definition."""
@@ -272,6 +308,9 @@ class TestAnalysisComponent:
             assert (
                 param_details["raw_data"].default is not param_details["raw_data"].empty
             )
+
+    @pytest.mark.integration
+
 
     def test_concrete_analysis_component_basic(self):
         """Test basic concrete implementation of AnalysisComponent."""
@@ -313,6 +352,9 @@ class TestAnalysisComponent:
         # Verify regime names
         expected_names = ["Bear", "Sideways", "Bull", "Sideways", "Bear"]
         assert result["regime_name"].tolist() == expected_names
+
+    @pytest.mark.integration
+
 
     def test_concrete_analysis_component_with_raw_data(self):
         """Test analysis component that uses raw_data parameter."""
@@ -362,10 +404,16 @@ class TestAnalysisComponent:
 class TestReportComponent:
     """Test ReportComponent interface."""
 
+    @pytest.mark.unit
+
+
     def test_report_component_is_abstract(self):
         """Test that ReportComponent cannot be instantiated directly."""
         with pytest.raises(TypeError):
             ReportComponent()
+
+    @pytest.mark.unit
+
 
     def test_report_component_interface_definition(self):
         """Test ReportComponent interface definition."""
@@ -379,6 +427,9 @@ class TestReportComponent:
 
         assert "self" in params
         assert "kwargs" in params
+
+    @pytest.mark.integration
+
 
     def test_concrete_report_component_implementation(self):
         """Test concrete implementation of ReportComponent."""
@@ -443,6 +494,9 @@ Generated at: {pd.Timestamp.now()}
 class TestInterfaceCompliance:
     """Test interface compliance and contract validation."""
 
+    @pytest.mark.unit
+
+
     def test_all_interfaces_are_abstract(self):
         """Test that all interface classes are abstract."""
         interfaces = [
@@ -457,6 +511,9 @@ class TestInterfaceCompliance:
             assert issubclass(interface, ABC)
             with pytest.raises(TypeError):
                 interface()
+
+    @pytest.mark.unit
+
 
     def test_interface_method_signatures(self):
         """Test that interface method signatures are properly defined."""
@@ -491,6 +548,9 @@ class TestInterfaceCompliance:
         expected = ["self", "kwargs"]
         assert params == expected
 
+    @pytest.mark.unit
+
+
     def test_interface_inheritance_hierarchy(self):
         """Test interface inheritance hierarchy."""
         interfaces = [
@@ -508,6 +568,9 @@ class TestInterfaceCompliance:
             # Should have abstractmethod decorator on update
             assert hasattr(interface.update, "__isabstractmethod__")
             assert interface.update.__isabstractmethod__
+
+    @pytest.mark.unit
+
 
     def test_concrete_implementation_requirements(self):
         """Test that concrete implementations must implement all abstract methods."""
@@ -539,6 +602,9 @@ class TestInterfaceCompliance:
 class TestInterfaceDocumentation:
     """Test interface documentation and metadata."""
 
+    @pytest.mark.unit
+
+
     def test_interface_docstrings(self):
         """Test that interfaces have proper docstrings."""
         interfaces = [
@@ -556,6 +622,9 @@ class TestInterfaceDocumentation:
             # Update method should have docstring
             assert interface.update.__doc__ is not None
             assert len(interface.update.__doc__.strip()) > 0
+
+    @pytest.mark.unit
+
 
     def test_interface_module_imports(self):
         """Test that interfaces can be imported correctly."""
