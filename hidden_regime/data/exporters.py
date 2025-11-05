@@ -12,7 +12,7 @@ import pickle
 import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -33,6 +33,9 @@ try:
 except ImportError:
     HDF5_AVAILABLE = False
     warnings.warn("h5py not available - HDF5 export disabled")
+
+if TYPE_CHECKING:
+    import h5py
 
 from ..analysis.regime_evolution import RegimeEvolutionAnalyzer
 from ..analysis.signal_attribution import SignalAttributionAnalyzer
@@ -594,7 +597,7 @@ class StructuredDataExporter:
                 result[new_key] = value
 
     def _write_to_hdf5_group(
-        self, group: h5py.Group, data: Dict[str, Any], prefix: str
+        self, group: "h5py.Group", data: Dict[str, Any], prefix: str
     ) -> None:
         """Recursively write data to HDF5 group."""
         for key, value in data.items():
@@ -838,7 +841,7 @@ class DataImporter:
             self._read_hdf5_group(f, data)
         return data
 
-    def _read_hdf5_group(self, group: h5py.Group, result: Dict[str, Any]) -> None:
+    def _read_hdf5_group(self, group: "h5py.Group", result: Dict[str, Any]) -> None:
         """Recursively read HDF5 group."""
         for key in group.keys():
             if isinstance(group[key], h5py.Group):
