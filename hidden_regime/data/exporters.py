@@ -17,6 +17,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 import numpy as np
 import pandas as pd
 
+if TYPE_CHECKING:
+    import h5py as _h5py
+
 try:
     import pyarrow as pa
     import pyarrow.parquet as pq

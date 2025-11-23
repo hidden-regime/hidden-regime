@@ -171,13 +171,16 @@ class FinancialDataLoader(DataComponent):
     def _load_from_yfinance(
         self, ticker: str, start_date: Optional[pd.Timestamp], end_date: pd.Timestamp
     ) -> pd.DataFrame:
-        """Load data from yfinance with retry logic."""
+        """Load data from yfinance with connection pooling and retry logic."""
         if not YFINANCE_AVAILABLE:
             raise DataLoadError("yfinance not available")
 
         # Default to 2 years of data if no start date
         if start_date is None:
             start_date = end_date - pd.Timedelta(days=730)
+
+        # Note: Newer yfinance versions manage sessions internally
+        # Do not pass session parameter - it must handle curl_cffi sessions
 
         for attempt in range(3):  # Simple retry logic
             try:

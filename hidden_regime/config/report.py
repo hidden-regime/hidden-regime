@@ -171,3 +171,7 @@ class ReportConfig(BaseConfig):
             include_trading_signals=False,
             template_style="professional",
         )
+
+
+# Alias for backward compatibility with new architecture naming
+ReportConfiguration = ReportConfig

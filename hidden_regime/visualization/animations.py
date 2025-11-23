@@ -172,7 +172,7 @@ class RegimeAnimator:
             if len(window_regime_data) > 0:
                 # Import colorblind-safe regime colors (name-based)
                 # Use regime_profiles for color consistency (single source of truth)
-                from ..analysis import get_regime_colors as get_name_based_colors
+                from ..analysis import get_regime_color_map as get_name_based_colors
                 regime_colors_map = get_name_based_colors(regime_profiles)
 
                 # Color by regime_name if available, otherwise fall back to state ID
@@ -235,7 +235,7 @@ class RegimeAnimator:
                             state_to_name_map = window_regime_data.groupby(regime_column)['regime_name'].first().to_dict()
                             regime_name = state_to_name_map.get(state_id, f"Regime {state_id}")
                             # Use name-based color mapping for consistency
-                            from ..analysis import get_regime_colors as get_name_based_colors
+                            from ..analysis import get_regime_color_map as get_name_based_colors
                             regime_colors_map = get_name_based_colors(regime_profiles)
                             color = regime_colors_map.get(regime_name.lower(), regime_colors[state_id])
                         else:
@@ -761,7 +761,7 @@ def save_individual_frames(
             if len(window_regime_data) > 0:
                 # Import colorblind-safe regime colors (name-based)
                 # Use regime_profiles for color consistency (single source of truth)
-                from ..analysis import get_regime_colors as get_name_based_colors
+                from ..analysis import get_regime_color_map as get_name_based_colors
                 regime_colors_map = get_name_based_colors(regime_profiles)
 
                 n_states = int(window_regime_data["predicted_state"].max()) + 1
@@ -826,7 +826,7 @@ def save_individual_frames(
                             state_to_name_map = window_regime_data.groupby("predicted_state")['regime_name'].first().to_dict()
                             regime_name = state_to_name_map.get(state_id, f"Regime {state_id}")
                             # Use name-based color mapping for consistency
-                            from ..analysis import get_regime_colors as get_name_based_colors
+                            from ..analysis import get_regime_color_map as get_name_based_colors
                             regime_colors_map = get_name_based_colors(regime_profiles)
                             color = regime_colors_map.get(regime_name.lower(), regime_colors[state_id])
                         else:

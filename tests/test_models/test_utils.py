@@ -18,10 +18,9 @@ from hidden_regime.models.utils import (
     normalize_probabilities,
     log_normalize,
     validate_hmm_parameters,
-    get_regime_interpretation,
-    validate_regime_economics,
-    analyze_regime_transitions,
-    calculate_regime_statistics,
+    validate_state_quality,
+    analyze_state_transitions,
+    calculate_state_statistics,
 )
 
 
@@ -572,78 +571,7 @@ class TestValidateHMMParameters:
 
 
 # ============================================================================
-# Test get_regime_interpretation
-# ============================================================================
-
-
-@pytest.mark.unit
-class TestGetRegimeInterpretation:
-    """Test regime interpretation."""
-
-    def test_bear_regime_negative_returns(self):
-        """Test that negative returns are classified as bear."""
-        emission_params = np.array([
-            [-0.03, 0.02],  # Strong negative mean
-            [0.0, 0.02],
-            [0.03, 0.02]
-        ])
-
-        interpretation = get_regime_interpretation(0, emission_params)
-
-        assert "Bear" in interpretation
-
-    def test_bull_regime_positive_returns(self):
-        """Test that positive returns are classified as bull."""
-        emission_params = np.array([
-            [-0.03, 0.02],
-            [0.0, 0.02],
-            [0.03, 0.02]  # Strong positive mean
-        ])
-
-        interpretation = get_regime_interpretation(2, emission_params)
-
-        assert "Bull" in interpretation
-
-    def test_sideways_regime_neutral_returns(self):
-        """Test that near-zero returns are classified as sideways."""
-        emission_params = np.array([
-            [-0.03, 0.02],
-            [0.0001, 0.02],  # Very close to zero
-            [0.03, 0.02]
-        ])
-
-        interpretation = get_regime_interpretation(1, emission_params)
-
-        assert "Sideways" in interpretation
-
-    def test_crisis_regime_high_volatility(self):
-        """Test that high volatility with negative returns is crisis."""
-        emission_params = np.array([
-            [-0.025, 0.05],  # Negative + high volatility
-            [0.0, 0.02],
-            [0.03, 0.02]
-        ])
-
-        interpretation = get_regime_interpretation(0, emission_params)
-
-        assert "Crisis" in interpretation or ("Bear" in interpretation and "High Vol" in interpretation)
-
-    def test_includes_volatility_description(self):
-        """Test that interpretation includes volatility description."""
-        emission_params = np.array([
-            [0.01, 0.01],  # Low vol
-            [0.01, 0.04],  # High vol
-        ])
-
-        low_vol = get_regime_interpretation(0, emission_params)
-        high_vol = get_regime_interpretation(1, emission_params)
-
-        assert "Vol" in low_vol
-        assert "Vol" in high_vol
-
-
-# ============================================================================
-# Test validate_regime_economics
+# Test validate_state_quality
 # ============================================================================
 
 
@@ -659,7 +587,7 @@ class TestValidateRegimeEconomics:
             [0.025, 0.02]    # Bull
         ])
 
-        is_valid, details = validate_regime_economics(emission_params, '3_state')
+        is_valid, details = validate_state_quality(emission_params, '3_state')
 
         assert is_valid is True
         assert details['mean_ordering_correct'] is True
@@ -672,7 +600,7 @@ class TestValidateRegimeEconomics:
             [0.01, 0.015]
         ])
 
-        is_valid, details = validate_regime_economics(emission_params)
+        is_valid, details = validate_state_quality(emission_params)
 
         assert is_valid is False
         assert details['mean_ordering_correct'] is False
@@ -686,7 +614,7 @@ class TestValidateRegimeEconomics:
             [0.0002, 0.02]
         ])
 
-        is_valid, details = validate_regime_economics(emission_params)
+        is_valid, details = validate_state_quality(emission_params)
 
         # Should detect poor separation
         assert len(details['violations']) > 0
@@ -699,7 +627,7 @@ class TestValidateRegimeEconomics:
             [0.02, 0.02]
         ])
 
-        is_valid, details = validate_regime_economics(emission_params)
+        is_valid, details = validate_state_quality(emission_params)
 
         assert details['volatility_reasonable'] is False
 
@@ -712,7 +640,7 @@ class TestValidateRegimeEconomics:
             [0.02, 0.02]
         ])
 
-        is_valid, details = validate_regime_economics(emission_params, '3_state')
+        is_valid, details = validate_state_quality(emission_params, '3_state')
 
         # Should warn about no clear bear regime
         if not is_valid:
@@ -726,14 +654,14 @@ class TestValidateRegimeEconomics:
             [0.02, 0.02]
         ])
 
-        _, details = validate_regime_economics(emission_params)
+        _, details = validate_state_quality(emission_params)
 
         assert 'regime_separation' in details
         assert len(details['regime_separation']) > 0
 
 
 # ============================================================================
-# Test analyze_regime_transitions
+# Test analyze_state_transitions
 # ============================================================================
 
 
@@ -749,7 +677,7 @@ class TestAnalyzeRegimeTransitions:
             [0.4, 0.6]
         ])
 
-        result = analyze_regime_transitions(states, transition_matrix)
+        result = analyze_state_transitions(states, transition_matrix)
 
         expected_keys = ['persistence_analysis', 'transition_patterns',
                         'stability_metrics', 'empirical_transition_matrix']
@@ -764,7 +692,7 @@ class TestAnalyzeRegimeTransitions:
             [0.5, 0.5]
         ])
 
-        result = analyze_regime_transitions(states, transition_matrix)
+        result = analyze_state_transitions(states, transition_matrix)
         empirical = np.array(result['empirical_transition_matrix'])
 
         # Expected: 0->0 (1 time), 0->1 (1 time), 1->1 (1 time), 1->0 (1 time)
@@ -780,7 +708,7 @@ class TestAnalyzeRegimeTransitions:
             [0.3, 0.7]   # Expected duration: 1/(1-0.7) = 3.33
         ])
 
-        result = analyze_regime_transitions(states, transition_matrix)
+        result = analyze_state_transitions(states, transition_matrix)
         persistence = result['persistence_analysis']
 
         assert 'Regime 0' in persistence
@@ -801,7 +729,7 @@ class TestAnalyzeRegimeTransitions:
             [0.4, 0.6]   # Less stable
         ])
 
-        result = analyze_regime_transitions(states, transition_matrix)
+        result = analyze_state_transitions(states, transition_matrix)
         stability = result['stability_metrics']
 
         assert stability['most_stable_regime'] == 'Regime 0'
@@ -809,7 +737,7 @@ class TestAnalyzeRegimeTransitions:
 
 
 # ============================================================================
-# Test calculate_regime_statistics
+# Test calculate_state_statistics
 # ============================================================================
 
 
@@ -822,7 +750,7 @@ class TestCalculateRegimeStatistics:
         states = np.array([0, 0, 1, 1, 1, 0])
         returns = np.array([0.01, 0.02, -0.01, -0.02, -0.01, 0.01])
 
-        stats = calculate_regime_statistics(states, returns)
+        stats = calculate_state_statistics(states, returns)
 
         assert 'regime_stats' in stats
         assert 0 in stats['regime_stats']
@@ -833,7 +761,7 @@ class TestCalculateRegimeStatistics:
         states = np.array([0, 0, 1, 1, 1, 0])  # 3 of state 0, 3 of state 1
         returns = np.array([0.01, 0.02, -0.01, -0.02, -0.01, 0.01])
 
-        stats = calculate_regime_statistics(states, returns)
+        stats = calculate_state_statistics(states, returns)
 
         assert stats['regime_stats'][0]['frequency'] == 0.5
         assert stats['regime_stats'][1]['frequency'] == 0.5
@@ -843,7 +771,7 @@ class TestCalculateRegimeStatistics:
         states = np.array([0, 0, 1, 1])
         returns = np.array([0.01, 0.02, 0.03, 0.04])
 
-        stats = calculate_regime_statistics(states, returns)
+        stats = calculate_state_statistics(states, returns)
 
         np.testing.assert_almost_equal(
             stats['regime_stats'][0]['mean_return'], 0.015  # (0.01 + 0.02) / 2
@@ -857,7 +785,7 @@ class TestCalculateRegimeStatistics:
         states = np.array([0, 0, 0, 1, 1, 0, 0])  # State 0: [3, 2], State 1: [2]
         returns = np.zeros(7)
 
-        stats = calculate_regime_statistics(states, returns)
+        stats = calculate_state_statistics(states, returns)
 
         # State 0: 2 episodes with durations [3, 2]
         assert stats['regime_stats'][0]['n_episodes'] == 2
@@ -874,7 +802,7 @@ class TestCalculateRegimeStatistics:
         states = np.array([0, 1, 0, 0])
         returns = np.array([0.01, 0.02, 0.03, 0.04])
 
-        stats = calculate_regime_statistics(states, returns)
+        stats = calculate_state_statistics(states, returns)
 
         # State 1 appears only once
         assert stats['regime_stats'][1]['total_periods'] == 1
@@ -885,7 +813,7 @@ class TestCalculateRegimeStatistics:
         states = np.array([0, 0, 0])
         returns = np.array([0.01, 0.05, 0.02])
 
-        stats = calculate_regime_statistics(states, returns)
+        stats = calculate_state_statistics(states, returns)
 
         assert stats['regime_stats'][0]['min_return'] == 0.01
         assert stats['regime_stats'][0]['max_return'] == 0.05

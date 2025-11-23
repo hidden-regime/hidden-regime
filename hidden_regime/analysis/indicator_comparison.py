@@ -14,7 +14,6 @@ import pandas as pd
 from scipy import stats
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
-from ..config.analysis import FinancialAnalysisConfig
 from ..utils.exceptions import ValidationError
 
 
@@ -26,7 +25,7 @@ class IndicatorPerformanceComparator:
     performance metrics between regime states and technical indicator signals.
     """
 
-    def __init__(self, config: Optional[FinancialAnalysisConfig] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
         Initialize indicator performance comparator.
 

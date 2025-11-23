@@ -30,6 +30,70 @@ Hidden Regime is a mathematical tool designed for educational purposes only to e
 - **Trading Simulation**: Backtest regime-based strategies with risk management
 - **Technical Indicator Comparison**: Compare HMM regime detection against traditional indicators
 - **Reporting**: Generate markdown reports with analysis results and recommendations
+- **🆕 MCP Server Integration**: Use regime detection directly in AI assistants like Claude Desktop via Model Context Protocol
+
+## AI Assistant Integration (Claude Desktop)
+
+Hidden Regime now includes an **MCP (Model Context Protocol) server** that brings regime detection to AI assistants like Claude Desktop. Ask Claude natural language questions and get sophisticated HMM regime analysis automatically.
+
+### Quick Setup
+
+```bash
+# 1. Install with MCP extras
+pip install hidden-regime[mcp]
+
+# 2. Add to Claude Desktop config
+# macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
+# Linux: ~/.config/Claude/claude_desktop_config.json
+{
+  "mcpServers": {
+    "hidden-regime": {
+      "command": "/path/to/python",
+      "args": ["-m", "fastmcp", "run", "/path/to/hidden_regime_mcp/server.py"]
+    }
+  }
+}
+
+# 3. Restart Claude Desktop and start asking questions!
+```
+
+### What You Can Do
+
+**Ask Natural Language Questions:**
+```
+"What's SPY's current market regime?"
+"Analyze NVDA's regime behavior over the past 2 years"
+"Compare regimes across SPY, QQQ, and IWM"
+"What trading strategies suit QQQ's current regime?"
+```
+
+**Use Expert-Level Prompts:**
+- 📊 **regime-quick-check** - Fast market health check for daily decisions
+- 🔍 **regime-deep-dive** - Comprehensive multi-tool analysis with historical context
+- 💼 **regime-strategy-advisor** - Trading strategy recommendations based on regime + risk
+- 📈 **regime-multi-asset-comparison** - Cross-asset regime comparison and diversification
+- ⚠️ **regime-risk-assessment** - Quantitative risk scoring (0-100) with mitigation strategies
+- 📚 **regime-historical-analogs** - Find similar past patterns and predict outcomes
+- 💰 **regime-portfolio-review** - Portfolio-wide regime analysis with rebalancing recommendations
+
+**Available Interfaces:**
+- ✅ **Tools** (3) - Core regime detection operations
+- ✅ **Resources** (2) - URI-based data access (`regime://SPY/current`)
+- ✅ **Prompts** (7) - Pre-configured expert analysis workflows
+- ✅ **Logging** - Structured logging showing data fetching, model training, and caching
+
+### Learn More
+
+See **[MCP Integration Guide](docs/integrations/mcp/README.md)** for:
+- Complete setup instructions for all platforms
+- Detailed documentation of all tools and prompts
+- Usage examples and scenarios
+- Troubleshooting guide
+
+See **[MCP Roadmap](docs/integrations/mcp/roadmap.md)** for:
+- Implementation status and roadmap
+- Planned features and enhancements
+- Contributing to MCP development
 
 ## Installation
 
@@ -497,9 +561,46 @@ If you use Hidden Regime in your research, please cite:
 }
 ```
 
+## Documentation
+
+### Core Documentation
+
+- **[Quickstart Guide](docs/guides/quickstart.md)** - Get started in 5 minutes
+- **[Architecture Overview](ARCHITECTURE.md)** - System design and pipeline flow
+- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute, test, and develop
+- **[Changelog](CHANGELOG.md)** - Version history and release notes
+
+### User Guides
+
+- **[Configuration Guide](docs/guides/configuration.md)** - Configure all components
+- **[Troubleshooting](docs/guides/troubleshooting.md)** - Common issues and solutions
+- **Setup Guides**: [Linux](docs/guides/SETUP_LINUX.md) | [macOS](docs/guides/SETUP_MACOS.md) | [Windows](docs/guides/SETUP_WINDOWS.md)
+
+### Advanced Topics
+
+- **[Advanced Features](docs/advanced/features.md)** - Multi-timeframe detection, temporal analysis
+- **[Trading Applications](docs/advanced/trading.md)** - Regime-based trading strategies
+- **[Case Studies](docs/advanced/case-studies.md)** - Historical market event analysis
+- **[Optimization Guide](docs/advanced/optimization.md)** - Performance tuning
+- **[Community Examples](docs/advanced/community-examples.md)** - User-contributed strategies
+
+### Reference
+
+- **[Mathematical Foundations](docs/reference/mathematical-foundations.md)** - HMM theory and algorithms
+- **[Deployment Guide](docs/reference/deployment.md)** - Production deployment
+- **[Error Handling](docs/reference/error-handling.md)** - Exception handling reference
+
+### Integrations
+
+- **[MCP Server](docs/integrations/mcp/README.md)** - Claude Desktop integration
+- **[Experimental Features](docs/experimental/README.md)** - QuantConnect and other experiments
+
+### Module Documentation
+
+See module READMEs in `hidden_regime/*/README.md` for detailed component documentation.
+
 ## Support
 
-- **Documentation**: See module READMEs in `hidden_regime/*/README.md`
 - **Examples**: Working code in `examples/` directory
 - **Issues**: Report bugs and request features on GitHub
 - **Website**: [hiddenregime.com](https://hiddenregime.com)

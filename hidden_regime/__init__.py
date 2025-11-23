@@ -41,16 +41,16 @@ __copyright__ = "Copyright 2025 Hidden Regime"
 
 # Configuration system
 from .config import (
-    AnalysisConfig,
     BaseConfig,
     DataConfig,
-    FinancialAnalysisConfig,
     FinancialDataConfig,
     FinancialObservationConfig,
     HMMConfig,
+    InterpreterConfiguration,
     ModelConfig,
     ObservationConfig,
     ReportConfig,
+    SignalGenerationConfiguration,
 )
 
 # Factory patterns
@@ -63,8 +63,8 @@ from .factories import (
 
 # Core pipeline architecture
 from .pipeline import (
-    AnalysisComponent,
     DataComponent,
+    InterpreterComponent,
     ModelComponent,
     ObservationComponent,
     Pipeline,
@@ -308,7 +308,7 @@ __all__ = [
     "DataComponent",
     "ObservationComponent",
     "ModelComponent",
-    "AnalysisComponent",
+    "InterpreterComponent",
     "ReportComponent",
     # Configuration system
     "BaseConfig",

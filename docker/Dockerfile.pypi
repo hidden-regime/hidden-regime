@@ -1,0 +1,40 @@
+# QuantConnect LEAN with Hidden-Regime (PyPI Version)
+#
+# This Dockerfile installs hidden-regime from PyPI for production use.
+# Use this when hidden-regime is published to PyPI.
+
+FROM quantconnect/lean:latest
+
+LABEL maintainer="hidden-regime <contact@hiddenregime.com>"
+LABEL description="QuantConnect LEAN with Hidden-Regime from PyPI"
+LABEL version="1.0.0"
+
+# Set working directory
+WORKDIR /Lean
+
+# Update pip
+RUN pip install --upgrade pip
+
+# Install hidden-regime from PyPI
+RUN pip install --no-cache-dir hidden-regime
+
+# Verify installation
+RUN python -c "import hidden_regime; print(f'Hidden-Regime {hidden_regime.__version__} installed')"
+RUN python -c "from hidden_regime.quantconnect import HiddenRegimeAlgorithm; print('QC integration verified')"
+
+# Set Python path
+ENV PYTHONPATH="${PYTHONPATH}:/usr/local/lib/python3.11/site-packages"
+
+# Expose LEAN ports
+EXPOSE 5678
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD python -c "import hidden_regime" || exit 1
+
+# Build metadata
+ARG BUILD_DATE
+ARG VCS_REF
+LABEL org.label-schema.build-date=$BUILD_DATE \
+      org.label-schema.vcs-ref=$VCS_REF \
+      org.label-schema.vcs-url="https://github.com/hidden-regime/hidden-regime"

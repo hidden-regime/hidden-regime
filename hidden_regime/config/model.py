@@ -59,7 +59,7 @@ class HMMConfig(ModelConfig):
     max_iterations: int = 100
     tolerance: float = 1e-6
     regularization: float = 1e-6
-    initialization_method: Literal["kmeans", "random", "custom"] = "kmeans"
+    initialization_method: Literal["quantile", "kmeans", "gmm", "random", "custom"] = "quantile"
 
     # Custom initialization parameters (only used when initialization_method='custom')
     custom_emission_means: Optional[list] = None  # List of regime mean returns (log space)
@@ -295,7 +295,7 @@ class HMMConfig(ModelConfig):
             observed_signal="log_return",
             max_iterations=200,
             tolerance=1e-8,
-            initialization_method="kmeans",
+            initialization_method="quantile",
             forgetting_factor=0.99,
             adaptation_rate=0.01,
             parameter_smoothing=True,
@@ -311,7 +311,7 @@ class HMMConfig(ModelConfig):
             observed_signal="log_return",
             max_iterations=50,
             tolerance=1e-4,
-            initialization_method="kmeans",
+            initialization_method="quantile",
             forgetting_factor=0.95,
             adaptation_rate=0.1,
             parameter_smoothing=True,
@@ -328,7 +328,7 @@ class HMMConfig(ModelConfig):
             observed_signal="log_return",
             max_iterations=100,
             tolerance=1e-6,
-            initialization_method="kmeans",
+            initialization_method="quantile",
             forgetting_factor=0.98,
             adaptation_rate=0.05,
             parameter_smoothing=True,

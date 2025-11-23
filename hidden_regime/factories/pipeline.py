@@ -10,9 +10,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from ..config import (
-    AnalysisConfig,
     DataConfig,
-    FinancialAnalysisConfig,
     FinancialDataConfig,
     FinancialObservationConfig,
     HMMConfig,
@@ -43,7 +41,8 @@ class PipelineFactory:
         data_config: DataConfig,
         observation_config: ObservationConfig,
         model_config: ModelConfig,
-        analysis_config: AnalysisConfig,
+        interpreter_config: Optional["InterpreterConfiguration"] = None,
+        signal_generator_config: Optional["SignalGenerationConfiguration"] = None,
         report_config: Optional[ReportConfig] = None,
     ) -> Pipeline:
         """
@@ -53,7 +52,8 @@ class PipelineFactory:
             data_config: Data component configuration
             observation_config: Observation component configuration
             model_config: Model component configuration
-            analysis_config: Analysis component configuration
+            interpreter_config: Interpreter component configuration
+            signal_generator_config: Signal generator component configuration (optional)
             report_config: Optional report component configuration
 
         Returns:
@@ -68,9 +68,23 @@ class PipelineFactory:
             model_component = self.component_factory.create_model_component(
                 model_config
             )
-            analysis_component = self.component_factory.create_analysis_component(
-                analysis_config
-            )
+
+            # Create interpreter and optional signal generator
+            interpreter_component = None
+            signal_generator_component = None
+
+            if interpreter_config is not None:
+                interpreter_component = self.component_factory.create_interpreter_component(
+                    interpreter_config
+                )
+                if signal_generator_config is not None:
+                    signal_generator_component = self.component_factory.create_signal_generator_component(
+                        signal_generator_config
+                    )
+            else:
+                raise ConfigurationError(
+                    "Must provide 'interpreter_config'"
+                )
 
             report_component = None
             if report_config is not None:
@@ -83,11 +97,12 @@ class PipelineFactory:
                 data=data_component,
                 observation=observation_component,
                 model=model_component,
-                analysis=analysis_component,
+                interpreter=interpreter_component,
+                signal_generator=signal_generator_component,
                 report=report_component,
             )
 
-            self.logger.info("Successfully created pipeline with all components")
+            self.logger.info("Successfully created pipeline with Interpreter + SignalGenerator architecture")
             return pipeline
 
         except Exception as e:
@@ -162,13 +177,19 @@ class PipelineFactory:
 
         model_config = HMMConfig.create_balanced().copy(**model_config_params)
 
-        # Create financial analysis configuration
-        analysis_config_params = {"n_states": n_states}
-        if "analysis_config_overrides" in kwargs:
-            analysis_config_params.update(kwargs["analysis_config_overrides"])
-        analysis_config = FinancialAnalysisConfig.create_comprehensive_financial().copy(
-            **analysis_config_params
-        )
+        # Create interpreter configuration (new architecture)
+        interpreter_config_params = {"n_states": n_states}
+        if "interpreter_config_overrides" in kwargs:
+            interpreter_config_params.update(kwargs["interpreter_config_overrides"])
+        from hidden_regime.config.interpreter import InterpreterConfiguration
+        interpreter_config = InterpreterConfiguration(**interpreter_config_params)
+
+        # Create signal generator configuration (new architecture)
+        signal_config_params = {}
+        if "signal_config_overrides" in kwargs:
+            signal_config_params.update(kwargs["signal_config_overrides"])
+        from hidden_regime.config.signal_generation import SignalGenerationConfiguration
+        signal_generator_config = SignalGenerationConfiguration(**signal_config_params)
 
         # Create report configuration if requested
         report_config = None
@@ -182,7 +203,8 @@ class PipelineFactory:
             data_config=data_config,
             observation_config=observation_config,
             model_config=model_config,
-            analysis_config=analysis_config,
+            interpreter_config=interpreter_config,
+            signal_generator_config=signal_generator_config,
             report_config=report_config,
         )
 
@@ -237,7 +259,7 @@ class PipelineFactory:
                 "normalize_features": True,
             },
             model_config_overrides={
-                "initialization_method": "kmeans",
+                "initialization_method": "quantile",
                 "enable_change_detection": True,
             },
             analysis_config_overrides={

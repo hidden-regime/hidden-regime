@@ -1,395 +1,599 @@
 # Hidden Regime Examples
 
-This directory contains 12 working examples demonstrating the capabilities of the Hidden Regime package v1.0.0. All examples have been tested and verified to execute successfully.
+This directory contains comprehensive examples demonstrating the Hidden Regime package capabilities. Examples are organized by difficulty level and use case for easier navigation and learning.
 
-## 🚀 Quick Start
+## 📁 Directory Structure
 
-```bash
-# Activate the virtual environment
-source /home/aoaustin/hidden-regime-pyenv/bin/activate
-
-# Run any example
-python examples/00_basic_regime_detection.py
+```
+examples/
+├── quickstart/              # Beginner examples (5-60 seconds runtime)
+├── intermediate/            # Intermediate examples (15-180 seconds)
+├── advanced/                # Advanced topics (60-180 seconds)
+├── case_studies/            # Real-world market analysis
+├── portfolios/              # QuantConnect trading strategies
+├── notebooks/               # Jupyter tutorials (🔒 BLOG-REFERENCED)
+└── templates/               # Reusable templates
 ```
 
-All examples generate output in the `output/` directory including:
-- Analysis reports (Markdown format)
-- Visualizations (PNG images)
-- Performance metrics (JSON)
-- Data files (CSV/Parquet)
+---
 
-## 📚 Example Categories
+## 🚀 Quickstart Examples
 
-### Beginner Examples
+**Perfect for:** First-time users, quick prototyping
 
-#### 00_basic_regime_detection.py
-**Runtime**: ~30 seconds
-**Purpose**: Minimal working example showing the core pipeline workflow
+### `minimal_10_lines.py` ✨ NEW
+**Runtime:** ~5 seconds
 
-Demonstrates:
-- Loading financial data with `FinancialDataLoader`
-- Generating observations with `FinancialObservationGenerator`
-- Training a 3-state HMM model
-- Running basic financial analysis
-- Generating analysis reports
+The absolute simplest way to use hidden-regime. Detect market regimes in just 10 lines of code.
 
-**Run**:
 ```bash
-python examples/00_basic_regime_detection.py
+python examples/quickstart/minimal_10_lines.py
 ```
 
-#### 01_real_market_analysis.py
-**Runtime**: ~60 seconds
-**Purpose**: Regime detection on real market data with error handling
+### `00_recommended_usage.py`
+**Runtime:** ~30 seconds
 
-Demonstrates:
-- Robust data loading with fallback to sample data
-- Regime change detection in actual market conditions
-- Professional analysis report generation
+Factory pattern example (v2.0+). Shows the **RECOMMENDED** way to create pipelines.
+
+**Demonstrates:**
+- `create_financial_pipeline()` factory method
+- Deprecation-free pipeline creation
+- Best practices for v2.0+
+
+```bash
+python examples/quickstart/00_recommended_usage.py
+```
+
+### `01_real_market_analysis.py`
+**Runtime:** ~60 seconds
+
+Regime detection on real market data with robust error handling.
+
+**Demonstrates:**
+- Loading real market data with fallbacks
+- Regime change detection
+- Professional analysis reports
 - Publication-quality visualizations
-- Graceful handling of data availability issues
 
-**Run**:
 ```bash
-python examples/01_real_market_analysis.py
+python examples/quickstart/01_real_market_analysis.py
 ```
 
-### Intermediate Examples
+### `02_regime_comparison_analysis.py`
+**Runtime:** ~20 seconds
 
-#### 02_regime_comparison_analysis.py
-**Runtime**: ~20 seconds
-**Purpose**: Compare regime patterns across different assets
+Compare regime patterns across multiple assets.
 
-Demonstrates:
+**Demonstrates:**
 - Multi-asset regime detection
-- Synchronous regime change identification
-- Cross-market correlation analysis
-- Divergence and convergence pattern detection
-- Portfolio analysis applications
+- Synchronous regime changes
+- Cross-market correlation
+- Portfolio applications
 
-**Run**:
 ```bash
-python examples/02_regime_comparison_analysis.py
+python examples/quickstart/02_regime_comparison_analysis.py
 ```
 
-#### 03_trading_strategy_demo.py
-**Runtime**: ~15 seconds
-**Purpose**: Build practical trading strategies based on regime detection
+---
 
-Demonstrates:
+## 🎯 Intermediate Examples
+
+**Perfect for:** Building trading strategies, multi-asset analysis
+
+### `03_trading_strategy_demo.py`
+**Runtime:** ~15 seconds
+
+Build practical trading strategies based on regime detection.
+
+**Demonstrates:**
 - Regime-based position sizing
-- Entry and exit signal generation
+- Entry/exit signal generation
 - Performance metrics calculation
-- Realistic trading simulation with transaction costs
-- Strategy performance reporting
+- Transaction cost modeling
 
-**Run**:
 ```bash
-python examples/03_trading_strategy_demo.py
+python examples/intermediate/03_trading_strategy_demo.py
 ```
 
-#### 04_multi_stock_comparative_study.py
-**Runtime**: ~180 seconds
-**Purpose**: Comprehensive regime analysis across multiple stocks
+### `04_multi_stock_comparative_study.py`
+**Runtime:** ~180 seconds
 
-Demonstrates:
+Comprehensive regime analysis across multiple stocks.
+
+**Demonstrates:**
 - Batch processing of multiple tickers
-- Cross-stock regime correlation analysis
+- Cross-stock regime correlation
 - Sector-based comparative studies
-- Market regime consensus identification
-- Institutional-quality comparative reporting
+- Market regime consensus
 
-**Run**:
 ```bash
-python examples/04_multi_stock_comparative_study.py
+python examples/intermediate/04_multi_stock_comparative_study.py
 ```
 
-### Advanced Examples
+### `05_advanced_analysis_showcase.py`
+**Runtime:** ~15 seconds
 
-#### 05_advanced_analysis_showcase.py
-**Runtime**: ~15 seconds
-**Purpose**: Complete working pipeline with all components
+Complete pipeline with all components.
 
-Demonstrates:
+**Demonstrates:**
 - Full data → observation → model → analysis pipeline
 - Comprehensive financial metrics
-- Report generation with markdown output
-- Proper handling of edge cases
+- Edge case handling
 - Current API best practices
 
-**Run**:
 ```bash
-python examples/05_advanced_analysis_showcase.py
+python examples/intermediate/05_advanced_analysis_showcase.py
 ```
 
-#### improved_features.py
-**Runtime**: ~120 seconds
-**Purpose**: Enhanced features for improved regime detection
+---
 
-Demonstrates:
-- **Momentum strength**: Bull/Bear momentum detection
-- **Trend persistence**: Sideways regime identification
-- **Volatility context**: Crisis period detection
-- **Directional consistency**: Regime characterization
-- Baseline vs enhanced feature comparison
-- Configuration-driven feature selection
+## 🔬 Advanced Examples
 
-**Run**:
+**Perfect for:** Power users, researchers, custom implementations
+
+### `initialization_methods_demo.py`
+**Runtime:** ~90 seconds
+
+Demonstrates the three HMM initialization approaches.
+
+**Demonstrates:**
+- **KMeans** (DEFAULT): Data-driven clustering
+- **Random**: Quantile-based initialization
+- **Custom**: User-specified parameters
+- Transfer learning (SPY → AAPL)
+- Convenience factory: `from_regime_specs()`
+
 ```bash
-python examples/improved_features.py
+python examples/advanced/initialization_methods_demo.py
 ```
 
-### Case Study Examples
+### `multi_timeframe_example.py`
+**Runtime:** ~45 seconds
 
-#### case_study.py
-**Runtime**: ~30 seconds
-**Purpose**: Main case study orchestrator implementing 4-phase workflow
+Multi-timeframe regime detection (daily, weekly, monthly).
 
-Demonstrates:
-- **Phase 1 - Training**: Train HMM on historical data
-- **Phase 2 - Evolution**: Daily regime updates over evaluation period
-- **Phase 3 - Visualization**: Charts and animations
-- **Phase 4 - Analysis**: Compare vs buy-and-hold and technical indicators
-- Proper temporal isolation
-- Comprehensive performance analysis
+**Demonstrates:**
+- Independent HMM models per timeframe
+- Alignment scoring (0.3 = misaligned, 1.0 = perfect)
+- False signal filtering (~70% reduction)
+- Confidence-based position sizing
 
-**Run**:
 ```bash
-python examples/case_study.py
+python examples/advanced/multi_timeframe_example.py
 ```
 
-#### case_study_basic.py
-**Runtime**: ~30 seconds
-**Purpose**: Simple financial regime analysis with unified API
+### `improved_features.py`
+**Runtime:** ~120 seconds
 
-Demonstrates:
-- `FinancialRegimeAnalysis` unified entry point
-- Quick analysis configuration
-- 3-month analysis on single stock
-- Simplified workflow for rapid testing
+Enhanced feature engineering for improved regime detection.
 
-**Run**:
+**Demonstrates:**
+- Momentum strength detection
+- Trend persistence features
+- Volatility context
+- Directional consistency
+- Baseline vs enhanced comparison
+
 ```bash
-python examples/case_study_basic.py
+python examples/advanced/improved_features.py
 ```
 
-#### case_study_comprehensive.py
-**Runtime**: ~60 seconds
-**Purpose**: Full-featured analysis with all advanced options
+### `financial_case_study.py`
+**Runtime:** ~90 seconds
 
-Demonstrates:
-- Comprehensive analysis configuration
+Financial-first architecture showcase.
+
+**Demonstrates:**
+- Data-driven regime characterization
 - Intelligent signal generation
-- Full trading simulation
-- Detailed performance metrics
-- Advanced reporting capabilities
-
-**Run**:
-```bash
-python examples/case_study_comprehensive.py
-```
-
-#### case_study_multi_asset.py
-**Runtime**: ~120 seconds
-**Purpose**: Comparative analysis across multiple assets
-
-Demonstrates:
-- Batch case study execution
-- Cross-asset regime comparison
-- Sector analysis capabilities
-- Asset class comparative studies
-- Multi-ticker output organization
-
-**Run**:
-```bash
-python examples/case_study_multi_asset.py
-```
-
-#### financial_case_study.py
-**Runtime**: ~90 seconds
-**Purpose**: Financial-first architecture showcase
-
-Demonstrates:
-- Data-driven regime characterization (not naive state assumptions)
-- Intelligent signal generation using regime characteristics
-- Single-asset optimized position sizing (100% allocation)
-- Zero transaction cost defaults (retail-friendly)
+- Optimized single-asset position sizing
 - Unified configuration and analysis
 
-**Run**:
 ```bash
-python examples/financial_case_study.py
+python examples/advanced/financial_case_study.py
 ```
 
-## 🎯 Running All Examples
+### `regime_quality_validation.py` ✨ NEW
+**Runtime:** ~120 seconds
 
-To verify all examples work in your environment:
+Assess and validate regime detection quality.
+
+**Demonstrates:**
+- Quality metrics programmatic access
+- Log-likelihood interpretation
+- Regime persistence and duration
+- Configuration comparison
+- Quality issue identification
 
 ```bash
-# Activate environment
-source /home/aoaustin/hidden-regime-pyenv/bin/activate
+python examples/advanced/regime_quality_validation.py
+```
 
-# Run all examples (this will take ~10 minutes)
-for example in examples/*.py; do
-    echo "Running $example..."
-    python "$example"
+---
+
+## 📊 Case Studies
+
+**Perfect for:** Real-world market analysis, research validation
+
+### 🔒 BLOG-REFERENCED (DO NOT MODIFY)
+
+These files are directly referenced on hiddenregime.com and **must remain unchanged**:
+
+- ✅ `case_study_2008_financial_crisis.py`
+- ✅ `case_study_dotcom_2000.py`
+- ✅ `case_study_covid_2020.py`
+
+### `case_study_2008_financial_crisis.py` 🔒
+**Runtime:** ~180 seconds | **PROTECTED**
+
+2008 Financial Crisis regime analysis.
+
+**Period:** 2007-2009 (crisis emergence → collapse → recovery)
+**Assets:** SPY, XLF, TLT, GLD
+**Events:** Bear Stearns, Lehman, TARP, Market Trough, Fed QE
+
+```bash
+python examples/case_studies/case_study_2008_financial_crisis.py
+```
+
+### `case_study_dotcom_2000.py` 🔒
+**Runtime:** ~180 seconds | **PROTECTED**
+
+Dot-Com Bubble collapse analysis.
+
+**Period:** 2000-2002 (bubble burst → capitulation)
+**Assets:** QQQ, MSFT, INTC, CSCO, AMZN, SPY
+**Events:** NASDAQ Peak, Initial Crash, 9/11, Bear Bottom
+
+```bash
+python examples/case_studies/case_study_dotcom_2000.py
+```
+
+### `case_study_covid_2020.py` 🔒
+**Runtime:** ~180 seconds | **PROTECTED**
+
+COVID-19 Crisis regime detection.
+
+**Period:** 2020 (fastest market crash in history)
+**Assets:** QQQ, CCL, WMT, AMZN, DIS, INTC
+**Events:** Market Peak, WHO Pandemic, Fed Rate Cut, Bottom, CARES Act
+
+```bash
+python examples/case_studies/case_study_covid_2020.py
+```
+
+### Other Case Studies
+
+#### `case_study_multi_asset.py`
+**Runtime:** ~120 seconds
+
+Comparative analysis across multiple assets.
+
+```bash
+python examples/case_studies/case_study_multi_asset.py
+```
+
+#### `market_event_study_tsla_2024.py`
+**Runtime:** ~90 seconds
+
+TSLA 2024 market event study with visualization pipeline.
+
+```bash
+python examples/case_studies/market_event_study_tsla_2024.py
+```
+
+#### Helper Scripts
+- `analyze_2008_regime_statistics.py` - Extract 2008 regime stats
+- `analyze_dotcom_regime_statistics.py` - Extract dotcom regime stats
+- `analyze_timeframe_persistence.py` - Analyze timeframe persistence
+
+---
+
+## 💼 Portfolio Strategies (QuantConnect)
+
+**Perfect for:** Live trading, QuantConnect backtesting
+
+**Note:** These are QuantConnect algorithms, not standalone Python scripts. They require the QuantConnect environment to run.
+
+### `quantconnect_simple_regime_following.py` ✨ NEW
+**A minimal regime-following strategy for learning QuantConnect integration.**
+
+**Strategy:** Long equities in Bull, defensive (bonds/gold) in Bear
+**Expected Sharpe:** 0.9-1.2
+
+### `all_weather_regime_portfolio.py`
+**Ray Dalio-inspired all-weather portfolio with regime adaptation.**
+
+**Assets:** SPY, QQQ, EFA, TLT, IEF, GLD, DBC, VNQ
+**Expected Sharpe:** 1.2-1.5
+**Max Drawdown:** <15%
+
+**Strategy:**
+- 4-state regime detection (Bull/Bear/Sideways/Crisis)
+- Regime-adaptive allocation across asset classes
+- Monthly rebalancing or on regime change
+
+### `momentum_regime_rotation.py`
+**Momentum rotation filtered by regime state.**
+
+**Universe:** 10 sector ETFs
+**Expected Sharpe:** 1.3-1.7
+**Max Drawdown:** <20%
+
+**Strategy:**
+- Rank sectors by 6-month momentum
+- Filter by regime (long only in Bull)
+- Top 3 sectors, equal-weighted
+- Defensive assets in Bear regime
+
+### `volatility_targeting_regime.py`
+**Constant volatility targeting with regime-adaptive targets.**
+
+**Assets:** SPY, QQQ, IWM
+**Target Vol:** 10% (regime-adjusted)
+**Expected Sharpe:** 1.4-1.8
+
+**Strategy:**
+- Maintain constant 10% volatility
+- Adjust leverage based on realized vol
+- Lower vol target in Bear regimes
+- Risk parity weighting
+
+---
+
+## 📓 Jupyter Notebooks
+
+**Perfect for:** Interactive learning, mathematical foundations
+
+### 🔒 ALL NOTEBOOKS ARE BLOG-REFERENCED (DO NOT MODIFY)
+
+All 7 notebooks are directly referenced on hiddenregime.com and **must not be modified**:
+
+- ✅ `01_Why_Log_Returns_Mathematical_Foundation.ipynb`
+- ✅ `02_HMM_Basics_Understanding_Regime_Detection.ipynb`
+- ✅ `03_Full_Pipeline_Advanced_Analysis.ipynb`
+- ✅ `04_Advanced_Trading_Applications.ipynb`
+- ✅ `05_multi_timeframe_regime_detection.ipynb`
+- ✅ `HMM101.ipynb`
+- ✅ `PipelineCheckout.ipynb`
+
+### Notebooks Overview
+
+**`01_Why_Log_Returns_Mathematical_Foundation.ipynb`** 🔒
+Mathematical foundation for using log returns in regime detection.
+
+**`02_HMM_Basics_Understanding_Regime_Detection.ipynb`** 🔒
+Comprehensive introduction to Hidden Markov Models.
+
+**`03_Full_Pipeline_Advanced_Analysis.ipynb`** 🔒
+End-to-end pipeline walkthrough with advanced analysis.
+
+**`04_Advanced_Trading_Applications.ipynb`** 🔒
+Building production-ready trading strategies.
+
+**`05_multi_timeframe_regime_detection.ipynb`** 🔒
+Multi-timeframe analysis with visualization.
+
+**`HMM101.ipynb`** 🔒
+Beginner-friendly HMM tutorial.
+
+**`PipelineCheckout.ipynb`** 🔒
+Pipeline architecture and best practices.
+
+---
+
+## 📝 Templates
+
+### `case_study_template.py`
+Reusable template for creating custom market event case studies.
+
+**Use for:**
+- Analyzing any market event (crashes, bubbles, policy changes)
+- Quick setup with MarketEventStudy API
+- Customizable key event dates and snapshots
+
+```bash
+python examples/templates/case_study_template.py
+```
+
+---
+
+## 🎓 Learning Paths
+
+### Absolute Beginner
+```
+1. quickstart/minimal_10_lines.py           (5s)
+2. quickstart/00_recommended_usage.py       (30s)
+3. quickstart/01_real_market_analysis.py    (60s)
+4. notebooks/HMM101.ipynb
+```
+
+### Traders & Portfolio Managers
+```
+1. quickstart/02_regime_comparison_analysis.py
+2. intermediate/03_trading_strategy_demo.py
+3. case_studies/case_study_covid_2020.py
+4. portfolios/quantconnect_simple_regime_following.py
+5. portfolios/all_weather_regime_portfolio.py
+```
+
+### Researchers & Quants
+```
+1. intermediate/04_multi_stock_comparative_study.py
+2. advanced/initialization_methods_demo.py
+3. advanced/multi_timeframe_example.py
+4. advanced/regime_quality_validation.py
+5. notebooks/01-04 (all mathematical foundations)
+```
+
+### QuantConnect Users
+```
+1. portfolios/quantconnect_simple_regime_following.py
+2. portfolios/all_weather_regime_portfolio.py
+3. portfolios/momentum_regime_rotation.py
+4. portfolios/volatility_targeting_regime.py
+```
+
+---
+
+## ⚡ Quick Commands
+
+### Run all quickstart examples
+```bash
+for f in examples/quickstart/*.py; do
+    echo "Running $f..."
+    python "$f"
 done
 ```
 
-## 📊 Example Output Structure
-
-All examples generate organized output:
-
-```
-output/
-├── plots/                          # Visualizations (PNG)
-│   ├── regime_analysis_*.png
-│   ├── performance_comparison_*.png
-│   └── enhanced_features_*.png
-├── reports/                        # Analysis reports (Markdown)
-│   ├── *_analysis_report.md
-│   └── *_case_study_report.md
-├── data/                          # Data exports (JSON/CSV/Parquet)
-│   ├── evolution_results.json
-│   ├── performance_metrics.json
-│   └── regime_history.parquet
-└── animations/                    # Time-lapse animations (GIF)
-    └── *_regime_evolution.gif
+### Run all case studies
+```bash
+for f in examples/case_studies/case_study_*.py; do
+    echo "Running $f..."
+    python "$f"
+done
 ```
 
-## 🏗️ Pipeline Architecture
+### Run a specific example
+```bash
+python examples/quickstart/minimal_10_lines.py
+python examples/case_studies/case_study_covid_2020.py
+python examples/advanced/regime_quality_validation.py
+```
 
-All examples follow the consistent pipeline pattern:
+---
+
+## 📊 Example Summary Table
+
+| Example | Category | Runtime | Complexity | New |
+|---------|----------|---------|------------|-----|
+| `minimal_10_lines.py` | Quickstart | 5s | Beginner | ✨ |
+| `00_recommended_usage.py` | Quickstart | 30s | Beginner | |
+| `01_real_market_analysis.py` | Quickstart | 60s | Beginner | |
+| `02_regime_comparison_analysis.py` | Quickstart | 20s | Beginner | |
+| `03_trading_strategy_demo.py` | Intermediate | 15s | Intermediate | |
+| `04_multi_stock_comparative_study.py` | Intermediate | 180s | Intermediate | |
+| `05_advanced_analysis_showcase.py` | Intermediate | 15s | Intermediate | |
+| `initialization_methods_demo.py` | Advanced | 90s | Advanced | |
+| `multi_timeframe_example.py` | Advanced | 45s | Advanced | |
+| `improved_features.py` | Advanced | 120s | Advanced | |
+| `financial_case_study.py` | Advanced | 90s | Advanced | |
+| `regime_quality_validation.py` | Advanced | 120s | Advanced | ✨ |
+| `case_study_2008_financial_crisis.py` 🔒 | Case Study | 180s | Intermediate | |
+| `case_study_dotcom_2000.py` 🔒 | Case Study | 180s | Intermediate | |
+| `case_study_covid_2020.py` 🔒 | Case Study | 180s | Intermediate | |
+| `case_study_multi_asset.py` | Case Study | 120s | Advanced | |
+| `market_event_study_tsla_2024.py` | Case Study | 90s | Intermediate | |
+| `quantconnect_simple_regime_following.py` | Portfolio | N/A | Beginner | ✨ |
+| `all_weather_regime_portfolio.py` | Portfolio | N/A | Advanced | |
+| `momentum_regime_rotation.py` | Portfolio | N/A | Advanced | |
+| `volatility_targeting_regime.py` | Portfolio | N/A | Advanced | |
+
+**Legend:**
+🔒 = Blog-referenced (DO NOT MODIFY)
+✨ = New in this update
+
+---
+
+## 🏭 Factory Pattern (REQUIRED)
+
+**All examples MUST use the factory pattern for component creation.** Direct instantiation is deprecated and will trigger architectural compliance failures.
+
+### ✅ Correct (Factory Pattern)
 
 ```python
-# 1. Data Loading
+import hidden_regime as hr
+from hidden_regime.factories import component_factory
+from hidden_regime.config.data import FinancialDataConfig
+
+# RECOMMENDED: Use high-level factory functions
+pipeline = hr.create_financial_pipeline('SPY', n_states=3)
+
+# OR: Use component factory for fine-grained control
+data_config = FinancialDataConfig(ticker='SPY')
+data_loader = component_factory.create_data_component(data_config)
+```
+
+### ❌ Incorrect (Direct Instantiation - DEPRECATED)
+
+```python
+# DON'T DO THIS - Will fail architectural tests
 from hidden_regime.data.financial import FinancialDataLoader
-from hidden_regime.config.data import FinancialDataConfig
-
-data_config = FinancialDataConfig(ticker="AAPL", ...)
-loader = FinancialDataLoader(data_config)
-raw_data = loader.update()
-
-# 2. Observation Generation
-from hidden_regime.observations.financial import FinancialObservationGenerator
-from hidden_regime.config.observation import FinancialObservationConfig
-
-obs_config = FinancialObservationConfig(generators=["log_return"])
-obs_gen = FinancialObservationGenerator(obs_config)
-observations = obs_gen.update(raw_data)
-
-# 3. Model Training
 from hidden_regime.models.hmm import HiddenMarkovModel
-from hidden_regime.config.model import HMMConfig
 
-model_config = HMMConfig(n_states=3)
-hmm_model = HiddenMarkovModel(config=model_config)
-model_output = hmm_model.update(observations)
-
-# 4. Financial Analysis
-from hidden_regime.analysis.financial import FinancialAnalysis
-from hidden_regime.config.analysis import FinancialAnalysisConfig
-
-analysis_config = FinancialAnalysisConfig()
-financial_analysis = FinancialAnalysis(analysis_config)
-analysis_results = financial_analysis.update(
-    model_output,
-    raw_data,
-    model_component=hmm_model
-)
-
-# 5. Report Generation
-from hidden_regime.reporting.financial import FinancialReportGenerator
-from hidden_regime.config.reporting import FinancialReportConfig
-
-report_config = FinancialReportConfig(output_dir="./output")
-report_gen = FinancialReportGenerator(report_config)
-report_gen.update(analysis_results, model_output, raw_data)
+data_loader = FinancialDataLoader(data_config)  # ❌ WRONG
+model = HiddenMarkovModel(model_config)        # ❌ WRONG
 ```
 
-## 🔧 Common Configuration
+### Why Factory Pattern?
 
-### Data Configuration
+1. **Deprecation Safety**: Direct instantiation will show `FutureWarning`
+2. **Architectural Compliance**: Examples must pass `test_factory_pattern.py`
+3. **Best Practices**: Follows documented v2.0 architecture
+4. **Future-Proof**: Easier migration when internals change
+
+### Available Factories
+
+**High-Level Pipeline Factories** (Recommended):
+- `hr.create_simple_regime_pipeline()` - Basic regime detection
+- `hr.create_financial_pipeline()` - Full financial analysis
+- `hr.create_trading_pipeline()` - Trading strategies with signals
+- `hr.create_research_pipeline()` - Academic research features
+- `hr.create_temporal_controller()` - V&V backtesting
+
+**Component-Level Factories** (Advanced):
 ```python
-from hidden_regime.config.data import FinancialDataConfig
+from hidden_regime.factories import component_factory
 
-config = FinancialDataConfig(
-    ticker="AAPL",
-    start_date="2024-01-01",
-    end_date="2024-12-31",
-    source="yfinance",
-    frequency="business_days"
-)
+data = component_factory.create_data_component(data_config)
+obs = component_factory.create_observation_component(obs_config)
+model = component_factory.create_model_component(model_config)
+interp = component_factory.create_interpreter_component(interp_config)
 ```
 
-### Model Configuration
-```python
-from hidden_regime.config.model import HMMConfig
-
-config = HMMConfig(
-    n_states=3,              # Number of regimes
-    max_iterations=1000,     # EM algorithm iterations
-    tolerance=1e-6,          # Convergence tolerance
-    random_seed=42           # Reproducibility
-)
-```
-
-### Analysis Configuration
-```python
-from hidden_regime.config.analysis import FinancialAnalysisConfig
-
-config = FinancialAnalysisConfig(
-    enable_trading_simulation=True,
-    initial_capital=100000.0,
-    position_sizing="regime_based",
-    stop_loss_pct=0.05
-)
-```
-
-## 📖 Key Concepts
-
-### Regime Detection
-The HMM identifies distinct market regimes based on return patterns:
-- **Bearish**: Negative mean returns, high volatility
-- **Sideways**: Near-zero returns, low volatility
-- **Bullish**: Positive returns, moderate volatility
-- **Crisis**: Extreme negative returns, extreme volatility
-
-### Data-Driven Regime Labeling
-Unlike naive approaches, regimes are characterized by **actual financial metrics**:
-- Mean return and volatility per regime
-- Win rate and duration statistics
-- Risk-adjusted return ratios
-- Maximum drawdown per regime
-
-### Trading Simulation
-Examples demonstrate realistic trading strategies:
-- Regime-based position sizing
-- Transaction cost modeling
-- Stop-loss risk management
-- Performance attribution by regime
-
-## 🎓 Learning Path
-
-**Beginners**: Start with examples 00 → 01 → 02
-
-**Traders**: Focus on examples 03 → case_study_basic → financial_case_study
-
-**Researchers**: Explore examples 04 → 05 → improved_features
-
-**Production Users**: Study case_study_comprehensive for complete workflows
+---
 
 ## ⚠️ Important Notes
 
-1. **Data Requirements**: Most examples use yfinance for data. Internet connection required for real market data.
+### Blog-Referenced Files (Protected)
 
-2. **Runtime**: Case study and multi-asset examples can take 2-3 minutes. Examples with 30-180s timeouts are expected.
+The following files are directly referenced on hiddenregime.com and **MUST NOT BE MODIFIED**:
 
-3. **Output Directory**: Examples create `output/` directory automatically. Add to `.gitignore` if committing to version control.
+**Case Studies:**
+- `case_studies/case_study_2008_financial_crisis.py`
+- `case_studies/case_study_dotcom_2000.py`
+- `case_studies/case_study_covid_2020.py`
 
-4. **Model Component Parameter**: When using `FinancialAnalysis.update()`, always pass `model_component=hmm_model` for data-driven regime interpretation.
+**Notebooks:**
+- All 7 notebooks in `notebooks/` directory
 
-5. **Virtual Environment**: Always activate the environment before running examples.
+Any changes to these files will break blog links and tutorials.
+
+### Data Requirements
+
+Most examples use yfinance for data. Internet connection required for real market data. Examples gracefully fall back to sample data when network is unavailable.
+
+### Output Directory
+
+Examples create `output/` directory automatically. Add to `.gitignore` if committing to version control.
+
+### Runtime Estimates
+
+Runtime estimates are approximate and depend on:
+- Network speed (for data downloads)
+- CPU performance
+- Number of assets analyzed
+
+Case studies can take 2-3 minutes for full analysis.
+
+### QuantConnect Examples
+
+Portfolio strategies in `portfolios/` are QuantConnect algorithms. They:
+- Require QuantConnect environment to run
+- Cannot be executed as standalone Python scripts
+- Serve as templates for QuantConnect backtesting
+
+---
 
 ## 🐛 Troubleshooting
 
@@ -401,13 +605,15 @@ Examples demonstrate realistic trading strategies:
 
 ### Missing Dependencies
 ```bash
-pip install yfinance pandas numpy matplotlib seaborn scipy
+pip install hidden-regime yfinance pandas numpy matplotlib seaborn scipy
 ```
 
 ### Output Directory Permissions
 ```bash
 chmod -R 755 output/
 ```
+
+---
 
 ## 🌟 Next Steps
 
@@ -424,25 +630,18 @@ For API documentation, see the module READMEs in:
 - `hidden_regime/analysis/README.md`
 - `hidden_regime/reporting/README.md`
 
-## 📝 Example Summary Table
+---
 
-| Example | Runtime | Complexity | Purpose |
-|---------|---------|------------|---------|
-| 00_basic_regime_detection.py | 30s | Beginner | Minimal working example |
-| 01_real_market_analysis.py | 60s | Beginner | Real market data with fallbacks |
-| 02_regime_comparison_analysis.py | 20s | Intermediate | Multi-asset comparison |
-| 03_trading_strategy_demo.py | 15s | Intermediate | Trading strategy development |
-| 04_multi_stock_comparative_study.py | 180s | Intermediate | Batch multi-ticker analysis |
-| 05_advanced_analysis_showcase.py | 15s | Advanced | Complete pipeline showcase |
-| improved_features.py | 120s | Advanced | Enhanced feature engineering |
-| case_study.py | 30s | Intermediate | 4-phase case study system |
-| case_study_basic.py | 30s | Beginner | Quick unified API example |
-| case_study_comprehensive.py | 60s | Advanced | Full-featured analysis |
-| case_study_multi_asset.py | 120s | Advanced | Multi-asset case studies |
-| financial_case_study.py | 90s | Advanced | Financial-first architecture |
+## 📖 Additional Resources
 
-**Total Runtime**: ~10 minutes for all examples
+- **Main Documentation:** See root `README.md`
+- **API Reference:** `API_REFERENCE.md`
+- **QuantConnect Guide:** `quantconnect_templates/README.md`
+- **Best Practices:** `BEST_PRACTICES_AND_FAQ.md`
+- **Blog & Tutorials:** https://hiddenregime.com
 
 ---
 
-*All examples tested and verified working on 2025-09-30*
+*Last Updated: 2025-11-17*
+*Examples reorganized into subdirectories for better navigation*
+*All examples tested and verified working*

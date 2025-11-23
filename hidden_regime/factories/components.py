@@ -9,9 +9,7 @@ import logging
 from typing import Any, Dict, Type, Union
 
 from ..config import (
-    AnalysisConfig,
     DataConfig,
-    FinancialAnalysisConfig,
     FinancialDataConfig,
     FinancialObservationConfig,
     HMMConfig,
@@ -19,6 +17,8 @@ from ..config import (
     ObservationConfig,
     ReportConfig,
 )
+from ..config.interpreter import InterpreterConfiguration
+from ..config.signal_generation import SignalGenerationConfiguration
 from ..utils.exceptions import ConfigurationError
 
 
@@ -38,7 +38,8 @@ class ComponentFactory:
         self._data_registry = {}
         self._observation_registry = {}
         self._model_registry = {}
-        self._analysis_registry = {}
+        self._interpreter_registry = {}
+        self._signal_generator_registry = {}
         self._report_registry = {}
 
         # Register default components
@@ -57,9 +58,14 @@ class ComponentFactory:
         # Model components
         self.register_model_component("HMMConfig", self._create_hmm_model)
 
-        # Analysis components
-        self.register_analysis_component(
-            "FinancialAnalysisConfig", self._create_financial_analysis
+        # Interpreter components (new architecture)
+        self.register_interpreter_component(
+            "InterpreterConfiguration", self._create_financial_interpreter
+        )
+
+        # Signal Generator components
+        self.register_signal_generator_component(
+            "SignalGenerationConfiguration", self._create_financial_signal_generator
         )
 
         # Report components
@@ -78,9 +84,13 @@ class ComponentFactory:
         """Register a model component creator function."""
         self._model_registry[config_type] = creator_func
 
-    def register_analysis_component(self, config_type: str, creator_func: callable):
-        """Register an analysis component creator function."""
-        self._analysis_registry[config_type] = creator_func
+    def register_interpreter_component(self, config_type: str, creator_func: callable):
+        """Register an interpreter component creator function."""
+        self._interpreter_registry[config_type] = creator_func
+
+    def register_signal_generator_component(self, config_type: str, creator_func: callable):
+        """Register a signal generator component creator function."""
+        self._signal_generator_registry[config_type] = creator_func
 
     def register_report_component(self, config_type: str, creator_func: callable):
         """Register a report component creator function."""
@@ -159,29 +169,53 @@ class ComponentFactory:
         except Exception as e:
             raise ConfigurationError(f"Failed to create model component: {str(e)}")
 
-    def create_analysis_component(self, config: AnalysisConfig) -> Any:
+    def create_interpreter_component(self, config: InterpreterConfiguration) -> Any:
         """
-        Create analysis component from configuration.
+        Create interpreter component from configuration.
 
         Args:
-            config: Analysis configuration object
+            config: Interpreter configuration object
 
         Returns:
-            Initialized analysis component
+            Initialized interpreter component
         """
         config_type = config.__class__.__name__
 
-        if config_type not in self._analysis_registry:
+        if config_type not in self._interpreter_registry:
             raise ConfigurationError(
-                f"Unknown analysis configuration type: {config_type}"
+                f"Unknown interpreter configuration type: {config_type}"
             )
 
         try:
-            component = self._analysis_registry[config_type](config)
-            self.logger.debug(f"Created analysis component: {type(component).__name__}")
+            component = self._interpreter_registry[config_type](config)
+            self.logger.debug(f"Created interpreter component: {type(component).__name__}")
             return component
         except Exception as e:
-            raise ConfigurationError(f"Failed to create analysis component: {str(e)}")
+            raise ConfigurationError(f"Failed to create interpreter component: {str(e)}")
+
+    def create_signal_generator_component(self, config: SignalGenerationConfiguration) -> Any:
+        """
+        Create signal generator component from configuration.
+
+        Args:
+            config: Signal generation configuration object
+
+        Returns:
+            Initialized signal generator component
+        """
+        config_type = config.__class__.__name__
+
+        if config_type not in self._signal_generator_registry:
+            raise ConfigurationError(
+                f"Unknown signal generator configuration type: {config_type}"
+            )
+
+        try:
+            component = self._signal_generator_registry[config_type](config)
+            self.logger.debug(f"Created signal generator component: {type(component).__name__}")
+            return component
+        except Exception as e:
+            raise ConfigurationError(f"Failed to create signal generator component: {str(e)}")
 
     def create_report_component(self, config: ReportConfig) -> Any:
         """
@@ -226,11 +260,17 @@ class ComponentFactory:
 
         return HiddenMarkovModel(config)
 
-    def _create_financial_analysis(self, config: FinancialAnalysisConfig) -> Any:
-        """Create financial analysis component."""
-        from ..analysis.financial import FinancialAnalysis
+    def _create_financial_interpreter(self, config: InterpreterConfiguration) -> Any:
+        """Create financial interpreter component (new architecture)."""
+        from ..interpreter.financial import FinancialInterpreter
 
-        return FinancialAnalysis(config)
+        return FinancialInterpreter(config)
+
+    def _create_financial_signal_generator(self, config: SignalGenerationConfiguration) -> Any:
+        """Create financial signal generator component."""
+        from ..signal_generation.financial import FinancialSignalGenerator
+
+        return FinancialSignalGenerator(config)
 
     def _create_report(self, config: ReportConfig) -> Any:
         """Create report component."""
@@ -249,7 +289,8 @@ class ComponentFactory:
             "data": dict(self._data_registry),
             "observation": dict(self._observation_registry),
             "model": dict(self._model_registry),
-            "analysis": dict(self._analysis_registry),
+            "interpreter": dict(self._interpreter_registry),
+            "signal_generator": dict(self._signal_generator_registry),
             "report": dict(self._report_registry),
         }
 

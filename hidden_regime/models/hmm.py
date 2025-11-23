@@ -21,9 +21,11 @@ from ..utils.exceptions import HMMInferenceError, HMMTrainingError, ValidationEr
 try:
     from .algorithms import HMMAlgorithms
     from .utils import (
-        calculate_regime_statistics,
+        calculate_state_statistics,
         check_convergence,
         initialize_parameters_kmeans,
+        initialize_parameters_quantile,
+        initialize_parameters_gmm,
         initialize_parameters_random,
         validate_hmm_parameters,
         validate_returns_data,
@@ -47,12 +49,25 @@ class HiddenMarkovModel(ModelComponent):
         """
         Initialize HMM model with configuration.
 
+        NOTE: Direct instantiation is discouraged. Use factory pattern instead:
+            pipeline = hr.create_financial_pipeline('SPY')
+        Or:
+            model = component_factory.create_model_component(config)
+
         Args:
             config: HMMConfig with model parameters
 
         Raises:
             ValidationError: If configuration parameters are invalid
         """
+        import warnings
+        warnings.warn(
+            "Direct instantiation of HiddenMarkovModel is discouraged. "
+            "Use hr.create_financial_pipeline() or component_factory.create_model_component() instead.",
+            FutureWarning,
+            stacklevel=2
+        )
+
         # Validate configuration parameters
         self._validate_config(config)
 
@@ -89,6 +104,88 @@ class HiddenMarkovModel(ModelComponent):
             self._algorithms = HMMAlgorithms()
         else:
             self._algorithms = None
+
+    # ========================================================================
+    # Property decorators for easier parameter access
+    # ========================================================================
+
+    @property
+    def emission_means(self) -> Optional[np.ndarray]:
+        """Get emission means (state mean returns)."""
+        return self.emission_means_
+
+    @property
+    def emission_stds(self) -> Optional[np.ndarray]:
+        """Get emission standard deviations (state volatilities)."""
+        return self.emission_stds_
+
+    @property
+    def transition_matrix(self) -> Optional[np.ndarray]:
+        """Get state transition probability matrix."""
+        return self.transition_matrix_
+
+    @property
+    def initial_probs(self) -> Optional[np.ndarray]:
+        """Get initial state probabilities."""
+        return self.initial_probs_
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        """
+        Get all model parameters as a dictionary.
+
+        Returns:
+            Dictionary containing all model parameters:
+            - emission_means: State mean returns
+            - emission_stds: State volatilities
+            - transition_matrix: State transition probabilities
+            - initial_probs: Initial state probabilities
+            - n_states: Number of states
+        """
+        return {
+            "emission_means": self.emission_means_.tolist() if self.emission_means_ is not None else None,
+            "emission_stds": self.emission_stds_.tolist() if self.emission_stds_ is not None else None,
+            "transition_matrix": self.transition_matrix_.tolist() if self.transition_matrix_ is not None else None,
+            "initial_probs": self.initial_probs_.tolist() if self.initial_probs_ is not None else None,
+            "n_states": self.n_states,
+            "is_fitted": self.is_fitted,
+        }
+
+    @property
+    def state_persistence(self) -> Optional[np.ndarray]:
+        """
+        Get diagonal elements of transition matrix (state persistence).
+
+        Returns:
+            Array of persistence probabilities for each state.
+            Higher values mean the state is more persistent.
+        """
+        if self.transition_matrix_ is None:
+            return None
+        return np.diag(self.transition_matrix_)
+
+    @property
+    def expected_durations(self) -> Optional[np.ndarray]:
+        """
+        Get expected duration (in periods) for each state.
+
+        Calculated as 1 / (1 - persistence) for each state.
+        For example, if persistence is 0.9, expected duration is 10 periods.
+
+        Returns:
+            Array of expected durations for each state.
+        """
+        if self.transition_matrix_ is None:
+            return None
+        persistence = self.state_persistence
+        return np.array([
+            1.0 / (1.0 - p) if p < 1.0 else float('inf')
+            for p in persistence
+        ])
+
+    # ========================================================================
+    # Validation methods
+    # ========================================================================
 
     def _validate_config(self, config: HMMConfig) -> None:
         """
@@ -271,6 +368,13 @@ class HiddenMarkovModel(ModelComponent):
         for i in range(self.n_states):
             results[f"state_{i}_prob"] = state_probs[:, i]
 
+        # Add emission parameters for interpreter access
+        # Store as list for each row so interpreter can access them
+        results["emission_means"] = [self.emission_means_.tolist()] * len(results)
+        results["emission_stds"] = [self.emission_stds_.tolist()] * len(results)
+        results["transition_matrix"] = [self.transition_matrix_.tolist()] * len(results)
+        results["initial_probs"] = [self.initial_probs_.tolist()] * len(results)
+
         # Reindex to match original observations (fill NaN rows with default values)
         results = results.reindex(observations.index)
         results["predicted_state"] = results["predicted_state"].fillna(0).astype(int)
@@ -279,6 +383,20 @@ class HiddenMarkovModel(ModelComponent):
         # Fill NaN values in state probability columns (default to uniform distribution)
         for i in range(self.n_states):
             results[f"state_{i}_prob"] = results[f"state_{i}_prob"].fillna(1.0 / self.n_states)
+
+        # Fill NaN values in emission parameters (use same values for consistency)
+        results["emission_means"] = results["emission_means"].fillna(
+            pd.Series([[self.emission_means_.tolist()]] * len(results), index=results.index)
+        ).apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list) else x)
+        results["emission_stds"] = results["emission_stds"].fillna(
+            pd.Series([[self.emission_stds_.tolist()]] * len(results), index=results.index)
+        ).apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list) else x)
+        results["transition_matrix"] = results["transition_matrix"].fillna(
+            pd.Series([[self.transition_matrix_.tolist()]] * len(results), index=results.index)
+        ).apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list) else x)
+        results["initial_probs"] = results["initial_probs"].fillna(
+            pd.Series([[self.initial_probs_.tolist()]] * len(results), index=results.index)
+        ).apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list) else x)
 
         return results
 
@@ -556,19 +674,39 @@ class HiddenMarkovModel(ModelComponent):
         return fig
 
     def _initialize_parameters(self, returns: np.ndarray) -> None:
-        """Initialize HMM parameters."""
+        """Initialize HMM parameters based on config.initialization_method."""
         initialization_diagnostics = None
+        method = self.config.initialization_method
 
         # Custom initialization - don't catch exceptions, let them propagate
-        if self.config.initialization_method == "custom":
+        if method == "custom":
             initial_probs, transition_matrix, means, stds, initialization_diagnostics = (
                 self._initialize_parameters_custom()
             )
+        elif not HMM_UTILS_AVAILABLE:
+            # Utilities not available - use simple initialization
+            initial_probs, transition_matrix, means, stds = (
+                self._initialize_parameters_simple(returns)
+            )
+            initialization_diagnostics = {
+                'method': 'simple',
+                'reason': 'utils_not_available',
+                'n_states': self.n_states,
+                'n_observations': len(returns),
+                'warnings': ['HMM utilities not available, using simple initialization']
+            }
         else:
-            # Other methods - use try-except with fallback
+            # Use config-driven initialization method
             try:
-                if HMM_UTILS_AVAILABLE and self.config.initialization_method == "kmeans":
-                    # Use sophisticated initialization with diagnostics
+                if method == "quantile":
+                    initial_probs, transition_matrix, emission_params, initialization_diagnostics = (
+                        initialize_parameters_quantile(
+                            self.n_states, returns, self.config.random_seed
+                        )
+                    )
+                    means = emission_params[:, 0]
+                    stds = emission_params[:, 1]
+                elif method == "kmeans":
                     initial_probs, transition_matrix, emission_params, initialization_diagnostics = (
                         initialize_parameters_kmeans(
                             self.n_states, returns, self.config.random_seed
@@ -576,13 +714,20 @@ class HiddenMarkovModel(ModelComponent):
                     )
                     means = emission_params[:, 0]
                     stds = emission_params[:, 1]
-                else:
-                    # Simple random initialization
+                elif method == "gmm":
+                    initial_probs, transition_matrix, emission_params, initialization_diagnostics = (
+                        initialize_parameters_gmm(
+                            self.n_states, returns, self.config.random_seed
+                        )
+                    )
+                    means = emission_params[:, 0]
+                    stds = emission_params[:, 1]
+                else:  # random
                     initial_probs, transition_matrix, means, stds = (
                         self._initialize_parameters_simple(returns)
                     )
                     initialization_diagnostics = {
-                        'method': 'random' if self.config.initialization_method == 'random' else 'simple',
+                        'method': 'random',
                         'n_states': self.n_states,
                         'n_observations': len(returns),
                         'warnings': []
@@ -590,7 +735,7 @@ class HiddenMarkovModel(ModelComponent):
             except Exception as e:
                 # Fallback to simple initialization on any error
                 print(
-                    f"Warning: Sophisticated initialization failed ({e}), using simple initialization"
+                    f"Warning: {method} initialization failed ({e}), using simple initialization"
                 )
                 initial_probs, transition_matrix, means, stds = (
                     self._initialize_parameters_simple(returns)
@@ -598,10 +743,11 @@ class HiddenMarkovModel(ModelComponent):
                 initialization_diagnostics = {
                     'method': 'simple_fallback',
                     'reason': 'initialization_error',
+                    'requested_method': method,
                     'error': str(e),
                     'n_states': self.n_states,
                     'n_observations': len(returns),
-                    'warnings': [f'Initialization failed: {str(e)}']
+                    'warnings': [f'{method} initialization failed: {str(e)}']
                 }
 
         self.initial_probs_ = initial_probs
@@ -635,9 +781,9 @@ class HiddenMarkovModel(ModelComponent):
         # Convert to percentage space for constraint checking
         means_pct = np.exp(means_log) - 1
 
-        # Apply financial domain constraints similar to kmeans initialization
-        # Maximum daily return: 8% for extreme bull markets
-        # Minimum daily return: -8% for crisis periods
+        # Apply statistical constraints similar to kmeans initialization
+        # Maximum daily return: 8% (extreme positive tail)
+        # Minimum daily return: -8% (extreme negative tail)
         max_daily_return_pct = 0.08  # 8% daily
         min_daily_return_pct = -0.08  # -8% daily
 
@@ -768,18 +914,18 @@ class HiddenMarkovModel(ModelComponent):
             negative_regimes = np.where(extremely_negative)[0]
             negative_values = means_pct[extremely_negative] * 100
             warnings.warn(
-                f"Regime(s) {list(negative_regimes)} have extremely negative mean returns "
+                f"State(s) {list(negative_regimes)} have extremely negative mean returns "
                 f"(< -10% daily): {list(negative_values)}%. "
-                "This may indicate a data entry error. Typical bear markets are -1% to -3% daily."
+                "This may indicate a data entry error. Typical negative states range from -1% to -3% daily."
             )
 
         if np.any(extremely_positive):
             positive_regimes = np.where(extremely_positive)[0]
             positive_values = means_pct[extremely_positive] * 100
             warnings.warn(
-                f"Regime(s) {list(positive_regimes)} have extremely positive mean returns "
+                f"State(s) {list(positive_regimes)} have extremely positive mean returns "
                 f"(> +10% daily): {list(positive_values)}%. "
-                "This may indicate a data entry error. Typical bull markets are +0.5% to +2% daily."
+                "This may indicate a data entry error. Typical positive states range from +0.5% to +2% daily."
             )
 
         # Check for extreme volatility values
@@ -792,16 +938,16 @@ class HiddenMarkovModel(ModelComponent):
             warnings.warn(
                 f"Regime(s) {list(low_vol_regimes)} have extremely low volatility "
                 f"(< 0.1% daily): {list(low_vol_values)}%. "
-                "Typical market volatility ranges from 1% to 5% daily."
+                "Typical volatility ranges from 1% to 5% daily."
             )
 
         if np.any(extremely_high_vol):
             high_vol_regimes = np.where(extremely_high_vol)[0]
             high_vol_values = stds[extremely_high_vol] * 100
             warnings.warn(
-                f"Regime(s) {list(high_vol_regimes)} have extremely high volatility "
+                f"State(s) {list(high_vol_regimes)} have extremely high volatility "
                 f"(> 15% daily): {list(high_vol_values)}%. "
-                "This is unusually high even for crisis periods."
+                "This is unusually high even for extreme conditions."
             )
 
         # Check for negative or zero volatilities
@@ -1629,8 +1775,8 @@ class HiddenMarkovModel(ModelComponent):
         3. Regime Persistence - Descriptive stability characteristic (reported, not judged)
 
         Note: Only log-likelihood is objectively assessed. Persistence and duration
-        are regime characteristics whose suitability depends on your trading strategy
-        and data frequency (day trading vs swing trading, daily vs minute data).
+        are regime characteristics whose suitability depends on your use case
+        and data frequency (high-frequency vs daily data).
 
         Args:
             observations: Data to evaluate
@@ -1652,15 +1798,15 @@ class HiddenMarkovModel(ModelComponent):
         # 2. Regime Duration (timing)
         predictions = self.predict(observations)
         returns = observations[self.config.observed_signal].values
-        regime_stats = calculate_regime_statistics(
+        regime_stats = calculate_state_statistics(
             states=predictions['predicted_state'].values,
             returns=returns
         )
 
         regime_durations = {}
         for state in range(self.n_states):
-            if state in regime_stats['regime_stats']:
-                regime_durations[state] = regime_stats['regime_stats'][state].get('avg_duration', 0.0)
+            if state in regime_stats['state_stats']:
+                regime_durations[state] = regime_stats['state_stats'][state].get('avg_duration', 0.0)
             else:
                 regime_durations[state] = 0.0
 

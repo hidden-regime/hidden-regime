@@ -1,0 +1,97 @@
+# .dockerignore for Hidden-Regime Docker builds
+#
+# Exclude files not needed in Docker image to reduce build context size
+# and improve build performance
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.pyc
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Documentation
+docs/_build/
+*.md
+!README.md
+!quantconnect_templates/README.md
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Examples (keep templates)
+examples/
+!quantconnect_templates/
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Data and outputs
+output/
+data/
+*.csv
+*.json
+*.log
+
+# Docker (don't include other Docker files)
+docker/
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Misc
+*.bak
+*.tmp
+*.cache
+.mypy_cache/

@@ -14,12 +14,14 @@ from .signal_generators import (
     BuyHoldSignalGenerator,
     HMMSignalGenerator,
     SignalGenerator,
+    SignalType,
 )
 from .trading_engine import TradingSimulationEngine
 
 __all__ = [
     "TradingSimulationEngine",
     "SignalGenerator",
+    "SignalType",
     "HMMSignalGenerator",
     "BuyHoldSignalGenerator",
     "RiskManager",

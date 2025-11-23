@@ -2,7 +2,7 @@
 Core algorithms for Hidden Markov Model implementation.
 
 Implements Forward-Backward, Viterbi, and Baum-Welch algorithms
-with numerical stability enhancements for market regime detection.
+with numerical stability enhancements for time series state detection.
 """
 
 import warnings
@@ -231,12 +231,23 @@ class HMMAlgorithms:
 
         # Compute gamma (state probabilities)
         gamma = forward_probs + backward_probs
-        # Normalize in log space
+        # Normalize in log space with numerical stability
         for t in range(T):
-            gamma[t] = gamma[t] - logsumexp(gamma[t])
+            log_sum = logsumexp(gamma[t])
+            # Check for numerical underflow (all probabilities are zero)
+            if np.isinf(log_sum) and log_sum < 0:
+                # Use uniform distribution when all probabilities underflow
+                gamma[t] = np.log(1.0 / n_states)
+            else:
+                gamma[t] = gamma[t] - log_sum
 
         # Convert to probability space
         gamma = np.exp(gamma)
+
+        # Ensure numerical stability: clip to valid probability range
+        gamma = np.clip(gamma, 1e-10, 1.0)
+        # Renormalize rows to sum to 1
+        gamma = gamma / gamma.sum(axis=1, keepdims=True)
 
         # Compute xi (pairwise transition probabilities)
         xi = np.zeros((T - 1, n_states, n_states))
@@ -256,10 +267,19 @@ class HMMAlgorithms:
                         + backward_probs[t + 1, j]
                     )
 
-            # Normalize xi[t] in log space
+            # Normalize xi[t] in log space with numerical stability
             xi_t_flat = xi[t].flatten()
-            xi_t_normalized = xi_t_flat - logsumexp(xi_t_flat)
-            xi[t] = np.exp(xi_t_normalized.reshape(n_states, n_states))
+            log_sum = logsumexp(xi_t_flat)
+            # Check for numerical underflow
+            if np.isinf(log_sum) and log_sum < 0:
+                # Use uniform distribution when all probabilities underflow
+                xi[t] = np.ones((n_states, n_states)) / (n_states * n_states)
+            else:
+                xi_t_normalized = xi_t_flat - log_sum
+                xi[t] = np.exp(xi_t_normalized.reshape(n_states, n_states))
+                # Ensure numerical stability
+                xi[t] = np.clip(xi[t], 1e-10, 1.0)
+                xi[t] = xi[t] / xi[t].sum()
 
         return gamma, xi, log_likelihood
 

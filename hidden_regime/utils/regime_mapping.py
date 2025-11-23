@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from ..financial.regime_characterizer import RegimeProfile, RegimeType
+from ..interpreter.regime_types import RegimeProfile, RegimeType
 
 # Base color mapping for regime types (colorblind-safe)
 # Source: ColorBrewer2 diverging scheme (Red-Yellow-Blue)
@@ -179,29 +179,6 @@ def _get_color_from_label(label: str) -> str:
     # Default for any other label
     else:
         return "#9970ab"  # Purple (mixed/unknown)
-
-
-def _create_single_regime_label(profile: RegimeProfile) -> str:
-    """DEPRECATED: Use profile.get_display_name() instead."""
-    return profile.get_display_name()
-
-
-def _create_multi_regime_label(profile: RegimeProfile, index: int, total: int) -> str:
-    """DEPRECATED: Use profile.get_display_name() instead."""
-    return profile.get_display_name()
-
-
-def _get_regime_color_variation(regime_type: RegimeType, index: int) -> str:
-    """DEPRECATED: Use _get_color_from_label() with data-driven labels instead."""
-    # Fallback for backward compatibility
-    variations = REGIME_COLOR_VARIATIONS.get(
-        regime_type, [REGIME_TYPE_COLORS[regime_type]]
-    )
-
-    if index < len(variations):
-        return variations[index]
-    else:
-        return REGIME_TYPE_COLORS[regime_type]
 
 
 def get_regime_labels_from_profiles(

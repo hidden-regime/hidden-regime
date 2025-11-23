@@ -47,7 +47,7 @@ def map_states_to_financial_regimes(
     # Classify each state independently based on actual return characteristics
     regime_classifications = []
     for i, mean_pct in enumerate(means_pct):
-        regime_name = _classify_regime_by_return_threshold(mean_pct)
+        regime_name = _classify_regime_by_return_threshold(mean_pct, n_states=n_states)
         regime_classifications.append((i, regime_name, mean_pct))
 
     # Handle duplicate regime names by adding qualifiers
@@ -64,7 +64,7 @@ def map_states_to_financial_regimes(
     return final_mapping
 
 
-def _classify_regime_by_return_threshold(mean_return_pct: float) -> str:
+def _classify_regime_by_return_threshold(mean_return_pct: float, n_states: int = 3) -> str:
     """
     Classify a regime based on its daily return threshold.
 
@@ -73,20 +73,36 @@ def _classify_regime_by_return_threshold(mean_return_pct: float) -> str:
 
     Args:
         mean_return_pct: Daily return in percentage form
+        n_states: Number of states in the model (for constraining regime names)
 
     Returns:
         Regime name based on return threshold
+
+    Note:
+        For n_states=3, crisis detection is disabled to ensure consistent
+        regime naming (always returns one of: Bearish, Sideways, Bullish).
+        For n_states>=4, crisis detection is enabled.
     """
-    if mean_return_pct < -0.03:  # Less than -3% daily
-        return "Crisis"
-    elif mean_return_pct < -0.005:  # -3% to -0.5% daily
-        return "Bear"
-    elif mean_return_pct <= 0.01:  # -0.5% to +1.0% daily (more generous sideways)
-        return "Sideways"
-    elif mean_return_pct < 0.05:  # +1.0% to +5% daily
-        return "Bull"
-    else:  # Greater than +5% daily
-        return "Euphoric"
+    # For n_states=3, constrain to standard 3-regime names (no Crisis)
+    if n_states == 3:
+        if mean_return_pct < -0.005:  # Less than -0.5% daily
+            return "Bearish"
+        elif mean_return_pct <= 0.01:  # -0.5% to +1.0% daily
+            return "Sideways"
+        else:  # Greater than +1.0% daily
+            return "Bullish"
+    else:
+        # For n_states>3, use full classification including Crisis
+        if mean_return_pct < -0.03:  # Less than -3% daily
+            return "Crisis"
+        elif mean_return_pct < -0.005:  # -3% to -0.5% daily
+            return "Bear"
+        elif mean_return_pct <= 0.01:  # -0.5% to +1.0% daily (more generous sideways)
+            return "Sideways"
+        elif mean_return_pct < 0.05:  # +1.0% to +5% daily
+            return "Bull"
+        else:  # Greater than +5% daily
+            return "Euphoric"
 
 
 def _resolve_duplicate_regime_names(
@@ -483,15 +499,30 @@ def _estimate_duration_from_regime_type(regime_name: str) -> float:
         return 10.0  # Default duration
 
 
-def _classify_regime_strength(return_pct: float) -> str:
-    """Classify the strength of a regime based on its return."""
+def _classify_regime_strength(return_pct: float) -> float:
+    """
+    Calculate regime strength as a numeric score based on return magnitude.
+
+    Returns a value between 0 and 1 indicating regime strength.
+    Higher absolute returns indicate stronger, more distinct regimes.
+
+    Args:
+        return_pct: Daily return in percentage form
+
+    Returns:
+        Numeric strength score from 0 to 1
+    """
     abs_return = abs(return_pct)
 
-    if abs_return < 0.005:
-        return "Weak"
-    elif abs_return < 0.02:
-        return "Moderate"
-    elif abs_return < 0.05:
-        return "Strong"
-    else:
-        return "Extreme"
+    # Map absolute return to strength score (0-1)
+    # Using sigmoid-like scaling to avoid hard boundaries
+    if abs_return < 0.005:  # <0.5% daily
+        return 0.3  # Weak regime
+    elif abs_return < 0.01:  # 0.5-1% daily
+        return 0.5  # Moderate regime
+    elif abs_return < 0.02:  # 1-2% daily
+        return 0.7  # Strong regime
+    elif abs_return < 0.05:  # 2-5% daily
+        return 0.85  # Very strong regime
+    else:  # >5% daily
+        return 0.95  # Extreme regime (cap at 0.95 to distinguish from model confidence)

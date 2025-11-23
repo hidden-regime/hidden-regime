@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # LEAN Engine with Hidden-Regime
+  lean-hidden-regime:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        BUILD_DATE: ${BUILD_DATE:-2025-01-01}
+        VCS_REF: ${VCS_REF:-dev}
+    image: quantconnect/lean:hidden-regime
+    container_name: lean-hidden-regime
+    ports:
+      - "5678:5678"  # Debugger port
+    volumes:
+      # Mount algorithm directory
+      - ../quantconnect_templates:/Lean/Algorithm.Python:ro
+      # Mount data directory
+      - lean-data:/Lean/Data
+      # Mount results
+      - lean-results:/Results
+      # Configuration
+      - ./config:/Lean/config:ro
+    environment:
+      # LEAN Configuration
+      - LEAN_MODE=backtest
+      - LEAN_ENVIRONMENT=docker
+      # Python configuration
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/usr/local/lib/python3.11/site-packages
+    restart: unless-stopped
+    networks:
+      - lean-network
+
+  # Jupyter Research Environment (optional)
+  lean-research:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: quantconnect/lean:hidden-regime
+    container_name: lean-research
+    ports:
+      - "8888:8888"  # Jupyter port
+    volumes:
+      - ../quantconnect_templates:/home/notebooks:rw
+      - lean-data:/Lean/Data:ro
+      - lean-results:/Results:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: >
+      bash -c "pip install jupyter notebook &&
+               jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+               --NotebookApp.token='' --NotebookApp.password=''"
+    restart: unless-stopped
+    networks:
+      - lean-network
+
+volumes:
+  # Persistent data volumes
+  lean-data:
+    driver: local
+  lean-results:
+    driver: local
+
+networks:
+  lean-network:
+    driver: bridge

@@ -5,6 +5,126 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [2.0.0] - 2025-11-23
+
+### BREAKING CHANGES
+
+This release completes the architecture migration to a unified Interpreter + Signal Generation pattern. **All backward compatibility code has been removed.**
+
+See [Migration Guide](docs/reference/MIGRATION_2.0.md) for detailed upgrade instructions.
+
+### Removed
+
+- **Legacy Components (66.6KB of code)**
+  - `FinancialAnalysis` component - replaced by `FinancialInterpreter`
+  - `AnalysisConfig` and `FinancialAnalysisConfig` - replaced by `InterpreterConfiguration`
+  - `analysis` parameter in `Pipeline.__init__()`
+  - `analysis_config` parameter in `PipelineFactory.create_pipeline()`
+  - `analysis_output` property (use `interpreter_output` instead)
+  - `_format_analysis_output()` method (use `_format_interpreter_output()` instead)
+
+### Changed
+
+- **Architecture**: Unified Interpreter + Signal Generation pattern
+  - **Pipeline flow**: Data → Observation → Model → Interpreter → SignalGenerator → Report
+  - **FinancialInterpreter** (895 lines): Unified regime interpretation with performance metrics
+  - **FinancialSignalGenerator**: Dedicated trading signal generation component
+  - **Clean separation**: Interpreter adds domain knowledge, SignalGenerator creates trading signals
+
+- **Factory Methods**: Simplified signatures
+  - `create_pipeline()` now requires `interpreter_config` (no longer accepts `analysis_config`)
+  - `Pipeline()` now requires `interpreter` parameter (no longer accepts `analysis`)
+  - `create_financial_pipeline()` uses new architecture by default
+
+- **Column Names**: Standardized output naming
+  - `regime_name` → `regime_label`
+  - `regime_return` → `expected_return`
+  - `regime_volatility` → `expected_volatility`
+  - Note: MCP tools still support both naming conventions
+
+- **Configuration System**
+  - Removed: `AnalysisConfig`, `FinancialAnalysisConfig`
+  - Added: `InterpreterConfiguration`, `SignalGenerationConfiguration`
+  - Updated package exports in `hidden_regime.config`
+
+### Added
+
+- **Migration Guide**: Comprehensive guide for upgrading from v1.x to v2.0
+  - Located at `docs/reference/MIGRATION_2.0.md`
+  - Step-by-step migration checklist
+  - Before/after code examples
+  - Common pitfalls and solutions
+
+### Fixed
+
+- **Performance Metrics**: Data-driven calculations for win_rate, max_drawdown, regime_strength
+- **Pipeline Output**: Proper formatting for interpreter output columns
+- **MCP Tools**: Dynamic column name handling (supports both old and new conventions)
+- **Import Paths**: Cleaned up all imports after removing legacy code
+
+### Technical Details
+
+- **Files Deleted**: 2 (financial.py, analysis.py)
+- **Files Modified**: 7 (factories, pipeline core, config exports, imports)
+- **Code Reduction**: 66.6KB removed
+- **Architecture**: Single responsibility principle maintained throughout
+
+- **Major Documentation Reorganization** - Consolidated 35+ root-level docs into organized structure
+  - **New Structure**: 4 root docs (README, ARCHITECTURE, CONTRIBUTING, CHANGELOG) + organized `docs/` subdirectories
+  - **docs/guides/**: User guides (quickstart, configuration, troubleshooting, OS-specific setup)
+  - **docs/advanced/**: Advanced topics (features, trading, case studies, optimization, community examples)
+  - **docs/reference/**: Technical reference (mathematical foundations, deployment, error handling)
+  - **docs/integrations/**: Integration guides (MCP server in `docs/integrations/mcp/`)
+  - **docs/experimental/**: Experimental features (QuantConnect integration, alpha strategies)
+  - **CONTRIBUTING.md**: New comprehensive contributing guide consolidating 8+ testing docs
+  - **Removed**: 15+ session artifacts and redundant documentation files
+  - **Updated**: README.md with complete documentation index and navigation
+  - **Result**: Reduced from 35 root .md files to 4 canonical docs + organized subdirectories
+
+### Added
+- **MCP Logging Interface** - Structured logging for transparency (4th of 5 MCP interfaces)
+  - Logs cache operations (hit/miss/set) for all tools
+  - Logs data loading with observation counts and date ranges
+  - Logs model training start and completion
+  - Logs operation completion with caching status
+  - Uses Python's standard logging module (captured by FastMCP)
+  - Added comprehensive test suite with 20+ test cases
+  - Documentation in README_MCP.md with example log output
+
+- **MCP Prompts Interface** - Complete implementation of MCP prompts (3rd of 5 MCP interfaces)
+  - 7 curated prompt templates for expert-level regime analysis workflows
+  - `regime_quick_check` - Fast market health check for day-to-day decisions
+  - `regime_deep_dive` - Comprehensive multi-tool analysis with historical context
+  - `regime_strategy_advisor` - Trading strategy recommendations based on regime + risk tolerance
+  - `regime_multi_asset_comparison` - Cross-asset regime comparison and diversification analysis
+  - `regime_risk_assessment` - Quantitative risk scoring (0-100) with mitigation strategies
+  - `regime_historical_analogs` - Find similar past regime patterns and predict outcomes
+  - `regime_portfolio_review` - Portfolio-wide regime analysis with rebalancing recommendations
+  - New `hidden_regime_mcp/prompts.py` module with 7 async prompt functions
+  - Comprehensive test suite: `tests/test_mcp/test_prompts.py` with 50+ test cases
+  - Extended README_MCP.md with detailed prompts documentation (350+ lines)
+
+### Documentation
+- **MCP Prompts Technical Specification** - 40-page implementation guide (`MCP_PROMPTS_TECHNICAL_SPEC.md`)
+  - Complete MCP Prompts interface overview and design rationale
+  - Detailed specification for all 7 prompts with workflows and output formats
+  - Implementation plan, testing strategy, and success metrics
+  - Roadmap for future enhancements (Phase 2 prompts, prompt composition, dynamic prompts)
+- **README_MCP.md Updates** - Comprehensive prompts section with:
+  - Why use prompts vs tools comparison
+  - Detailed documentation for each prompt with arguments, workflows, and sample outputs
+  - "Prompts vs Tools: When to Use Each" decision guide
+  - Usage examples showing real-world scenarios
+
+### Technical Details
+- Prompts registered in `hidden_regime_mcp/server.py` using FastMCP decorator pattern
+- All prompts are async functions returning structured instruction text
+- Argument validation with sensible defaults (e.g., risk_tolerance="medium", lookback_period="2y")
+- Prompts reference actual MCP tools (detect_regime, get_regime_statistics, get_transition_probabilities)
+- Modular architecture: prompts are instructional layer above operational tools
+
 ## [1.1.0] - 2025-11-04
 
 ### Added

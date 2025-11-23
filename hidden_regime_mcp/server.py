@@ -18,6 +18,15 @@ from hidden_regime_mcp.resources import (
     get_current_regime_resource,
     get_transitions_resource,
 )
+from hidden_regime_mcp.prompts import (
+    regime_quick_check,
+    regime_deep_dive,
+    regime_strategy_advisor,
+    regime_multi_asset_comparison,
+    regime_risk_assessment,
+    regime_historical_analogs,
+    regime_portfolio_review,
+)
 
 # Create FastMCP server
 mcp = FastMCP(
@@ -34,6 +43,15 @@ mcp.tool(get_transition_probabilities)
 # Register resources with URI templates
 mcp.resource("regime://{ticker}/current")(get_current_regime_resource)
 mcp.resource("regime://{ticker}/transitions")(get_transitions_resource)
+
+# Register prompts
+mcp.prompt()(regime_quick_check)
+mcp.prompt()(regime_deep_dive)
+mcp.prompt()(regime_strategy_advisor)
+mcp.prompt()(regime_multi_asset_comparison)
+mcp.prompt()(regime_risk_assessment)
+mcp.prompt()(regime_historical_analogs)
+mcp.prompt()(regime_portfolio_review)
 
 
 def main():

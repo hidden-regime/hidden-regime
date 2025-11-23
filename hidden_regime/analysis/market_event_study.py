@@ -281,7 +281,7 @@ class MarketEventStudy:
         # Initialize signal generator if enabled
         signal_generator = None
         if self.generate_signals:
-            from ..financial.signal_generation import FinancialSignalGenerator
+            from ..signal_generation import FinancialSignalGenerator
 
             signal_generator = FinancialSignalGenerator(
                 strategy_type=self.signal_strategy,

@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, calinski_harabasz_score
+from sklearn.mixture import GaussianMixture
 
 
 def validate_returns_data(returns: np.ndarray) -> np.ndarray:
@@ -85,7 +86,7 @@ def initialize_parameters_random(
 
     # Generate means around overall mean with some spread
     means = np.random.normal(returns_mean, returns_std * 0.5, n_states)
-    means = np.sort(means)  # Sort for interpretability (bear, sideways, bull)
+    means = np.sort(means)  # Sort for interpretability (lowest to highest return)
 
     # Generate standard deviations
     stds = np.random.uniform(returns_std * 0.5, returns_std * 1.5, n_states)
@@ -99,10 +100,10 @@ def initialize_parameters_kmeans(
     n_states: int, returns: np.ndarray, random_seed: Optional[int] = None
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[str, Any]]:
     """
-    Initialize HMM parameters using financial domain-constrained K-means clustering.
+    Initialize HMM parameters using data-constrained K-means clustering.
 
-    This function applies financial domain knowledge to prevent unrealistic
-    regime centers while preserving the statistical benefits of data-driven initialization.
+    This function applies domain-specific constraints to prevent unrealistic
+    state centers while preserving the statistical benefits of data-driven initialization.
 
     Args:
         n_states: Number of hidden states
@@ -130,11 +131,11 @@ def initialize_parameters_kmeans(
         }
         return init_probs, trans_mat, emission_params, fallback_diagnostics
 
-    # STEP 1: Filter extreme outliers in percentage space (easier financial intuition)
+    # STEP 1: Filter extreme outliers in percentage space
     returns_pct = np.exp(returns) - 1  # Convert log returns to percentages
 
-    # Filter outliers: daily moves >15% are likely noise/earnings/splits
-    outlier_threshold_pct = 0.15  # 15% daily move threshold
+    # Filter outliers: daily moves >15% are likely noise or anomalous events
+    outlier_threshold_pct = 0.15  # 15% daily threshold
     outlier_mask = np.abs(returns_pct) <= outlier_threshold_pct
 
     if outlier_mask.sum() < n_states * 5:  # Need minimum data per state
@@ -147,11 +148,38 @@ def initialize_parameters_kmeans(
     filtered_returns_log = np.log(filtered_returns_pct + 1)  # Back to log space
 
     # STEP 2: Enhanced feature engineering for clustering
+    # Include VOLATILITY to distinguish states (not just returns!)
+    # - High-return state: positive returns, moderate volatility
+    # - Low-return state: negative returns, HIGH volatility
+    # - Neutral-return state: near-zero returns, LOW volatility
+
+    # Calculate rolling volatility (20-day window)
+    vol_window = min(20, len(filtered_returns_log) // 5)
+    if vol_window < 3:
+        vol_window = 3
+
+    rolling_vol = np.zeros(len(filtered_returns_log))
+    for i in range(len(filtered_returns_log)):
+        start_idx = max(0, i - vol_window + 1)
+        window = filtered_returns_log[start_idx:i + 1]
+        rolling_vol[i] = np.std(window) if len(window) > 1 else 0.01
+
+    # Normalize volatility to similar scale as returns
+    vol_mean = np.mean(rolling_vol)
+    vol_std = np.std(rolling_vol)
+    if vol_std > 0:
+        rolling_vol_normalized = (rolling_vol - vol_mean) / vol_std
+    else:
+        rolling_vol_normalized = rolling_vol
+
     features = []
     for i in range(len(filtered_returns_log)):
-        feature_vec = [filtered_returns_log[i]]
+        feature_vec = [
+            filtered_returns_log[i],  # Current return
+            rolling_vol_normalized[i],  # Rolling volatility (KEY for regime separation)
+        ]
         # Add lagged returns for temporal context (helps identify regimes)
-        for lag in range(1, min(4, i + 1)):
+        for lag in range(1, min(3, i + 1)):  # Reduced to 2 lags since we added volatility
             feature_vec.append(filtered_returns_log[i - lag])
         features.append(feature_vec)
 
@@ -225,14 +253,14 @@ def initialize_parameters_kmeans(
         raw_emission_params[state, 1] = std_return
         cluster_means.append((state, mean_return))
 
-    # STEP 5: Apply financial domain constraints to emission means
+    # STEP 5: Apply domain constraints to emission means
     # Convert means to percentage space for constraint application
     raw_means_pct = np.exp([mean for _, mean in cluster_means]) - 1
     sorted_cluster_info = sorted(
         cluster_means, key=lambda x: x[1]
     )  # Sort by log return
 
-    # Define financial constraints in percentage space
+    # Define domain constraints in percentage space (typical daily return ranges)
     constrained_means_pct = []
     constraint_applied = []
     for i, (original_state, raw_mean_log) in enumerate(sorted_cluster_info):
@@ -240,13 +268,13 @@ def initialize_parameters_kmeans(
 
         # Apply progressive constraints based on sorted position
         if i == 0:  # Lowest return state
-            # Bear regime: -8% to -0.1% daily reasonable range
+            # Low-return state: -8% to -0.1% daily reasonable range
             constrained_pct = np.clip(raw_mean_pct, -0.08, -0.001)
         elif i == len(sorted_cluster_info) - 1:  # Highest return state
-            # Bull regime: 0.1% to 5% daily reasonable range
+            # High-return state: 0.1% to 5% daily reasonable range
             constrained_pct = np.clip(raw_mean_pct, 0.001, 0.05)
         else:  # Middle states
-            # Sideways-type regimes: -0.5% to 1.5% daily reasonable range
+            # Neutral-return states: -0.5% to 1.5% daily reasonable range
             constrained_pct = np.clip(raw_mean_pct, -0.005, 0.015)
 
         constrained_means_pct.append(constrained_pct)
@@ -280,13 +308,277 @@ def initialize_parameters_kmeans(
         for old_j, new_j in state_reordering.items():
             reordered_transition_matrix[new_i, new_j] = transition_matrix[old_i, old_j]
 
-    # STEP 7: Validate final parameters make financial sense
-    _validate_financial_constraints(emission_params, n_states)
+    # STEP 7: Validate final parameters make domain sense
+    _validate_domain_constraints(emission_params, n_states)
 
     # Add warnings to diagnostics
     diagnostics['warnings'] = _generate_initialization_warnings(diagnostics)
 
     return reordered_initial_probs, reordered_transition_matrix, emission_params, diagnostics
+
+
+def initialize_parameters_quantile(
+    n_states: int, returns: np.ndarray, random_seed: Optional[int] = None
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[str, Any]]:
+    """
+    Initialize HMM parameters using quantile-based clustering.
+
+    Guarantees balanced clusters by splitting data into equal-sized percentile bins.
+    This is the most robust initialization for financial data where K-means
+    tends to produce highly imbalanced clusters.
+
+    Args:
+        n_states: Number of hidden states
+        returns: Log returns data
+        random_seed: Random seed for reproducibility (not used, for API consistency)
+
+    Returns:
+        Tuple of (initial_probs, transition_matrix, emission_params, diagnostics)
+    """
+    if len(returns) < n_states:
+        warnings.warn(
+            "Insufficient data for quantile initialization, falling back to random"
+        )
+        init_probs, trans_mat, emission_params = initialize_parameters_random(
+            n_states, returns, random_seed
+        )
+        return init_probs, trans_mat, emission_params, {
+            'method': 'random_fallback',
+            'reason': 'insufficient_data',
+            'n_states': n_states,
+            'n_observations': len(returns),
+            'warnings': ['Insufficient data for quantile init, used random']
+        }
+
+    # Filter extreme outliers
+    returns_pct = np.exp(returns) - 1
+    outlier_threshold_pct = 0.15
+    outlier_mask = np.abs(returns_pct) <= outlier_threshold_pct
+
+    if outlier_mask.sum() < n_states * 5:
+        outlier_threshold_pct = 0.25
+        outlier_mask = np.abs(returns_pct) <= outlier_threshold_pct
+
+    filtered_returns_pct = returns_pct[outlier_mask]
+    filtered_returns_log = np.log(filtered_returns_pct + 1)
+
+    # Sort returns and create balanced bins
+    sorted_indices = np.argsort(filtered_returns_log)
+    n_obs = len(filtered_returns_log)
+
+    cluster_labels = np.zeros(n_obs, dtype=int)
+    for state in range(n_states):
+        start_idx = int(state * n_obs / n_states)
+        end_idx = int((state + 1) * n_obs / n_states)
+        for i in range(start_idx, end_idx):
+            cluster_labels[sorted_indices[i]] = state
+
+    # Calculate cluster sizes for diagnostics
+    unique, counts = np.unique(cluster_labels, return_counts=True)
+    cluster_sizes = {int(s): int(c) for s, c in zip(unique, counts)}
+
+    # Initial probabilities (approximately equal)
+    initial_probs = np.zeros(n_states)
+    for i, count in zip(unique, counts):
+        initial_probs[i] = count / len(cluster_labels)
+
+    # Transition matrix from cluster sequence
+    transition_matrix = np.zeros((n_states, n_states))
+    for i in range(len(cluster_labels) - 1):
+        transition_matrix[cluster_labels[i], cluster_labels[i + 1]] += 1
+
+    transition_matrix += 0.01
+    transition_matrix = transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
+
+    # Emission parameters from clusters
+    emission_params = np.zeros((n_states, 2))
+    for state in range(n_states):
+        state_mask = cluster_labels == state
+        state_returns = filtered_returns_log[state_mask]
+
+        if len(state_returns) > 0:
+            emission_params[state, 0] = np.mean(state_returns)
+            emission_params[state, 1] = max(np.std(state_returns), 1e-6)
+        else:
+            emission_params[state, 0] = np.mean(filtered_returns_log)
+            emission_params[state, 1] = np.std(filtered_returns_log)
+
+    diagnostics = {
+        'method': 'quantile',
+        'n_states': n_states,
+        'n_observations': len(returns),
+        'cluster_sizes': cluster_sizes,
+        'cluster_balance_ratio': min(counts) / max(counts) if max(counts) > 0 else 0,
+        'warnings': []
+    }
+
+    return initial_probs, transition_matrix, emission_params, diagnostics
+
+
+def initialize_parameters_gmm(
+    n_states: int, returns: np.ndarray, random_seed: Optional[int] = None
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[str, Any]]:
+    """
+    Initialize HMM parameters using Gaussian Mixture Model clustering.
+
+    GMM provides soft clustering with probabilistic assignments, which can be
+    more flexible than K-means for non-spherical clusters.
+
+    Args:
+        n_states: Number of hidden states
+        returns: Log returns data
+        random_seed: Random seed for reproducibility
+
+    Returns:
+        Tuple of (initial_probs, transition_matrix, emission_params, diagnostics)
+    """
+    if len(returns) < n_states * 5:
+        warnings.warn(
+            "Insufficient data for GMM initialization, falling back to random"
+        )
+        init_probs, trans_mat, emission_params = initialize_parameters_random(
+            n_states, returns, random_seed
+        )
+        return init_probs, trans_mat, emission_params, {
+            'method': 'random_fallback',
+            'reason': 'insufficient_data',
+            'n_states': n_states,
+            'n_observations': len(returns),
+            'warnings': ['Insufficient data for GMM init, used random']
+        }
+
+    # Filter extreme outliers
+    returns_pct = np.exp(returns) - 1
+    outlier_threshold_pct = 0.15
+    outlier_mask = np.abs(returns_pct) <= outlier_threshold_pct
+
+    if outlier_mask.sum() < n_states * 5:
+        outlier_threshold_pct = 0.25
+        outlier_mask = np.abs(returns_pct) <= outlier_threshold_pct
+
+    filtered_returns_pct = returns_pct[outlier_mask]
+    filtered_returns_log = np.log(filtered_returns_pct + 1)
+
+    # Build features (same as K-means)
+    vol_window = min(20, len(filtered_returns_log) // 5)
+    if vol_window < 3:
+        vol_window = 3
+
+    rolling_vol = np.zeros(len(filtered_returns_log))
+    for i in range(len(filtered_returns_log)):
+        start_idx = max(0, i - vol_window + 1)
+        window = filtered_returns_log[start_idx:i + 1]
+        rolling_vol[i] = np.std(window) if len(window) > 1 else 0.01
+
+    vol_mean = np.mean(rolling_vol)
+    vol_std = np.std(rolling_vol)
+    if vol_std > 0:
+        rolling_vol_normalized = (rolling_vol - vol_mean) / vol_std
+    else:
+        rolling_vol_normalized = rolling_vol
+
+    features = []
+    for i in range(len(filtered_returns_log)):
+        feature_vec = [
+            filtered_returns_log[i],
+            rolling_vol_normalized[i],
+        ]
+        for lag in range(1, min(3, i + 1)):
+            feature_vec.append(filtered_returns_log[i - lag])
+        features.append(feature_vec)
+
+    max_len = max(len(f) for f in features)
+    for i, f in enumerate(features):
+        while len(f) < max_len:
+            f.append(0.0)
+
+    features = np.array(features)
+
+    # Fit GMM
+    gmm = GaussianMixture(
+        n_components=n_states,
+        covariance_type='full',
+        random_state=random_seed,
+        n_init=5,
+        max_iter=100
+    )
+
+    try:
+        cluster_labels = gmm.fit_predict(features)
+    except Exception as e:
+        warnings.warn(f"GMM clustering failed ({str(e)}), falling back to random")
+        init_probs, trans_mat, emission_params = initialize_parameters_random(
+            n_states, returns, random_seed
+        )
+        return init_probs, trans_mat, emission_params, {
+            'method': 'random_fallback',
+            'reason': 'gmm_failed',
+            'error': str(e),
+            'n_states': n_states,
+            'n_observations': len(returns),
+            'warnings': [f'GMM failed: {str(e)}']
+        }
+
+    # Calculate cluster sizes
+    unique, counts = np.unique(cluster_labels, return_counts=True)
+    cluster_sizes = {int(s): int(c) for s, c in zip(unique, counts)}
+
+    # Initial probabilities
+    initial_probs = np.zeros(n_states)
+    for i, count in zip(unique, counts):
+        initial_probs[i] = count / len(cluster_labels)
+
+    # Transition matrix
+    transition_matrix = np.zeros((n_states, n_states))
+    for i in range(len(cluster_labels) - 1):
+        transition_matrix[cluster_labels[i], cluster_labels[i + 1]] += 1
+
+    transition_matrix += 0.01
+    transition_matrix = transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
+
+    # Emission parameters
+    emission_params = np.zeros((n_states, 2))
+    for state in range(n_states):
+        state_mask = cluster_labels == state
+        state_returns = filtered_returns_log[state_mask]
+
+        if len(state_returns) > 0:
+            emission_params[state, 0] = np.mean(state_returns)
+            emission_params[state, 1] = max(np.std(state_returns), 1e-6)
+        else:
+            emission_params[state, 0] = np.mean(filtered_returns_log)
+            emission_params[state, 1] = np.std(filtered_returns_log)
+
+    # Reorder by mean return (lowest to highest)
+    sorted_indices = np.argsort(emission_params[:, 0])
+    state_reordering = {old: new for new, old in enumerate(sorted_indices)}
+
+    reordered_emission = emission_params[sorted_indices]
+    reordered_initial = initial_probs[sorted_indices]
+
+    reordered_transition = np.zeros_like(transition_matrix)
+    for old_i, new_i in state_reordering.items():
+        for old_j, new_j in state_reordering.items():
+            reordered_transition[new_i, new_j] = transition_matrix[old_i, old_j]
+
+    diagnostics = {
+        'method': 'gmm',
+        'n_states': n_states,
+        'n_observations': len(returns),
+        'cluster_sizes': cluster_sizes,
+        'cluster_balance_ratio': min(counts) / max(counts) if max(counts) > 0 else 0,
+        'gmm_converged': gmm.converged_,
+        'gmm_n_iter': gmm.n_iter_,
+        'warnings': []
+    }
+
+    if min(counts) / max(counts) < 0.2:
+        diagnostics['warnings'].append(
+            f"Highly imbalanced clusters (ratio={min(counts)/max(counts):.3f}). "
+            "Consider using 'quantile' initialization for balanced regimes."
+        )
+
+    return reordered_initial, reordered_transition, reordered_emission, diagnostics
 
 
 def _collect_kmeans_diagnostics(
@@ -402,10 +694,10 @@ def _compute_constraint_distortion(
 
 def _interpret_silhouette_for_financial_data(score: float) -> str:
     """
-    Provide domain-specific interpretation of silhouette scores for financial data.
+    Provide domain-specific interpretation of silhouette scores for time series data.
 
-    Financial returns typically produce lower silhouette scores (0.10-0.20) than
-    other domains due to inherently overlapping regimes. Bull/bear/sideways states
+    Time series returns typically produce lower silhouette scores (0.10-0.20) than
+    other domains due to inherently overlapping states. Hidden states often
     have fuzzy boundaries and gradual transitions, not sharp cluster separation.
 
     Args:
@@ -417,9 +709,9 @@ def _interpret_silhouette_for_financial_data(score: float) -> str:
     if score > 0.25:
         return "Excellent separation for financial data (regimes are well-defined)"
     elif score > 0.15:
-        return "Good separation for financial regimes (typical for real markets)"
+        return "Good separation for time series states (typical for real data)"
     elif score > 0.05:
-        return "Typical overlapping market regimes (expected for financial returns)"
+        return "Typical overlapping states (expected for continuous data)"
     elif score > 0.0:
         return "Weak cluster separation (regimes may be poorly defined)"
     else:
@@ -488,25 +780,25 @@ def _generate_initialization_warnings(diagnostics: Dict[str, Any]) -> list:
     return warnings_list
 
 
-def _validate_financial_constraints(emission_params: np.ndarray, n_states: int) -> None:
-    """Validate that emission parameters satisfy financial constraints."""
+def _validate_domain_constraints(emission_params: np.ndarray, n_states: int) -> None:
+    """Validate that emission parameters satisfy domain constraints."""
     means_log = emission_params[:, 0]
     means_pct = np.exp(means_log) - 1
 
     for i, mean_pct in enumerate(means_pct):
-        # Warn about extreme regimes
+        # Warn about extreme states
         if abs(mean_pct) > 0.10:  # >10% daily is extreme
             warnings.warn(
                 f"State {i} has extreme daily return: {mean_pct:.2%}. "
                 f"Consider using more states or different initialization."
             )
 
-        # Check gaps between adjacent regimes
+        # Check gaps between adjacent states
         if i > 0:
             gap_pct = means_pct[i] - means_pct[i - 1]
-            if gap_pct > 0.03:  # >3% gap between regimes is large
+            if gap_pct > 0.03:  # >3% gap between states is large
                 warnings.warn(
-                    f"Large gap between regimes {i-1} and {i}: {gap_pct:.2%} daily return difference"
+                    f"Large gap between states {i-1} and {i}: {gap_pct:.2%} daily return difference"
                 )
 
 
@@ -627,125 +919,15 @@ def validate_hmm_parameters(
         raise ValueError("Emission standard deviations must be positive")
 
 
-def get_regime_interpretation(state_idx: int, emission_params: np.ndarray) -> str:
-    """
-    Get human-readable interpretation of a regime state.
-
-    Args:
-        state_idx: State index
-        emission_params: Emission parameters [means, stds]
-
-    Returns:
-        String interpretation of the regime
-    """
-    mean_return = emission_params[state_idx, 0]
-    volatility = emission_params[state_idx, 1]
-
-    # Enhanced regime classification with more nuanced thresholds
-    if mean_return < -0.015:  # Less than -1.5% daily (severe bear)
-        if volatility >= 0.04:  # >=4% daily volatility
-            regime_type = "Crisis"
-        else:
-            regime_type = "Bear"
-    elif mean_return < -0.002:  # -0.2% to -1.5% daily (mild bear)
-        regime_type = "Bear"
-    elif mean_return > 0.015:  # Greater than 1.5% daily (strong bull)
-        if volatility >= 0.04:  # High volatility bull (euphoric)
-            regime_type = "Euphoric Bull"
-        else:
-            regime_type = "Bull"
-    elif mean_return > 0.002:  # 0.2% to 1.5% daily (mild bull)
-        regime_type = "Bull"
-    else:  # -0.2% to 0.2% daily
-        regime_type = "Sideways"
-
-    # Add volatility characterization for context
-    if volatility >= 0.035:  # >=3.5% daily volatility
-        vol_desc = "High Vol"
-    elif volatility <= 0.015:  # <=1.5% daily volatility
-        vol_desc = "Low Vol"
-    else:
-        vol_desc = "Moderate Vol"
-
-    return f"{regime_type} ({vol_desc})"
-
-
-def get_standardized_regime_name(
-    state_idx: int, emission_params: np.ndarray, regime_type: str = "3_state"
-) -> str:
-    """
-    Get standardized regime name based on configuration type.
-
-    Args:
-        state_idx: State index
-        emission_params: Emission parameters [means, stds]
-        regime_type: Type of regime configuration ('3_state', '4_state', '5_state')
-
-    Returns:
-        Standardized regime name
-    """
-    from .state_standardizer import StateStandardizer
-
-    standardizer = StateStandardizer()
-    config = standardizer.get_config(regime_type)
-
-    if config is None:
-        return get_regime_interpretation(state_idx, emission_params)
-
-    mean_return = emission_params[state_idx, 0]
-    volatility = emission_params[state_idx, 1]
-
-    # Find best matching regime based on thresholds
-    best_match = None
-    best_score = float("inf")
-
-    for i, state_name in enumerate(config.state_names):
-        if state_name in config.state_thresholds:
-            thresholds = config.state_thresholds[state_name]
-            score = 0
-
-            # Score based on mean return criteria
-            if "mean_return" in thresholds:
-                score += abs(mean_return - thresholds["mean_return"])
-            if "min_return" in thresholds:
-                if mean_return < thresholds["min_return"]:
-                    score += (
-                        thresholds["min_return"] - mean_return
-                    ) * 2  # Penalty for violation
-            if "max_return" in thresholds:
-                if mean_return > thresholds["max_return"]:
-                    score += (
-                        mean_return - thresholds["max_return"]
-                    ) * 2  # Penalty for violation
-
-            # Score based on volatility criteria
-            if "min_volatility" in thresholds:
-                if volatility < thresholds["min_volatility"]:
-                    score += (thresholds["min_volatility"] - volatility) * 0.5
-            if "max_volatility" in thresholds:
-                if volatility > thresholds["max_volatility"]:
-                    score += (volatility - thresholds["max_volatility"]) * 0.5
-
-            if score < best_score:
-                best_score = score
-                best_match = state_name
-
-    return (
-        best_match
-        if best_match
-        else get_regime_interpretation(state_idx, emission_params)
-    )
-
-
-def validate_regime_economics(
-    emission_params: np.ndarray, regime_type: str = "3_state"
+def validate_state_quality(
+    emission_params: np.ndarray, state_type: str = "3_state"
 ) -> Tuple[bool, Dict[str, Any]]:
     """
-    Validate that detected regimes make economic sense.
+    Validate that detected states are statistically sound.
 
     Args:
         emission_params: Emission parameters [means, stds]
-        regime_type: Type of regime configuration
+        state_type: Type of state configuration
 
     Returns:
         Tuple of (is_valid, validation_details)
@@ -755,9 +937,9 @@ def validate_regime_economics(
     stds = emission_params[:, 1]
 
     validation_results = {
-        "is_economically_valid": True,
+        "is_statistically_valid": True,
         "violations": [],
-        "regime_separation": {},
+        "state_separation": {},
         "mean_ordering_correct": False,
         "volatility_reasonable": True,
     }
@@ -769,9 +951,9 @@ def validate_regime_economics(
 
     if not validation_results["mean_ordering_correct"]:
         validation_results["violations"].append("Mean returns not properly ordered")
-        validation_results["is_economically_valid"] = False
+        validation_results["is_statistically_valid"] = False
 
-    # Check regime separation (Cohen's d between adjacent regimes)
+    # Check state separation (Cohen's d between adjacent states)
     for i in range(n_states - 1):
         idx1, idx2 = sorted_indices[i], sorted_indices[i + 1]
         mean1, std1 = means[idx1], stds[idx1]
@@ -781,7 +963,7 @@ def validate_regime_economics(
         pooled_std = np.sqrt((std1**2 + std2**2) / 2)
         cohens_d = abs(mean2 - mean1) / pooled_std if pooled_std > 0 else 0
 
-        validation_results["regime_separation"][f"regime_{idx1}_vs_{idx2}"] = {
+        validation_results["state_separation"][f"state_{idx1}_vs_{idx2}"] = {
             "cohens_d": cohens_d,
             "well_separated": cohens_d
             >= 0.5,  # Cohen's d >= 0.5 indicates medium effect
@@ -789,9 +971,9 @@ def validate_regime_economics(
 
         if cohens_d < 0.3:  # Small effect size threshold
             validation_results["violations"].append(
-                f"Poor separation between regime {idx1} and {idx2} (Cohen's d = {cohens_d:.3f})"
+                f"Poor separation between state {idx1} and {idx2} (Cohen's d = {cohens_d:.3f})"
             )
-            validation_results["is_economically_valid"] = False
+            validation_results["is_statistically_valid"] = False
 
     # Check volatility reasonableness
     min_vol, max_vol = np.min(stds), np.max(stds)
@@ -800,48 +982,48 @@ def validate_regime_economics(
             "Unrealistically low volatility detected"
         )
         validation_results["volatility_reasonable"] = False
-        validation_results["is_economically_valid"] = False
+        validation_results["is_statistically_valid"] = False
 
     if max_vol >= 0.08:  # Greater than 8% daily
         validation_results["violations"].append("Extremely high volatility detected")
         validation_results["volatility_reasonable"] = False
 
-    # Specific checks based on regime type
-    if regime_type in ["3_state", "4_state", "5_state"]:
-        bear_indices = [i for i in range(n_states) if means[i] < -0.001]
-        bull_indices = [i for i in range(n_states) if means[i] > 0.001]
+    # Specific checks based on state type
+    if state_type in ["3_state", "4_state", "5_state"]:
+        negative_indices = [i for i in range(n_states) if means[i] < -0.001]
+        positive_indices = [i for i in range(n_states) if means[i] > 0.001]
 
-        if not bear_indices:
-            validation_results["violations"].append("No clear bear regime detected")
-            validation_results["is_economically_valid"] = False
+        if not negative_indices:
+            validation_results["violations"].append("No clear negative return state detected")
+            validation_results["is_statistically_valid"] = False
 
-        if not bull_indices:
-            validation_results["violations"].append("No clear bull regime detected")
-            validation_results["is_economically_valid"] = False
+        if not positive_indices:
+            validation_results["violations"].append("No clear positive return state detected")
+            validation_results["is_statistically_valid"] = False
 
-    return validation_results["is_economically_valid"], validation_results
+    return validation_results["is_statistically_valid"], validation_results
 
 
-def analyze_regime_transitions(
+def analyze_state_transitions(
     states: np.ndarray,
     transition_matrix: np.ndarray,
-    regime_names: Optional[Dict[int, str]] = None,
+    state_names: Optional[Dict[int, str]] = None,
 ) -> Dict[str, Any]:
     """
-    Analyze regime transition patterns and persistence.
+    Analyze state transition patterns and persistence.
 
     Args:
         states: State sequence
         transition_matrix: Transition probability matrix
-        regime_names: Optional mapping of state indices to regime names
+        state_names: Optional mapping of state indices to state names
 
     Returns:
         Dictionary with transition analysis results
     """
     n_states = len(np.unique(states))
 
-    if regime_names is None:
-        regime_names = {i: f"Regime {i}" for i in range(n_states)}
+    if state_names is None:
+        state_names = {i: f"State {i}" for i in range(n_states)}
 
     # Calculate empirical transition frequencies
     empirical_transitions = np.zeros((n_states, n_states))
@@ -855,7 +1037,7 @@ def analyze_regime_transitions(
 
     # Calculate persistence (diagonal elements)
     persistence = {
-        regime_names[i]: {
+        state_names[i]: {
             "theoretical_persistence": transition_matrix[i, i],
             "empirical_persistence": empirical_transition_probs[i, i],
             "expected_duration": (
@@ -872,7 +1054,7 @@ def analyze_regime_transitions(
     for i in range(n_states):
         for j in range(n_states):
             if i != j and transition_matrix[i, j] > 0.1:  # Only significant transitions
-                pattern_name = f"{regime_names[i]} → {regime_names[j]}"
+                pattern_name = f"{state_names[i]} → {state_names[j]}"
                 transition_patterns[pattern_name] = {
                     "probability": transition_matrix[i, j],
                     "empirical_frequency": empirical_transition_probs[i, j],
@@ -882,9 +1064,9 @@ def analyze_regime_transitions(
     # Calculate overall stability metrics
     stability_metrics = {
         "average_persistence": np.mean(np.diag(transition_matrix)),
-        "regime_switching_rate": 1 - np.mean(np.diag(transition_matrix)),
-        "most_stable_regime": regime_names[np.argmax(np.diag(transition_matrix))],
-        "least_stable_regime": regime_names[np.argmin(np.diag(transition_matrix))],
+        "state_switching_rate": 1 - np.mean(np.diag(transition_matrix)),
+        "most_stable_state": state_names[np.argmax(np.diag(transition_matrix))],
+        "least_stable_state": state_names[np.argmin(np.diag(transition_matrix))],
     }
 
     return {
@@ -896,11 +1078,11 @@ def analyze_regime_transitions(
     }
 
 
-def calculate_regime_statistics(
+def calculate_state_statistics(
     states: np.ndarray, returns: np.ndarray, dates: Optional[np.ndarray] = None
 ) -> Dict[str, Any]:
     """
-    Calculate comprehensive statistics for regime sequences.
+    Calculate comprehensive statistics for state sequences.
 
     Args:
         states: State sequence
@@ -908,17 +1090,17 @@ def calculate_regime_statistics(
         dates: Optional dates for temporal analysis
 
     Returns:
-        Dictionary with regime statistics
+        Dictionary with state statistics
     """
     n_states = len(np.unique(states))
-    stats = {"n_observations": len(states), "n_states": n_states, "regime_stats": {}}
+    stats = {"n_observations": len(states), "n_states": n_states, "state_stats": {}}
 
     for state in range(n_states):
         state_mask = states == state
         state_returns = returns[state_mask]
 
         if len(state_returns) > 0:
-            regime_stats = {
+            state_statistics = {
                 "frequency": np.sum(state_mask) / len(states),
                 "mean_return": np.mean(state_returns),
                 "std_return": np.std(state_returns),
@@ -927,7 +1109,7 @@ def calculate_regime_statistics(
                 "total_periods": np.sum(state_mask),
             }
 
-            # Calculate regime duration statistics
+            # Calculate state duration statistics
             durations = []
             current_duration = 0
             for i, s in enumerate(states):
@@ -943,7 +1125,7 @@ def calculate_regime_statistics(
                 durations.append(current_duration)
 
             if durations:
-                regime_stats.update(
+                state_statistics.update(
                     {
                         "avg_duration": np.mean(durations),
                         "min_duration": np.min(durations),
@@ -952,6 +1134,6 @@ def calculate_regime_statistics(
                     }
                 )
 
-            stats["regime_stats"][state] = regime_stats
+            stats["state_stats"][state] = state_statistics
 
     return stats

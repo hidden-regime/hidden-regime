@@ -8,6 +8,7 @@ get_transition_probabilities.
 import pytest
 from fastmcp.exceptions import ToolError
 
+from hidden_regime_mcp.errors import ValidationError
 from hidden_regime_mcp.tools import (
     detect_regime,
     get_regime_statistics,
@@ -32,16 +33,16 @@ class TestValidation:
     @pytest.mark.unit
     def test_validate_ticker_invalid(self):
         """Test invalid ticker symbols."""
-        with pytest.raises(ToolError, match="Ticker symbol is required"):
+        with pytest.raises(ValidationError, match="Ticker symbol is required"):
             validate_ticker("")
 
-        with pytest.raises(ToolError, match="Invalid ticker symbol"):
+        with pytest.raises(ValidationError, match="Invalid ticker symbol"):
             validate_ticker("SP Y")  # Space
 
-        with pytest.raises(ToolError, match="Invalid ticker symbol"):
+        with pytest.raises(ValidationError, match="Invalid ticker symbol"):
             validate_ticker("SPY@")  # Special char
 
-        with pytest.raises(ToolError, match="Ticker symbol too long"):
+        with pytest.raises(ValidationError, match="Ticker symbol too long"):
             validate_ticker("VERYLONGTICKER")
 
     @pytest.mark.unit
@@ -55,10 +56,10 @@ class TestValidation:
     @pytest.mark.unit
     def test_validate_n_states_invalid(self):
         """Test invalid n_states values."""
-        with pytest.raises(ToolError, match="n_states must be between 2 and 5"):
+        with pytest.raises(ValidationError, match="Invalid number of regimes"):
             validate_n_states(1)
 
-        with pytest.raises(ToolError, match="n_states must be between 2 and 5"):
+        with pytest.raises(ValidationError, match="Invalid number of regimes"):
             validate_n_states(6)
 
     @pytest.mark.unit
@@ -71,14 +72,14 @@ class TestValidation:
     @pytest.mark.unit
     def test_validate_date_invalid(self):
         """Test invalid date formats."""
-        with pytest.raises(ToolError, match="must be in YYYY-MM-DD format"):
+        with pytest.raises(ValidationError, match="Invalid date format"):
             validate_date("01/01/2024", "start_date")
 
-        with pytest.raises(ToolError, match="must be in YYYY-MM-DD format"):
-            validate_date("2024-1-1", "start_date")
-
-        with pytest.raises(ToolError, match="must be in YYYY-MM-DD format"):
+        with pytest.raises(ValidationError, match="Invalid date format"):
             validate_date("not-a-date", "start_date")
+
+        with pytest.raises(ValidationError, match="Invalid date format"):
+            validate_date("2024/01/01", "start_date")
 
 
 @pytest.mark.asyncio
@@ -92,7 +93,7 @@ class TestDetectRegime:
         result = await detect_regime(ticker="SPY", n_states=3)
 
         assert result["ticker"] == "SPY"
-        assert result["current_regime"] in ["bull", "bear", "sideways"]
+        assert result["current_regime"] in ["bullish", "bearish", "sideways"]
         assert 0.0 <= result["confidence"] <= 1.0
         assert isinstance(result["mean_return"], float)
         assert isinstance(result["volatility"], float)
@@ -123,7 +124,7 @@ class TestDetectRegime:
     @pytest.mark.e2e
     async def test_detect_regime_invalid_n_states(self):
         """Test regime detection with invalid n_states."""
-        with pytest.raises(ToolError, match="n_states must be between 2 and 5"):
+        with pytest.raises(ToolError, match="Invalid number of regimes"):
             await detect_regime(ticker="SPY", n_states=10)
 
 

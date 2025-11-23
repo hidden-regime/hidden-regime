@@ -109,20 +109,22 @@ class ModelComponent(PipelineComponent):
 **Implementations:**
 - `HiddenMarkovModel` - HMM-based regime detection
 
-#### AnalysisComponent
+#### InterpreterComponent
 
-Interprets model outputs and computes metrics.
+Interprets model outputs and adds financial domain knowledge.
 
 ```python
-class AnalysisComponent(PipelineComponent):
+class InterpreterComponent(PipelineComponent):
     @abstractmethod
-    def update(self, **kwargs) -> str:
-        """Analyze results and return summary"""
+    def update(self, model_output: pd.DataFrame) -> pd.DataFrame:
+        """Interpret model output and add regime information"""
         pass
 ```
 
 **Implementations:**
-- `FinancialAnalysis` - Regime statistics and performance metrics
+- `FinancialInterpreter` - Financial regime interpretation with comprehensive characterization
+
+**Note:** `AnalysisComponent` was removed in v2.0.0. Use `InterpreterComponent` instead.
 
 #### ReportComponent (Optional)
 
@@ -239,10 +241,12 @@ result = pipeline.update()
 from hidden_regime.pipeline import PipelineComponent, Pipeline
 import pandas as pd
 
-class CustomAnalysis(AnalysisComponent):
-    def update(self, data, observations, model_output):
-        # Custom analysis logic
-        return "Custom analysis results"
+class CustomInterpreter(InterpreterComponent):
+    def update(self, model_output):
+        # Custom interpretation logic
+        output = model_output.copy()
+        output['regime_label'] = output['state'].map({0: 'Bear', 1: 'Bull'})
+        return output
 
     def plot(self, **kwargs):
         # Custom visualization
@@ -253,7 +257,7 @@ pipeline = Pipeline(
     data=data_component,
     observation=obs_component,
     model=model_component,
-    analysis=CustomAnalysis(),  # Your custom component
+    interpreter=CustomInterpreter(),  # Your custom component
     report=None
 )
 ```

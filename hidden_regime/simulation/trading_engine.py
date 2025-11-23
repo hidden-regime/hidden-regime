@@ -15,14 +15,7 @@ import pandas as pd
 
 from .performance_analytics import PerformanceAnalyzer, TradeJournal
 from .risk_management import RiskManager
-
-
-class SignalType(Enum):
-    """Trading signal types."""
-
-    BUY = 1
-    SELL = -1
-    HOLD = 0
+from .signal_generators import SignalType
 
 
 @dataclass

@@ -5,13 +5,13 @@ Provides analysis components that implement the AnalysisComponent interface
 for interpreting model outputs with domain knowledge and generating insights.
 """
 
-from .financial import FinancialAnalysis
 from .indicator_comparison import IndicatorPerformanceComparator
 from .market_event_study import MarketEventStudy
 from .performance import RegimePerformanceAnalyzer
+from .stability import RegimeStabilityMetrics
 
 
-def get_regime_colors(regime_profiles=None):
+def get_regime_color_map(regime_profiles=None):
     """
     Get consistent colorblind-safe color mapping for regime types.
 
@@ -51,9 +51,9 @@ def get_regime_colors(regime_profiles=None):
 
 
 __all__ = [
-    "FinancialAnalysis",
     "RegimePerformanceAnalyzer",
+    "RegimeStabilityMetrics",
     "IndicatorPerformanceComparator",
     "MarketEventStudy",
-    "get_regime_colors",
+    "get_regime_color_map",
 ]

@@ -133,19 +133,64 @@ class ModelComponent(PipelineComponent):
         pass
 
 
-class AnalysisComponent(PipelineComponent):
-    """Interface for analysis and interpretation components."""
+class InterpreterComponent(PipelineComponent):
+    """Interface for regime interpretation components.
+
+    The Interpreter component adds domain knowledge to model outputs.
+    It maps model state indices to semantic regime labels and characteristics.
+
+    Key Principle: ALL financial domain knowledge belongs here.
+    - State indices (0,1,2) → regime labels (Bear, Bull, Sideways)
+    - Regime characteristics (returns, volatility, etc.)
+    - Consistent colors and naming for visualization
+
+    The Model provides ONLY pure math outputs. The Interpreter provides ONLY domain interpretation.
+    """
 
     @abstractmethod
     def update(self, model_output: pd.DataFrame) -> pd.DataFrame:
         """
-        Interpret model output and add domain knowledge.
+        Interpret model output and add regime labels/characteristics.
 
         Args:
-            model_output: Raw model predictions
+            model_output: Raw model predictions (state indices, confidence, etc.)
 
         Returns:
-            DataFrame with interpreted analysis results
+            DataFrame with regime labels, types, colors, and characteristics added
+        """
+        pass
+
+
+# AnalysisComponent has been REMOVED in version 2.0.0
+# Use InterpreterComponent instead
+
+
+class SignalGeneratorComponent(PipelineComponent):
+    """Interface for signal generation components.
+
+    The Signal Generator component creates trading signals from Interpreter outputs.
+    It implements trading logic and position sizing strategies.
+
+    Key Principle: ALL trading logic belongs here.
+    - Position signals (long/short/neutral)
+    - Strategy implementation
+    - Position sizing
+    - Entry/exit rules
+
+    The Interpreter provides regime interpretation. The Signal Generator provides trading logic.
+    These must remain separate.
+    """
+
+    @abstractmethod
+    def update(self, interpreter_output: pd.DataFrame) -> pd.DataFrame:
+        """
+        Generate trading signals from regime interpretation.
+
+        Args:
+            interpreter_output: Interpreter output with regime labels and characteristics
+
+        Returns:
+            DataFrame with trading signals, position sizes, and strategy information added
         """
         pass
 

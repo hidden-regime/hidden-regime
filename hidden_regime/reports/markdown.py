@@ -28,9 +28,20 @@ class MarkdownReportGenerator(ReportComponent):
         """
         Initialize markdown report generator with configuration.
 
+        NOTE: Direct instantiation is discouraged. Use factory pattern instead:
+            pipeline = hr.create_financial_pipeline('SPY')
+
         Args:
             config: ReportConfig with report generation parameters
         """
+        import warnings
+        warnings.warn(
+            "Direct instantiation of MarkdownReportGenerator is discouraged. "
+            "Use hr.create_financial_pipeline() instead.",
+            FutureWarning,
+            stacklevel=2
+        )
+
         self.config = config
         self._last_report = None
 

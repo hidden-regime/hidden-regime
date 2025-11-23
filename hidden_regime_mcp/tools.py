@@ -8,6 +8,7 @@ Implements three core tools:
 """
 
 import json
+import logging
 from typing import Dict, Optional, Any
 from datetime import datetime, timedelta
 
@@ -16,6 +17,22 @@ from fastmcp.exceptions import ToolError
 
 from hidden_regime import create_financial_pipeline
 from hidden_regime.data import FinancialDataLoader
+from hidden_regime_mcp.cache import get_cache
+from hidden_regime_mcp.errors import (
+    ValidationError,
+    DataError,
+    NetworkError,
+    ModelError,
+    MCPToolError,
+    ErrorCode,
+)
+from hidden_regime_mcp.retry import (
+    get_retry_manager,
+    RetryConfig,
+    get_yfinance_circuit_breaker,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def handle_pipeline_error(ticker: str, error: Exception, operation: str) -> None:
@@ -28,24 +45,53 @@ def handle_pipeline_error(ticker: str, error: Exception, operation: str) -> None
         operation: Operation name (e.g., "Regime detection", "Regime statistics")
 
     Raises:
-        ToolError: With standardized user-friendly message
+        ToolError: With standardized user-friendly message and error code
     """
-    error_msg = str(error)
+    error_msg = str(error).lower()
 
-    if "No data" in error_msg or "Could not load" in error_msg:
-        raise ToolError(
-            f"Unable to load data for {ticker}. "
-            "Please check the ticker symbol and try again."
+    # Log the error for debugging
+    logger.warning(f"{operation} failed for {ticker}: {error}", exc_info=True)
+
+    # Classify error and create appropriate exception
+    if "no data" in error_msg or "could not load" in error_msg:
+        mcp_error = DataError(
+            message=f"Unable to load data for {ticker}",
+            details=str(error),
+            retriable=True,
         )
-    elif "insufficient" in error_msg.lower():
-        raise ToolError(
-            f"Insufficient data for {ticker}. "
-            "Need at least 100 observations for reliable regime detection."
+    elif "insufficient" in error_msg:
+        mcp_error = DataError(
+            message=f"Insufficient data for {ticker}. Need at least 100 observations.",
+            details=str(error),
+            retriable=False,
+        )
+    elif "timeout" in error_msg or "connection" in error_msg:
+        mcp_error = NetworkError(
+            message=f"Network error while analyzing {ticker}",
+            details=str(error),
+            retriable=True,
+        )
+    elif "training" in error_msg or "hmm" in error_msg:
+        mcp_error = ModelError(
+            message=f"Model training failed for {ticker}",
+            details=str(error),
+            retriable=False,
         )
     else:
-        raise ToolError(
-            f"{operation} failed for {ticker}: {error_msg}"
+        mcp_error = MCPToolError(
+            code=ErrorCode.UNKNOWN_ERROR,
+            message=f"{operation} failed for {ticker}",
+            details=str(error),
+            retriable=False,
         )
+
+    # Convert to ToolError with additional context
+    error_info = mcp_error.to_error_info()
+    error_response = f"{error_info.message}"
+    if error_info.suggestion:
+        error_response += f". {error_info.suggestion}"
+
+    raise ToolError(error_response)
 
 
 def validate_ticker(ticker: str) -> None:
@@ -56,18 +102,22 @@ def validate_ticker(ticker: str) -> None:
         ticker: Stock symbol to validate
 
     Raises:
-        ToolError: If ticker is invalid
+        ValidationError: If ticker is invalid
     """
     if not ticker:
-        raise ToolError("Ticker symbol is required")
+        raise ValidationError("Ticker symbol is required")
 
     if not ticker.replace(".", "").replace("-", "").isalnum():
-        raise ToolError(
-            f"Invalid ticker symbol: {ticker}. " "Must be alphanumeric (with optional . or -)"
+        raise ValidationError(
+            message=f"Invalid ticker symbol: {ticker}",
+            details="Tickers must be alphanumeric with optional . or - (e.g., AAPL, BRK.A, SPY)",
         )
 
     if len(ticker) > 10:
-        raise ToolError(f"Ticker symbol too long: {ticker}. Max 10 characters")
+        raise ValidationError(
+            message=f"Ticker symbol too long: {ticker}",
+            details="Ticker symbols must be 10 characters or less",
+        )
 
 
 def validate_n_states(n_states: int) -> None:
@@ -78,10 +128,13 @@ def validate_n_states(n_states: int) -> None:
         n_states: Number of HMM states
 
     Raises:
-        ToolError: If n_states is out of range
+        ValidationError: If n_states is out of range
     """
     if n_states < 2 or n_states > 5:
-        raise ToolError("n_states must be between 2 and 5")
+        raise ValidationError(
+            message=f"Invalid number of regimes: {n_states}",
+            details="Number of regimes (states) must be between 2 (minimal) and 5 (maximum)",
+        )
 
 
 def validate_date(date_str: Optional[str], param_name: str) -> None:
@@ -93,7 +146,7 @@ def validate_date(date_str: Optional[str], param_name: str) -> None:
         param_name: Parameter name for error messages
 
     Raises:
-        ToolError: If date format is invalid or date is in the future
+        ValidationError: If date format is invalid or date is in the future
     """
     if date_str is None:
         return
@@ -101,11 +154,17 @@ def validate_date(date_str: Optional[str], param_name: str) -> None:
     try:
         parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
     except ValueError:
-        raise ToolError(f"{param_name} must be in YYYY-MM-DD format")
+        raise ValidationError(
+            message=f"Invalid date format for {param_name}",
+            details=f"Expected YYYY-MM-DD format, got '{date_str}'",
+        )
 
     # Check if date is in the future
     if parsed_date.date() > datetime.now().date():
-        raise ToolError(f"{param_name} cannot be in the future")
+        raise ValidationError(
+            message=f"{param_name} cannot be in the future",
+            details=f"Date must be on or before today ({datetime.now().date()})",
+        )
 
 
 def validate_date_range(start_date: Optional[str], end_date: Optional[str]) -> None:
@@ -117,7 +176,7 @@ def validate_date_range(start_date: Optional[str], end_date: Optional[str]) -> N
         end_date: End date string (YYYY-MM-DD) or None
 
     Raises:
-        ToolError: If start_date is after end_date
+        ValidationError: If start_date is after end_date
     """
     if start_date is None or end_date is None:
         return
@@ -126,7 +185,10 @@ def validate_date_range(start_date: Optional[str], end_date: Optional[str]) -> N
     end = datetime.strptime(end_date, "%Y-%m-%d")
 
     if start > end:
-        raise ToolError("start_date must be before or equal to end_date")
+        raise ValidationError(
+            message="Invalid date range",
+            details=f"start_date ({start_date}) must be before or equal to end_date ({end_date})",
+        )
 
 
 def calculate_price_performance(data_output: pd.DataFrame) -> Dict[str, Any]:
@@ -239,7 +301,10 @@ def analyze_regime_stability(analysis_output: pd.DataFrame) -> Dict[str, Any]:
     last_30_days = analysis_output.tail(min(30, len(analysis_output)))
 
     # Count unique regimes in last 30 days
-    unique_regimes = last_30_days["regime_name"].unique()
+    # Support both old (regime_name) and new (regime_label) column names
+    regime_column = "regime_label" if "regime_label" in last_30_days.columns else "regime_name"
+
+    unique_regimes = last_30_days[regime_column].unique()
     regime_changes = len(unique_regimes) - 1
 
     # Determine stability
@@ -251,7 +316,7 @@ def analyze_regime_stability(analysis_output: pd.DataFrame) -> Dict[str, Any]:
         stability = "volatile"
 
     # Get previous regime and transition date
-    current_regime = analysis_output["regime_name"].iloc[-1]
+    current_regime = analysis_output[regime_column].iloc[-1]
     current_episode = analysis_output["regime_episode"].iloc[-1]
 
     # Find where current episode started
@@ -262,7 +327,7 @@ def analyze_regime_stability(analysis_output: pd.DataFrame) -> Dict[str, Any]:
     if len(analysis_output) > len(episode_data):
         previous_data = analysis_output[analysis_output["regime_episode"] < current_episode]
         if len(previous_data) > 0:
-            previous_regime = previous_data["regime_name"].iloc[-1]
+            previous_regime = previous_data[regime_column].iloc[-1]
         else:
             previous_regime = "unknown"
     else:
@@ -430,14 +495,31 @@ async def detect_regime(
         ToolError: If parameters are invalid or regime detection fails
     """
     # Validate inputs
-    validate_ticker(ticker)
-    validate_n_states(n_states)
-    validate_date(start_date, "start_date")
-    validate_date(end_date, "end_date")
-    validate_date_range(start_date, end_date)
+    try:
+        validate_ticker(ticker)
+        validate_n_states(n_states)
+        validate_date(start_date, "start_date")
+        validate_date(end_date, "end_date")
+        validate_date_range(start_date, end_date)
+    except ValidationError as e:
+        error_info = e.to_error_info()
+        msg = f"{error_info.message}"
+        if error_info.details:
+            msg += f": {error_info.details}"
+        raise ToolError(msg)
+
+    # Check cache first
+    cache = get_cache()
+    cached_result = cache.get(ticker, n_states, start_date, end_date, tool_name="detect_regime")
+    if cached_result is not None:
+        logger.info(f"Cache hit for {ticker} (regime detection) - returning cached result")
+        return cached_result
+
+    logger.info(f"Cache miss for {ticker} - running fresh regime analysis")
 
     try:
         # Create pipeline and run regime detection
+        logger.info(f"Fetching data for {ticker} from Yahoo Finance...")
         pipeline = create_financial_pipeline(
             ticker=ticker,
             n_states=n_states,
@@ -446,6 +528,7 @@ async def detect_regime(
             include_report=False,  # Don't generate report, return result object
         )
 
+        logger.info(f"Training {n_states}-state HMM model for {ticker}...")
         _ = pipeline.update()  # Returns a string, but we'll use pipeline internals
 
         # Validate pipeline outputs are not empty
@@ -455,10 +538,30 @@ async def detect_regime(
                 "This may be due to weekends, holidays, or insufficient trading data."
             )
 
+        # Log data loading success
+        n_observations = len(pipeline.data_output)
+        date_range = f"{pipeline.data_output.index[0].strftime('%Y-%m-%d')} to {pipeline.data_output.index[-1].strftime('%Y-%m-%d')}"
+        logger.info(f"Downloaded {n_observations} observations for {ticker} ({date_range})")
+        logger.info(f"Model training completed for {ticker}")
+
         # Extract current regime information from pipeline analysis_output
         latest = pipeline.analysis_output.iloc[-1]
 
-        regime_name = str(latest["regime_name"])
+        # Support both old (regime_name) and new (regime_label) column names
+        regime_column = "regime_label" if "regime_label" in pipeline.analysis_output.columns else "regime_name"
+
+        # Normalize regime name to lowercase and map to expected format
+        regime_name = str(latest[regime_column]).lower()
+        # Map new FinancialInterpreter labels to old format for backward compatibility
+        regime_mapping = {
+            "bull": "bullish",
+            "bear": "bearish",
+            "sideways": "sideways",
+            "crisis": "crisis",
+            "mixed": "mixed"
+        }
+        regime_name = regime_mapping.get(regime_name, regime_name)
+
         confidence = float(latest["confidence"])
         expected_return = float(latest["expected_return"])
         expected_volatility = float(latest["expected_volatility"])
@@ -514,6 +617,10 @@ async def detect_regime(
             "interpretation": interpretation["interpretation"],
             "explanation": interpretation["explanation"],
         }
+
+        # Cache the result
+        cache.set(ticker, n_states, response, start_date, end_date, tool_name="detect_regime")
+        logger.info(f"Regime detection completed for {ticker} - result cached")
 
         return response
 
@@ -571,14 +678,31 @@ async def get_regime_statistics(
         ToolError: If parameters are invalid or analysis fails
     """
     # Validate inputs
-    validate_ticker(ticker)
-    validate_n_states(n_states)
-    validate_date(start_date, "start_date")
-    validate_date(end_date, "end_date")
-    validate_date_range(start_date, end_date)
+    try:
+        validate_ticker(ticker)
+        validate_n_states(n_states)
+        validate_date(start_date, "start_date")
+        validate_date(end_date, "end_date")
+        validate_date_range(start_date, end_date)
+    except ValidationError as e:
+        error_info = e.to_error_info()
+        msg = f"{error_info.message}"
+        if error_info.details:
+            msg += f": {error_info.details}"
+        raise ToolError(msg)
+
+    # Check cache first
+    cache = get_cache()
+    cached_result = cache.get(ticker, n_states, start_date, end_date, tool_name="get_regime_statistics")
+    if cached_result is not None:
+        logger.info(f"Cache hit for {ticker} (regime statistics) - returning cached result")
+        return cached_result
+
+    logger.info(f"Cache miss for {ticker} - computing regime statistics")
 
     try:
         # Create pipeline and run regime detection
+        logger.info(f"Fetching data for {ticker} from Yahoo Finance...")
         pipeline = create_financial_pipeline(
             ticker=ticker,
             n_states=n_states,
@@ -587,6 +711,7 @@ async def get_regime_statistics(
             include_report=False,  # Don't generate report, return result object
         )
 
+        logger.info(f"Training {n_states}-state HMM model for {ticker}...")
         _ = pipeline.update()  # Returns a string, but we'll use pipeline internals
 
         # Validate pipeline outputs are not empty
@@ -596,13 +721,20 @@ async def get_regime_statistics(
                 "This may be due to weekends, holidays, or insufficient trading data."
             )
 
+        # Log data loading success
+        n_observations = len(pipeline.data_output)
+        date_range = f"{pipeline.data_output.index[0].strftime('%Y-%m-%d')} to {pipeline.data_output.index[-1].strftime('%Y-%m-%d')}"
+        logger.info(f"Downloaded {n_observations} observations for {ticker} ({date_range})")
+        logger.info(f"Analyzing regime statistics for {ticker}...")
+
         # Build regime statistics from analysis_output
         analysis = pipeline.analysis_output
         regimes = {}
 
-        # Group by regime_name and calculate statistics
-        for regime_name in analysis["regime_name"].unique():
-            regime_data = analysis[analysis["regime_name"] == regime_name]
+        # Group by regime_label (or regime_name for backward compatibility) and calculate statistics
+        regime_column = "regime_label" if "regime_label" in analysis.columns else "regime_name"
+        for regime_name in analysis[regime_column].unique():
+            regime_data = analysis[analysis[regime_column] == regime_name]
 
             regimes[regime_name] = {
                 "mean_return": round(float(regime_data["expected_return"].mean()), 6),
@@ -627,6 +759,10 @@ async def get_regime_statistics(
             },
             "n_states": n_states,
         }
+
+        # Cache the result
+        cache.set(ticker, n_states, response, start_date, end_date, tool_name="get_regime_statistics")
+        logger.info(f"Regime statistics computed for {ticker} - result cached")
 
         return response
 
@@ -677,15 +813,33 @@ async def get_transition_probabilities(
         ToolError: If parameters are invalid or analysis fails
     """
     # Validate inputs
-    validate_ticker(ticker)
-    validate_n_states(n_states)
+    try:
+        validate_ticker(ticker)
+        validate_n_states(n_states)
+    except ValidationError as e:
+        error_info = e.to_error_info()
+        msg = f"{error_info.message}"
+        if error_info.details:
+            msg += f": {error_info.details}"
+        raise ToolError(msg)
+
+    # Check cache first
+    cache = get_cache()
+    cached_result = cache.get(ticker, n_states, tool_name="get_transition_probabilities")
+    if cached_result is not None:
+        logger.info(f"Cache hit for {ticker} (transition probabilities) - returning cached result")
+        return cached_result
+
+    logger.info(f"Cache miss for {ticker} - computing transition probabilities")
 
     try:
         # Create pipeline and run regime detection
+        logger.info(f"Fetching data for {ticker} from Yahoo Finance...")
         pipeline = create_financial_pipeline(
             ticker=ticker, n_states=n_states, include_report=False
         )
 
+        logger.info(f"Training {n_states}-state HMM model for {ticker}...")
         _ = pipeline.update()  # Returns a string, but we'll use pipeline internals
 
         # Validate pipeline outputs are not empty
@@ -695,17 +849,26 @@ async def get_transition_probabilities(
                 "This may be due to insufficient trading data or invalid ticker symbol."
             )
 
+        # Log data loading success
+        n_observations = len(pipeline.data_output)
+        logger.info(f"Downloaded {n_observations} observations for {ticker}")
+        logger.info(f"Computing transition probabilities for {ticker}...")
+
         # Get transition matrix from model
         trans_matrix = pipeline.model.transition_matrix_
 
         # Get regime labels from analysis
         analysis = pipeline.analysis_output
-        regime_names = analysis["regime_name"].unique()
+
+        # Support both old (regime_name) and new (regime_label) column names
+        regime_column = "regime_label" if "regime_label" in analysis.columns else "regime_name"
+
+        regime_names = analysis[regime_column].unique()
         state_to_regime = {int(analysis.iloc[0]["predicted_state"]): regime_names[0]}
 
         # Build mapping from state number to regime name
         for i, regime_name in enumerate(regime_names):
-            regime_rows = analysis[analysis["regime_name"] == regime_name]
+            regime_rows = analysis[analysis[regime_column] == regime_name]
             if len(regime_rows) > 0:
                 state_num = int(regime_rows.iloc[0]["predicted_state"])
                 state_to_regime[state_num] = regime_name
@@ -746,6 +909,10 @@ async def get_transition_probabilities(
             "steady_state": steady_state,
             "n_states": n_states,
         }
+
+        # Cache the result
+        cache.set(ticker, n_states, response, tool_name="get_transition_probabilities")
+        logger.info(f"Transition probabilities computed for {ticker} - result cached")
 
         return response
 
