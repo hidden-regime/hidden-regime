@@ -29,7 +29,9 @@ def get_regime_color_map(regime_profiles=None):
         color_map = {}
         for profile in regime_profiles.values():
             regime_name = profile.get_display_name()
-            color = profile.color if hasattr(profile, 'color') else "#808080"  # Fallback to gray
+            color = (
+                profile.color if hasattr(profile, "color") else "#808080"
+            )  # Fallback to gray
             color_map[regime_name] = color
             # Legacy support (capitalized)
             color_map[regime_name.capitalize()] = color
@@ -37,11 +39,11 @@ def get_regime_color_map(regime_profiles=None):
 
     # Fallback to default colorblind-safe colors if no profiles provided
     return {
-        "bearish": "#d73027",      # Red (colorblind safe)
-        "crisis": "#a50026",       # Dark red (colorblind safe)
-        "sideways": "#fee08b",     # Yellow (colorblind safe)
-        "bullish": "#4575b4",      # Blue (colorblind safe)
-        "mixed": "#9970ab",        # Purple (colorblind safe)
+        "bearish": "#d73027",  # Red (colorblind safe)
+        "crisis": "#a50026",  # Dark red (colorblind safe)
+        "sideways": "#fee08b",  # Yellow (colorblind safe)
+        "bullish": "#4575b4",  # Blue (colorblind safe)
+        "mixed": "#9970ab",  # Purple (colorblind safe)
         # Legacy support for old naming
         "Bear": "#d73027",
         "Crisis": "#a50026",

@@ -88,7 +88,9 @@ class ComponentFactory:
         """Register an interpreter component creator function."""
         self._interpreter_registry[config_type] = creator_func
 
-    def register_signal_generator_component(self, config_type: str, creator_func: callable):
+    def register_signal_generator_component(
+        self, config_type: str, creator_func: callable
+    ):
         """Register a signal generator component creator function."""
         self._signal_generator_registry[config_type] = creator_func
 
@@ -188,12 +190,18 @@ class ComponentFactory:
 
         try:
             component = self._interpreter_registry[config_type](config)
-            self.logger.debug(f"Created interpreter component: {type(component).__name__}")
+            self.logger.debug(
+                f"Created interpreter component: {type(component).__name__}"
+            )
             return component
         except Exception as e:
-            raise ConfigurationError(f"Failed to create interpreter component: {str(e)}")
+            raise ConfigurationError(
+                f"Failed to create interpreter component: {str(e)}"
+            )
 
-    def create_signal_generator_component(self, config: SignalGenerationConfiguration) -> Any:
+    def create_signal_generator_component(
+        self, config: SignalGenerationConfiguration
+    ) -> Any:
         """
         Create signal generator component from configuration.
 
@@ -212,10 +220,14 @@ class ComponentFactory:
 
         try:
             component = self._signal_generator_registry[config_type](config)
-            self.logger.debug(f"Created signal generator component: {type(component).__name__}")
+            self.logger.debug(
+                f"Created signal generator component: {type(component).__name__}"
+            )
             return component
         except Exception as e:
-            raise ConfigurationError(f"Failed to create signal generator component: {str(e)}")
+            raise ConfigurationError(
+                f"Failed to create signal generator component: {str(e)}"
+            )
 
     def create_report_component(self, config: ReportConfig) -> Any:
         """
@@ -266,7 +278,9 @@ class ComponentFactory:
 
         return FinancialInterpreter(config)
 
-    def _create_financial_signal_generator(self, config: SignalGenerationConfiguration) -> Any:
+    def _create_financial_signal_generator(
+        self, config: SignalGenerationConfiguration
+    ) -> Any:
         """Create financial signal generator component."""
         from ..signal_generation.financial import FinancialSignalGenerator
 

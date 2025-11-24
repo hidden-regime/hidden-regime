@@ -92,9 +92,9 @@ try:
     print(f'   Version: {hidden_regime.__version__}')
     print(f'   Author: {hidden_regime.__author__}')
     
-    # Test basic functionality
-    from hidden_regime import DataLoader, HiddenMarkovModel
-    print('✅ Core classes imported successfully')
+    # Test basic functionality (v2.0.0 uses factory functions)
+    from hidden_regime import create_financial_pipeline, Pipeline
+    print('✅ Core factory functions imported successfully')
     
 except ImportError as e:
     print(f'❌ Import failed: {e}')
