@@ -74,17 +74,19 @@ class PipelineFactory:
             signal_generator_component = None
 
             if interpreter_config is not None:
-                interpreter_component = self.component_factory.create_interpreter_component(
-                    interpreter_config
+                interpreter_component = (
+                    self.component_factory.create_interpreter_component(
+                        interpreter_config
+                    )
                 )
                 if signal_generator_config is not None:
-                    signal_generator_component = self.component_factory.create_signal_generator_component(
-                        signal_generator_config
+                    signal_generator_component = (
+                        self.component_factory.create_signal_generator_component(
+                            signal_generator_config
+                        )
                     )
             else:
-                raise ConfigurationError(
-                    "Must provide 'interpreter_config'"
-                )
+                raise ConfigurationError("Must provide 'interpreter_config'")
 
             report_component = None
             if report_config is not None:
@@ -102,7 +104,9 @@ class PipelineFactory:
                 report=report_component,
             )
 
-            self.logger.info("Successfully created pipeline with Interpreter + SignalGenerator architecture")
+            self.logger.info(
+                "Successfully created pipeline with Interpreter + SignalGenerator architecture"
+            )
             return pipeline
 
         except Exception as e:
@@ -182,6 +186,7 @@ class PipelineFactory:
         if "interpreter_config_overrides" in kwargs:
             interpreter_config_params.update(kwargs["interpreter_config_overrides"])
         from hidden_regime.config.interpreter import InterpreterConfiguration
+
         interpreter_config = InterpreterConfiguration(**interpreter_config_params)
 
         # Create signal generator configuration (new architecture)
@@ -189,6 +194,7 @@ class PipelineFactory:
         if "signal_config_overrides" in kwargs:
             signal_config_params.update(kwargs["signal_config_overrides"])
         from hidden_regime.config.signal_generation import SignalGenerationConfiguration
+
         signal_generator_config = SignalGenerationConfiguration(**signal_config_params)
 
         # Create report configuration if requested

@@ -139,7 +139,9 @@ class Pipeline:
             self.logger.debug("Step 4: Interpreting regimes")
 
             # Pass raw data for performance calculations (win_rate, max_drawdown, etc.)
-            interpreter_output = self.interpreter.update(model_output, raw_data=data_output)
+            interpreter_output = self.interpreter.update(
+                model_output, raw_data=data_output
+            )
             self.component_outputs["interpreter"] = interpreter_output
 
             # Step 5: Signal generation (if signal generator provided)
@@ -217,14 +219,18 @@ class Pipeline:
                 # Handle both string and numeric types
                 if isinstance(expected_return, str):
                     expected_return = float(expected_return)
-                report_lines.append(f"**Expected Annual Return**: {expected_return:.2%}")
+                report_lines.append(
+                    f"**Expected Annual Return**: {expected_return:.2%}"
+                )
         elif "regime_return" in current.index:
             expected_return = current.get("regime_return")
             if expected_return is not None:
                 # Handle both string and numeric types
                 if isinstance(expected_return, str):
                     expected_return = float(expected_return)
-                report_lines.append(f"**Expected Annual Return**: {expected_return:.2%}")
+                report_lines.append(
+                    f"**Expected Annual Return**: {expected_return:.2%}"
+                )
 
         # Support both old (regime_volatility) and new (expected_volatility) column names
         if "expected_volatility" in current.index:
@@ -380,7 +386,11 @@ class Pipeline:
                 "observation": type(self.observation).__name__,
                 "model": type(self.model).__name__,
                 "interpreter": type(self.interpreter).__name__,
-                "signal_generator": type(self.signal_generator).__name__ if self.signal_generator else None,
+                "signal_generator": (
+                    type(self.signal_generator).__name__
+                    if self.signal_generator
+                    else None
+                ),
                 "report": type(self.report).__name__ if self.report else None,
             },
         }
@@ -429,7 +439,9 @@ class Pipeline:
         components.append(f"Model: {type(self.model).__name__}")
         components.append(f"Interpreter: {type(self.interpreter).__name__}")
         if self.signal_generator:
-            components.append(f"SignalGenerator: {type(self.signal_generator).__name__}")
+            components.append(
+                f"SignalGenerator: {type(self.signal_generator).__name__}"
+            )
         if self.report:
             components.append(f"Report: {type(self.report).__name__}")
 
