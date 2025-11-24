@@ -44,14 +44,14 @@ mcp.tool(get_transition_probabilities)
 mcp.resource("regime://{ticker}/current")(get_current_regime_resource)
 mcp.resource("regime://{ticker}/transitions")(get_transitions_resource)
 
-# Register prompts
-mcp.prompt()(regime_quick_check)
-mcp.prompt()(regime_deep_dive)
-mcp.prompt()(regime_strategy_advisor)
-mcp.prompt()(regime_multi_asset_comparison)
-mcp.prompt()(regime_risk_assessment)
-mcp.prompt()(regime_historical_analogs)
-mcp.prompt()(regime_portfolio_review)
+# Register prompts with explicit kebab-case names for user-facing API
+mcp.prompt(name="regime-quick-check")(regime_quick_check)
+mcp.prompt(name="regime-deep-dive")(regime_deep_dive)
+mcp.prompt(name="regime-strategy-advisor")(regime_strategy_advisor)
+mcp.prompt(name="regime-multi-asset-comparison")(regime_multi_asset_comparison)
+mcp.prompt(name="regime-risk-assessment")(regime_risk_assessment)
+mcp.prompt(name="regime-historical-analogs")(regime_historical_analogs)
+mcp.prompt(name="regime-portfolio-review")(regime_portfolio_review)
 
 
 def main():

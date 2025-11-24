@@ -860,18 +860,25 @@ async def get_transition_probabilities(
         # Get regime labels from interpreter_output (v2.0.0)
         analysis = pipeline.interpreter_output
 
-        # Support both old (regime_name) and new (regime_label) column names
-        regime_column = "regime_label" if "regime_label" in analysis.columns else "regime_name"
+        # Get authoritative state-to-regime mapping from interpreter
+        # This ensures ALL states get labels, even if they never appear in observed data
+        state_to_regime = pipeline.interpreter._state_labels.copy()
 
-        regime_names = analysis[regime_column].unique()
-        state_to_regime = {int(analysis.iloc[0]["predicted_state"]): regime_names[0]}
+        # Handle duplicate labels by appending state indices
+        # If multiple states have the same label (e.g., two "Bull" states),
+        # distinguish them as "Bull-0", "Bull-1", etc.
+        label_counts = {}
+        for state_idx, label in state_to_regime.items():
+            if label not in label_counts:
+                label_counts[label] = []
+            label_counts[label].append(state_idx)
 
-        # Build mapping from state number to regime name
-        for i, regime_name in enumerate(regime_names):
-            regime_rows = analysis[analysis[regime_column] == regime_name]
-            if len(regime_rows) > 0:
-                state_num = int(regime_rows.iloc[0]["predicted_state"])
-                state_to_regime[state_num] = regime_name
+        # Only modify labels if there are duplicates
+        for label, state_indices in label_counts.items():
+            if len(state_indices) > 1:
+                # Multiple states share this label - disambiguate them
+                for state_idx in state_indices:
+                    state_to_regime[state_idx] = f"{label}-{state_idx}"
 
         # Build transition matrix in readable format with regime names
         transition_matrix = {}

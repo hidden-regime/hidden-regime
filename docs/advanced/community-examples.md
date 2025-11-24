@@ -219,9 +219,6 @@ Where:
 3. ✅ **Faster Recovery:** Regime-based reallocation captured upside earlier
 4. ⚠️  **False Signals:** Brief "Sideways" in June (minor performance drag)
 
-**Trader Commentary:**
-> "The regime detection worked remarkably well during 2020. The switch to 'Crisis' on Feb 25th saved us from the worst of the drawdown. We missed some upside in June with the false 'Sideways' signal, but overall, the system performed exactly as designed."
-
 ---
 
 ### Case Study 2: Sector Rotation in Rising Rate Environment (2022)
@@ -273,9 +270,6 @@ Where:
 3. ⚠️  **Missed July Rally:** Defensive positioning missed +9% month
 4. ✅ **Overall Alpha:** +10% outperformance vs S&P 500
 
-**Trader Commentary:**
-> "2022 was a perfect example of why regime filtering matters. Traditional momentum would have kept us in Tech far too long. The Bear regime signal in April was the key - it overrode momentum and saved us from the worst drawdowns. Yes, we missed the July rally, but protecting capital in a down year is what matters."
-
 ---
 
 ### Case Study 3: Volatility Targeting Through Market Cycles (2015-2024)
@@ -324,9 +318,6 @@ Where:
 | Bull | 68 | +1.2% | 11.8% | Levered to 12% target |
 | Sideways | 34 | +0.6% | 9.9% | Neutral positioning |
 | Bear | 22 | -0.3% | 6.2% | De-levered to 6% target |
-
-**Trader Commentary:**
-> "The volatility targeting strategy delivered exactly what we wanted: consistent, predictable risk exposure. The regime detection added crucial context - we could run higher volatility in Bull markets and lower in Bear markets. Over 9 years, we gave up 140bps of return but reduced volatility by 40%. For institutional mandates, that's a huge win."
 
 ---
 

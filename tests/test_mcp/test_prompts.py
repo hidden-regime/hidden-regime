@@ -444,3 +444,34 @@ class TestPromptIntegration:
         for result in results:
             assert isinstance(result, str)
             assert len(result) > 0
+
+    def test_server_prompt_registration(self):
+        """Verify prompts are registered in MCP server with explicit names.
+
+        NOTE: This test verifies that the server.py file uses explicit
+        name parameters in mcp.prompt() calls to ensure kebab-case names.
+        The actual verification of prompt names requires running the MCP server,
+        which is tested via manual integration testing with Claude Desktop.
+
+        This test verifies the registration pattern in code.
+        """
+        from hidden_regime_mcp import server
+        import inspect
+
+        # Read the server.py source to verify explicit name= parameters
+        source = inspect.getsource(server)
+
+        # Expected kebab-case names should appear in explicit registrations
+        expected_names = [
+            'name="regime-quick-check"',
+            'name="regime-deep-dive"',
+            'name="regime-strategy-advisor"',
+            'name="regime-multi-asset-comparison"',
+            'name="regime-risk-assessment"',
+            'name="regime-historical-analogs"',
+            'name="regime-portfolio-review"',
+        ]
+
+        # Verify all expected names are in the source code
+        for expected in expected_names:
+            assert expected in source, f"Expected to find {expected} in server.py prompt registration"

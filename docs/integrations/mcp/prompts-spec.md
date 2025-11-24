@@ -1152,11 +1152,12 @@ async def my_prompt_name(
 ```
 
 FastMCP automatically:
-- Converts function name to prompt name (snake_case → kebab-case)
 - Extracts description from docstring
 - Generates argument schema from type hints
 - Handles argument validation
 - Returns prompt text in MCP format
+
+**Note:** Prompt names must be explicitly specified using `mcp.prompt(name="kebab-case-name")` for user-facing kebab-case identifiers. FastMCP does not automatically convert function names to kebab-case.
 
 ---
 

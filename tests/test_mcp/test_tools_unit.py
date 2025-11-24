@@ -502,6 +502,78 @@ class TestGetTransitionProbabilitiesUnit:
             with pytest.raises(ToolError):  # Will raise error about empty data
                 await get_transition_probabilities(ticker="SPY", n_states=3)
 
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_get_transition_probabilities_duplicate_labels(self):
+        """Test transition probabilities with duplicate regime labels.
+
+        When multiple states have the same label (e.g., two 'Bull' states),
+        they should be disambiguated with state indices (Bull-1, Bull-2).
+        """
+        # Create mock pipeline with duplicate labels
+        mock_pipeline = MagicMock()
+
+        # Mock interpreter with duplicate labels (States 1 and 2 both labeled "Bull")
+        mock_interpreter = MagicMock()
+        mock_interpreter._state_labels = {0: "Bear", 1: "Bull", 2: "Bull"}
+        mock_pipeline.interpreter = mock_interpreter
+
+        # Mock model with 3-state transition matrix
+        mock_model = MagicMock()
+        mock_model.transition_matrix_ = np.array([
+            [0.75, 0.01, 0.24],   # Bear -> Bear, Bull-1, Bull-2
+            [0.13, 0.86, 0.01],   # Bull-1 -> Bear, Bull-1, Bull-2
+            [0.06, 0.46, 0.48],   # Bull-2 -> Bear, Bull-1, Bull-2
+        ])
+        mock_pipeline.model = mock_model
+
+        # Mock interpreter_output
+        dates = pd.date_range(end="2024-12-31", periods=100, freq="D")
+        mock_pipeline.interpreter_output = pd.DataFrame({
+            "predicted_state": [0] * 27 + [1] * 62 + [2] * 11,  # Distribution matching steady state
+            "regime_label": ["Bear"] * 27 + ["Bull"] * 62 + ["Bull"] * 11,
+        }, index=dates[:100])
+
+        # Mock data_output
+        mock_pipeline.data_output = pd.DataFrame(
+            {"close": [100.0] * 100}, index=dates[:100]
+        )
+
+        mock_pipeline.update.return_value = "Success"
+
+        with patch("hidden_regime_mcp.tools.create_financial_pipeline", return_value=mock_pipeline):
+            result = await get_transition_probabilities(ticker="SPY", n_states=3)
+
+            # Verify that duplicate labels are disambiguated
+            matrix = result["transition_matrix"]
+            assert len(matrix) == 3, "Should have 3 unique regime names"
+
+            # Check that disambiguated labels exist
+            assert "Bear" in matrix
+            assert "Bull-1" in matrix
+            assert "Bull-2" in matrix
+
+            # Verify no raw state labels or undisambiguated duplicates
+            assert "state_0" not in matrix
+            assert "state_1" not in matrix
+            assert "state_2" not in matrix
+
+            # Verify transition structure is preserved
+            assert "Bear" in matrix["Bear"]
+            assert "Bull-1" in matrix["Bear"]
+            assert "Bull-2" in matrix["Bear"]
+
+            # Verify expected durations and steady state also use disambiguated labels
+            durations = result["expected_durations"]
+            assert "Bear" in durations
+            assert "Bull-1" in durations
+            assert "Bull-2" in durations
+
+            steady_state = result["steady_state"]
+            assert "Bear" in steady_state
+            assert "Bull-1" in steady_state
+            assert "Bull-2" in steady_state
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
