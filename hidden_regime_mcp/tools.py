@@ -532,7 +532,7 @@ async def detect_regime(
         _ = pipeline.update()  # Returns a string, but we'll use pipeline internals
 
         # Validate pipeline outputs are not empty
-        if len(pipeline.analysis_output) == 0:
+        if len(pipeline.interpreter_output) == 0:
             raise ToolError(
                 f"No data available for {ticker} in the specified date range. "
                 "This may be due to weekends, holidays, or insufficient trading data."
@@ -544,11 +544,11 @@ async def detect_regime(
         logger.info(f"Downloaded {n_observations} observations for {ticker} ({date_range})")
         logger.info(f"Model training completed for {ticker}")
 
-        # Extract current regime information from pipeline analysis_output
-        latest = pipeline.analysis_output.iloc[-1]
+        # Extract current regime information from pipeline interpreter_output (v2.0.0)
+        latest = pipeline.interpreter_output.iloc[-1]
 
         # Support both old (regime_name) and new (regime_label) column names
-        regime_column = "regime_label" if "regime_label" in pipeline.analysis_output.columns else "regime_name"
+        regime_column = "regime_label" if "regime_label" in pipeline.interpreter_output.columns else "regime_name"
 
         # Normalize regime name to lowercase and map to expected format
         regime_name = str(latest[regime_column]).lower()
@@ -581,7 +581,7 @@ async def detect_regime(
         price_perf = calculate_price_performance(pipeline.data_output)
 
         # Analyze regime stability
-        stability_metrics = analyze_regime_stability(pipeline.analysis_output)
+        stability_metrics = analyze_regime_stability(pipeline.interpreter_output)
 
         # Generate interpretation
         interpretation = generate_regime_interpretation(
@@ -715,7 +715,7 @@ async def get_regime_statistics(
         _ = pipeline.update()  # Returns a string, but we'll use pipeline internals
 
         # Validate pipeline outputs are not empty
-        if len(pipeline.analysis_output) == 0:
+        if len(pipeline.interpreter_output) == 0:
             raise ToolError(
                 f"No data available for {ticker} in the specified date range. "
                 "This may be due to weekends, holidays, or insufficient trading data."
@@ -727,8 +727,8 @@ async def get_regime_statistics(
         logger.info(f"Downloaded {n_observations} observations for {ticker} ({date_range})")
         logger.info(f"Analyzing regime statistics for {ticker}...")
 
-        # Build regime statistics from analysis_output
-        analysis = pipeline.analysis_output
+        # Build regime statistics from interpreter_output (v2.0.0)
+        analysis = pipeline.interpreter_output
         regimes = {}
 
         # Group by regime_label (or regime_name for backward compatibility) and calculate statistics
@@ -843,7 +843,7 @@ async def get_transition_probabilities(
         _ = pipeline.update()  # Returns a string, but we'll use pipeline internals
 
         # Validate pipeline outputs are not empty
-        if len(pipeline.analysis_output) == 0:
+        if len(pipeline.interpreter_output) == 0:
             raise ToolError(
                 f"No data available for {ticker}. "
                 "This may be due to insufficient trading data or invalid ticker symbol."
@@ -857,8 +857,8 @@ async def get_transition_probabilities(
         # Get transition matrix from model
         trans_matrix = pipeline.model.transition_matrix_
 
-        # Get regime labels from analysis
-        analysis = pipeline.analysis_output
+        # Get regime labels from interpreter_output (v2.0.0)
+        analysis = pipeline.interpreter_output
 
         # Support both old (regime_name) and new (regime_label) column names
         regime_column = "regime_label" if "regime_label" in analysis.columns else "regime_name"
