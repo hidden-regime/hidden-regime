@@ -49,6 +49,7 @@ from .config import (
     InterpreterConfiguration,
     ModelConfig,
     ObservationConfig,
+    ObservationMode,
     ReportConfig,
     SignalGenerationConfiguration,
 )
@@ -243,6 +244,55 @@ def create_research_pipeline(ticker="SPY", n_states=3, comprehensive_analysis=Tr
     )
 
 
+def create_multivariate_pipeline(
+    ticker="SPY",
+    n_states=3,
+    features=None,
+    start_date=None,
+    end_date=None,
+    **kwargs
+):
+    """
+    Create pipeline for multivariate regime detection.
+
+    Args:
+        ticker: Stock ticker symbol
+        n_states: Number of regime states for HMM
+        features: List of feature names to use, or None for default ['log_return', 'realized_vol']
+        start_date: Data start date (YYYY-MM-DD)
+        end_date: Data end date (YYYY-MM-DD)
+        **kwargs: Additional configuration overrides
+
+    Returns:
+        Configured Pipeline instance with multivariate HMM
+
+    Example:
+        >>> import hidden_regime as hr
+        >>> # Use default features (returns + realized volatility)
+        >>> pipeline = hr.create_multivariate_pipeline('SPY', n_states=3)
+        >>> result = pipeline.update()
+        >>>
+        >>> # Or specify custom features
+        >>> pipeline = hr.create_multivariate_pipeline(
+        ...     'AAPL',
+        ...     features=['log_return', 'realized_vol'],
+        ...     n_states=3
+        ... )
+    """
+    # Default features: returns + realized volatility (best practice)
+    if features is None:
+        features = ['log_return', 'realized_vol']
+
+    return pipeline_factory.create_multivariate_pipeline(
+        ticker=ticker,
+        n_states=n_states,
+        features=features,
+        start_date=start_date,
+        end_date=end_date,
+        **kwargs
+    )
+
+
 # Temporal V&V functions
 def create_temporal_controller(pipeline, full_dataset):
     """
@@ -318,6 +368,7 @@ __all__ = [
     "FinancialObservationConfig",
     "ModelConfig",
     "HMMConfig",
+    "ObservationMode",
     "AnalysisConfig",
     "FinancialAnalysisConfig",
     "ReportConfig",
@@ -345,6 +396,7 @@ __all__ = [
     "create_simple_regime_pipeline",
     "create_trading_pipeline",
     "create_research_pipeline",
+    "create_multivariate_pipeline",
     # Temporal V&V functions
     "create_temporal_controller",
     # Legacy compatibility

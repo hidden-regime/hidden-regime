@@ -8,7 +8,7 @@ serialization, and factory pattern support for creating configured components.
 from .base import BaseConfig
 from .data import DataConfig, FinancialDataConfig
 from .interpreter import InterpreterConfiguration
-from .model import HMMConfig, ModelConfig
+from .model import HMMConfig, ModelConfig, ObservationMode
 from .observation import FinancialObservationConfig, ObservationConfig
 from .pipeline import PipelineConfiguration
 from .report import ReportConfig, ReportConfiguration
@@ -26,6 +26,7 @@ __all__ = [
     # Model configurations
     "ModelConfig",
     "HMMConfig",
+    "ObservationMode",
     # Interpreter configurations
     "InterpreterConfiguration",
     # Signal generation configurations

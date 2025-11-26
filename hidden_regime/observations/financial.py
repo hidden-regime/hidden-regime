@@ -52,6 +52,7 @@ class FinancialObservationGenerator(BaseObservationGenerator):
             "price_change": self._generate_price_change,
             # Volatility measures
             "volatility": self._generate_volatility,
+            "realized_vol": self._generate_realized_vol,  # Multivariate HMM: rolling volatility
             # Enhanced regime-relevant features
             "momentum_strength": self._generate_momentum_strength,
             "trend_persistence": self._generate_trend_persistence,
@@ -65,6 +66,7 @@ class FinancialObservationGenerator(BaseObservationGenerator):
             # Volume indicators (if available)
             "volume_sma": self._generate_volume_sma,
             "volume_ratio": self._generate_volume_ratio,
+            "volume_change": self._generate_volume_change,  # Multivariate HMM: log volume change
             "price_volume_trend": self._generate_price_volume_trend,
         }
 
@@ -299,6 +301,64 @@ class FinancialObservationGenerator(BaseObservationGenerator):
         # Calculate PVT
         pvt = (price_change_pct * volume).cumsum()
         return pd.Series(pvt, index=data.index, name="pvt")
+
+    def _generate_realized_vol(self, data: pd.DataFrame, window: int = 20) -> pd.Series:
+        """
+        Generate realized volatility (rolling standard deviation of returns).
+
+        This is the RECOMMENDED feature for multivariate HMM regime detection.
+        Realized volatility captures regime structure better than volume features.
+
+        Args:
+            data: Financial data with returns
+            window: Rolling window size (default: 20 days)
+
+        Returns:
+            Series with realized volatility values
+        """
+        # Get window size from config if available
+        if hasattr(self.config, 'window_size'):
+            window = self.config.window_size
+
+        # Calculate log returns if not already present
+        if "log_return" not in data.columns:
+            price_col = self.config.price_column
+            prices = data[price_col]
+            log_returns = np.log(prices / prices.shift(1))
+        else:
+            log_returns = data["log_return"]
+
+        # Calculate rolling volatility (standard deviation of returns)
+        realized_vol = log_returns.rolling(window=window).std()
+
+        return pd.Series(realized_vol, index=data.index, name="realized_vol")
+
+    def _generate_volume_change(self, data: pd.DataFrame) -> pd.Series:
+        """
+        Generate log volume change.
+
+        WARNING: Volume change is NOT recommended for multivariate HMM.
+        Use realized_vol instead. Volume is regime-ambiguous (spikes in both
+        bull and bear markets) and has much larger variance than returns,
+        causing numerical instability.
+
+        Args:
+            data: Financial data with volume column
+
+        Returns:
+            Series with log volume change values
+        """
+        volume_col = self.config.volume_column
+
+        if volume_col not in data.columns:
+            return pd.Series(dtype=float, index=data.index, name="volume_change")
+
+        volume = data[volume_col]
+
+        # Calculate log volume change
+        volume_change = np.log(volume / volume.shift(1))
+
+        return pd.Series(volume_change, index=data.index, name="volume_change")
 
     def plot(self, ax=None, **kwargs) -> plt.Figure:
         """

@@ -17,6 +17,14 @@ from ..config.model import HMMConfig
 from ..pipeline.interfaces import ModelComponent
 from ..utils.exceptions import HMMInferenceError, HMMTrainingError, ValidationError
 
+# Try to import sklearn for feature standardization (optional but recommended for multivariate)
+try:
+    from sklearn.preprocessing import StandardScaler
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    StandardScaler = None
+
 # Try to import existing HMM utilities
 try:
     from .algorithms import HMMAlgorithms
@@ -60,13 +68,24 @@ class HiddenMarkovModel(ModelComponent):
         Raises:
             ValidationError: If configuration parameters are invalid
         """
+        import inspect
         import warnings
-        warnings.warn(
-            "Direct instantiation of HiddenMarkovModel is discouraged. "
-            "Use hr.create_financial_pipeline() or component_factory.create_model_component() instead.",
-            FutureWarning,
-            stacklevel=2
-        )
+
+        # Check if called from component factory (suppress warning if so)
+        frame = inspect.currentframe()
+        caller_filename = None
+        if frame is not None and frame.f_back is not None:
+            caller_filename = frame.f_back.f_code.co_filename
+
+        is_from_factory = caller_filename and 'factories/components.py' in caller_filename
+
+        if not is_from_factory:
+            warnings.warn(
+                "Direct instantiation of HiddenMarkovModel is discouraged. "
+                "Use hr.create_financial_pipeline() or component_factory.create_model_component() instead.",
+                FutureWarning,
+                stacklevel=2
+            )
 
         # Validate configuration parameters
         self._validate_config(config)
@@ -78,7 +97,16 @@ class HiddenMarkovModel(ModelComponent):
         self.initial_probs_: Optional[np.ndarray] = None
         self.transition_matrix_: Optional[np.ndarray] = None
         self.emission_means_: Optional[np.ndarray] = None
-        self.emission_stds_: Optional[np.ndarray] = None
+        self.emission_stds_: Optional[np.ndarray] = None  # Univariate only
+        self.emission_covs_: Optional[np.ndarray] = None  # Multivariate covariances
+
+        # Dimensionality tracking
+        self.n_features_: int = 1  # Number of observation features (1 = univariate)
+        self.is_multivariate_: bool = False  # Multivariate vs univariate
+
+        # Feature standardization (multivariate only)
+        self.scaler_: Optional[Any] = None  # StandardScaler for multivariate features
+        self.feature_scales_: Optional[Dict[str, np.ndarray]] = None  # Store scaling info
 
         # Training state
         self.is_fitted = False
@@ -118,6 +146,21 @@ class HiddenMarkovModel(ModelComponent):
     def emission_stds(self) -> Optional[np.ndarray]:
         """Get emission standard deviations (state volatilities)."""
         return self.emission_stds_
+
+    @property
+    def emission_covs(self) -> Optional[np.ndarray]:
+        """Get emission covariance matrices (multivariate only)."""
+        return self.emission_covs_
+
+    @property
+    def n_features(self) -> int:
+        """Get number of observation features."""
+        return self.n_features_
+
+    @property
+    def is_multivariate(self) -> bool:
+        """Check if model is multivariate (n_features > 1)."""
+        return self.is_multivariate_
 
     @property
     def transition_matrix(self) -> Optional[np.ndarray]:
@@ -267,48 +310,150 @@ class HiddenMarkovModel(ModelComponent):
                 f"Excessive missing values: {removed_count} observations removed from {len(returns) + removed_count} total"
             )
 
+    def _extract_observations(self, observations: pd.DataFrame) -> np.ndarray:
+        """
+        Extract observation features from DataFrame.
+
+        Supports both univariate (single column) and multivariate (multiple columns).
+
+        Args:
+            observations: Input DataFrame
+
+        Returns:
+            Numpy array of observations:
+            - Univariate: (T,) shape
+            - Multivariate: (T, n_features) shape
+        """
+        # Check if multivariate
+        if self.config.observed_signals is not None:
+            # Multivariate mode
+            missing_cols = [
+                col for col in self.config.observed_signals
+                if col not in observations.columns
+            ]
+            if missing_cols:
+                raise ValueError(
+                    f"Observed signals {missing_cols} not found in observations. "
+                    f"Available columns: {list(observations.columns)}"
+                )
+
+            # Extract all signal columns
+            obs_data = observations[self.config.observed_signals].values
+            return obs_data  # (T, n_features) shape
+
+        else:
+            # Univariate mode (backward compatible)
+            if self.config.observed_signal not in observations.columns:
+                raise ValueError(
+                    f"Observed signal '{self.config.observed_signal}' not found in observations"
+                )
+
+            return observations[self.config.observed_signal].values  # (T,) shape
+
     def fit(self, observations: pd.DataFrame) -> None:
         """
         Train the model on observations.
 
+        Supports both univariate and multivariate observations.
+
         Args:
             observations: Training data DataFrame with observation columns
         """
-        # Extract the observed signal from observations
-        if self.config.observed_signal not in observations.columns:
-            raise ValueError(
-                f"Observed signal '{self.config.observed_signal}' not found in observations"
-            )
-
         # Validate input data first (before cleaning)
         self._validate_input_data(observations)
 
-        # Clean data - remove NaN values
-        clean_observations = observations.dropna(subset=[self.config.observed_signal])
-        returns = clean_observations[self.config.observed_signal].values
+        # Determine which columns to use for cleaning
+        if self.config.observed_signals is not None:
+            subset_cols = self.config.observed_signals
+        else:
+            subset_cols = [self.config.observed_signal]
+
+        # Clean data - remove NaN values in any of the observation columns
+        clean_observations = observations.dropna(subset=subset_cols)
+        obs_array = self._extract_observations(clean_observations)
+
+        # Detect dimensionality
+        if obs_array.ndim == 1:
+            # Univariate
+            self.n_features_ = 1
+            self.is_multivariate_ = False
+            obs_array = obs_array  # Keep as (T,) shape
+        else:
+            # Multivariate
+            self.n_features_ = obs_array.shape[1]
+            self.is_multivariate_ = True
+
+            # Apply feature standardization for multivariate (CRITICAL for numerical stability)
+            if SKLEARN_AVAILABLE:
+                # Compute feature scales before standardization for diagnostics
+                feature_means = np.mean(obs_array, axis=0)
+                feature_stds = np.std(obs_array, axis=0)
+                feature_vars = np.var(obs_array, axis=0)
+
+                # Check for scale mismatch (variance ratio > 100 indicates problem)
+                max_var = np.max(feature_vars)
+                min_var = np.min(feature_vars[feature_vars > 0])
+                variance_ratio = max_var / min_var if min_var > 0 else np.inf
+
+                if variance_ratio > 100:
+                    warnings.warn(
+                        f"Large feature scale mismatch detected (variance ratio: {variance_ratio:.0f}). "
+                        f"Features: {subset_cols}. "
+                        f"Variances: {feature_vars}. "
+                        f"Applying StandardScaler to prevent numerical instability.",
+                        UserWarning
+                    )
+
+                # Store original scales for reference
+                self.feature_scales_ = {
+                    'means': feature_means,
+                    'stds': feature_stds,
+                    'vars': feature_vars,
+                    'variance_ratio': variance_ratio,
+                    'feature_names': subset_cols
+                }
+
+                # Apply standardization
+                self.scaler_ = StandardScaler()
+                obs_array = self.scaler_.fit_transform(obs_array)
+
+                print(f"  Feature standardization applied (variance ratio before: {variance_ratio:.1f})")
+            else:
+                warnings.warn(
+                    "sklearn not available - multivariate features will NOT be standardized. "
+                    "This may cause numerical instability if features have different scales. "
+                    "Install sklearn with: pip install scikit-learn",
+                    UserWarning
+                )
+                self.scaler_ = None
+                self.feature_scales_ = None
 
         print(
-            f"Training on {len(returns)} observations (removed {len(observations) - len(returns)} NaN values)"
+            f"Training on {len(obs_array)} observations "
+            f"(removed {len(observations) - len(obs_array)} NaN values), "
+            f"{self.n_features_} feature(s)"
         )
 
-        # Validate processed data
-        self._validate_processed_data(returns, len(observations) - len(returns))
+        # Validate processed data (use first feature for validation if multivariate)
+        first_feature = obs_array if obs_array.ndim == 1 else obs_array[:, 0]
+        self._validate_processed_data(first_feature, len(observations) - len(obs_array))
 
-        # Validate returns data
-        if HMM_UTILS_AVAILABLE:
-            validate_returns_data(returns)
-        else:
-            self._validate_returns_simple(returns)
+        # Validate data
+        if HMM_UTILS_AVAILABLE and not self.is_multivariate_:
+            # Univariate validation
+            validate_returns_data(obs_array)
+        elif not self.is_multivariate_:
+            self._validate_returns_simple(obs_array)
 
         # Set random seed if specified
         if self.config.random_seed is not None:
             np.random.seed(self.config.random_seed)
 
         # Initialize parameters
-        self._initialize_parameters(returns)
+        self._initialize_parameters(obs_array)
 
         # Train using Baum-Welch algorithm
-        self._train_baum_welch(returns)
+        self._train_baum_welch(obs_array)
 
         self.is_fitted = True
 
@@ -325,38 +470,68 @@ class HiddenMarkovModel(ModelComponent):
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
 
-        # Extract the observed signal and clean data
-        if self.config.observed_signal not in observations.columns:
-            raise ValueError(
-                f"Observed signal '{self.config.observed_signal}' not found in observations"
-            )
+        # Find indices to keep (non-NaN rows) FIRST
+        if self.is_multivariate_:
+            # For multivariate, dropna on all observed signals
+            clean_observations = observations.dropna(subset=self.config.observed_signals)
+        else:
+            # For univariate, dropna on single observed signal
+            if self.config.observed_signal not in observations.columns:
+                raise ValueError(
+                    f"Observed signal '{self.config.observed_signal}' not found in observations"
+                )
+            clean_observations = observations.dropna(subset=[self.config.observed_signal])
 
-        # Clean data - remove NaN values but keep original index for results
-        clean_observations = observations.dropna(subset=[self.config.observed_signal])
-        returns = clean_observations[self.config.observed_signal].values
+        # Extract observations using the helper (handles univariate/multivariate) from CLEAN data
+        obs_array = self._extract_observations(clean_observations)
+
+        # Apply standardization if multivariate and scaler was fitted
+        if self.is_multivariate_ and self.scaler_ is not None:
+            obs_array = self.scaler_.transform(obs_array)
 
         # Use sophisticated algorithms if available
         if HMM_UTILS_AVAILABLE and self._algorithms is not None:
-            # Create emission parameters array
-            emission_params = np.column_stack(
-                [self.emission_means_, self.emission_stds_]
-            )
+            if self.is_multivariate_:
+                # Multivariate prediction path
+                # Get most likely state sequence
+                states, _ = self._algorithms.viterbi_algorithm_multivariate(
+                    obs_array, self.initial_probs_, self.transition_matrix_,
+                    self.emission_means_, self.emission_covs_
+                )
 
-            # Get most likely state sequence using sophisticated Viterbi algorithm
-            states, _ = self._algorithms.viterbi_algorithm(
-                returns, self.initial_probs_, self.transition_matrix_, emission_params
-            )
+                # Calculate state probabilities
+                gamma, _, _ = self._algorithms.forward_backward_algorithm_multivariate(
+                    obs_array, self.initial_probs_, self.transition_matrix_,
+                    self.emission_means_, self.emission_covs_
+                )
+                state_probs = gamma
+                confidence = np.max(state_probs, axis=1)
+            else:
+                # Univariate prediction path
+                # Create emission parameters array
+                emission_params = np.column_stack(
+                    [self.emission_means_, self.emission_stds_]
+                )
 
-            # Calculate state probabilities using sophisticated forward-backward
-            gamma, _, _ = self._algorithms.forward_backward_algorithm(
-                returns, self.initial_probs_, self.transition_matrix_, emission_params
-            )
-            state_probs = gamma
-            confidence = np.max(state_probs, axis=1)
+                # Get most likely state sequence using sophisticated Viterbi algorithm
+                states, _ = self._algorithms.viterbi_algorithm(
+                    obs_array, self.initial_probs_, self.transition_matrix_, emission_params
+                )
+
+                # Calculate state probabilities using sophisticated forward-backward
+                gamma, _, _ = self._algorithms.forward_backward_algorithm(
+                    obs_array, self.initial_probs_, self.transition_matrix_, emission_params
+                )
+                state_probs = gamma
+                confidence = np.max(state_probs, axis=1)
         else:
-            # Fallback to simplified algorithms
-            states = self._viterbi_decode(returns)
-            state_probs = self._forward_backward(returns)
+            # Fallback to simplified algorithms (univariate only)
+            if self.is_multivariate_:
+                raise ValueError(
+                    "Multivariate HMM requires sophisticated algorithms (install scipy)"
+                )
+            states = self._viterbi_decode(obs_array)
+            state_probs = self._forward_backward(obs_array)
             confidence = np.max(state_probs, axis=1)
 
         # Create results DataFrame using clean observations index
@@ -371,7 +546,10 @@ class HiddenMarkovModel(ModelComponent):
         # Add emission parameters for interpreter access
         # Store as list for each row so interpreter can access them
         results["emission_means"] = [self.emission_means_.tolist()] * len(results)
-        results["emission_stds"] = [self.emission_stds_.tolist()] * len(results)
+        if self.is_multivariate_:
+            results["emission_covs"] = [self.emission_covs_.tolist()] * len(results)
+        else:
+            results["emission_stds"] = [self.emission_stds_.tolist()] * len(results)
         results["transition_matrix"] = [self.transition_matrix_.tolist()] * len(results)
         results["initial_probs"] = [self.initial_probs_.tolist()] * len(results)
 
@@ -388,9 +566,16 @@ class HiddenMarkovModel(ModelComponent):
         results["emission_means"] = results["emission_means"].fillna(
             pd.Series([[self.emission_means_.tolist()]] * len(results), index=results.index)
         ).apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list) else x)
-        results["emission_stds"] = results["emission_stds"].fillna(
-            pd.Series([[self.emission_stds_.tolist()]] * len(results), index=results.index)
-        ).apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list) else x)
+
+        if self.is_multivariate_:
+            results["emission_covs"] = results["emission_covs"].fillna(
+                pd.Series([[self.emission_covs_.tolist()]] * len(results), index=results.index)
+            ).apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list) else x)
+        else:
+            results["emission_stds"] = results["emission_stds"].fillna(
+                pd.Series([[self.emission_stds_.tolist()]] * len(results), index=results.index)
+            ).apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list) else x)
+
         results["transition_matrix"] = results["transition_matrix"].fillna(
             pd.Series([[self.transition_matrix_.tolist()]] * len(results), index=results.index)
         ).apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list) else x)
@@ -698,62 +883,135 @@ class HiddenMarkovModel(ModelComponent):
         else:
             # Use config-driven initialization method
             try:
-                if method == "quantile":
-                    initial_probs, transition_matrix, emission_params, initialization_diagnostics = (
-                        initialize_parameters_quantile(
-                            self.n_states, returns, self.config.random_seed
+                # Branch for multivariate vs univariate initialization
+                if self.is_multivariate_:
+                    # Multivariate initialization
+                    from .utils import (
+                        initialize_parameters_kmeans_multivariate,
+                        initialize_parameters_gmm_multivariate,
+                        _initialize_parameters_diagonal_multivariate
+                    )
+
+                    if method == "kmeans":
+                        initial_probs, transition_matrix, means, stds, initialization_diagnostics = (
+                            initialize_parameters_kmeans_multivariate(
+                                self.n_states, returns, self.config.random_seed
+                            )
                         )
-                    )
-                    means = emission_params[:, 0]
-                    stds = emission_params[:, 1]
-                elif method == "kmeans":
-                    initial_probs, transition_matrix, emission_params, initialization_diagnostics = (
-                        initialize_parameters_kmeans(
-                            self.n_states, returns, self.config.random_seed
+                        # stds is actually covs for multivariate
+                    elif method == "gmm":
+                        initial_probs, transition_matrix, means, stds, initialization_diagnostics = (
+                            initialize_parameters_gmm_multivariate(
+                                self.n_states, returns, self.config.random_seed
+                            )
                         )
-                    )
-                    means = emission_params[:, 0]
-                    stds = emission_params[:, 1]
-                elif method == "gmm":
-                    initial_probs, transition_matrix, emission_params, initialization_diagnostics = (
-                        initialize_parameters_gmm(
-                            self.n_states, returns, self.config.random_seed
+                        # stds is actually covs for multivariate
+                    else:  # quantile, random, or any other method
+                        # Fall back to diagonal covariance initialization
+                        initial_probs, transition_matrix, means, stds, initialization_diagnostics = (
+                            _initialize_parameters_diagonal_multivariate(
+                                self.n_states, returns, self.config.random_seed
+                            )
                         )
-                    )
-                    means = emission_params[:, 0]
-                    stds = emission_params[:, 1]
-                else:  # random
-                    initial_probs, transition_matrix, means, stds = (
-                        self._initialize_parameters_simple(returns)
-                    )
-                    initialization_diagnostics = {
-                        'method': 'random',
-                        'n_states': self.n_states,
-                        'n_observations': len(returns),
-                        'warnings': []
-                    }
+                        initialization_diagnostics['requested_method'] = method
+                else:
+                    # Univariate initialization (existing logic)
+                    if method == "quantile":
+                        initial_probs, transition_matrix, emission_params, initialization_diagnostics = (
+                            initialize_parameters_quantile(
+                                self.n_states, returns, self.config.random_seed
+                            )
+                        )
+                        means = emission_params[:, 0]
+                        stds = emission_params[:, 1]
+                    elif method == "kmeans":
+                        initial_probs, transition_matrix, emission_params, initialization_diagnostics = (
+                            initialize_parameters_kmeans(
+                                self.n_states, returns, self.config.random_seed
+                            )
+                        )
+                        means = emission_params[:, 0]
+                        stds = emission_params[:, 1]
+                    elif method == "gmm":
+                        initial_probs, transition_matrix, emission_params, initialization_diagnostics = (
+                            initialize_parameters_gmm(
+                                self.n_states, returns, self.config.random_seed
+                            )
+                        )
+                        means = emission_params[:, 0]
+                        stds = emission_params[:, 1]
+                    else:  # random
+                        initial_probs, transition_matrix, means, stds = (
+                            self._initialize_parameters_simple(returns)
+                        )
+                        initialization_diagnostics = {
+                            'method': 'random',
+                            'n_states': self.n_states,
+                            'n_observations': len(returns),
+                            'warnings': []
+                        }
             except Exception as e:
                 # Fallback to simple initialization on any error
                 print(
                     f"Warning: {method} initialization failed ({e}), using simple initialization"
                 )
-                initial_probs, transition_matrix, means, stds = (
-                    self._initialize_parameters_simple(returns)
-                )
-                initialization_diagnostics = {
-                    'method': 'simple_fallback',
-                    'reason': 'initialization_error',
-                    'requested_method': method,
-                    'error': str(e),
-                    'n_states': self.n_states,
-                    'n_observations': len(returns),
-                    'warnings': [f'{method} initialization failed: {str(e)}']
-                }
+                if self.is_multivariate_:
+                    # Multivariate fallback
+                    from .utils import _initialize_parameters_diagonal_multivariate
+                    initial_probs, transition_matrix, means, stds, initialization_diagnostics = (
+                        _initialize_parameters_diagonal_multivariate(
+                            self.n_states, returns, self.config.random_seed
+                        )
+                    )
+                    initialization_diagnostics['requested_method'] = method
+                    initialization_diagnostics['error'] = str(e)
+                else:
+                    # Univariate fallback
+                    initial_probs, transition_matrix, means, stds = (
+                        self._initialize_parameters_simple(returns)
+                    )
+                    initialization_diagnostics = {
+                        'method': 'simple_fallback',
+                        'reason': 'initialization_error',
+                        'requested_method': method,
+                        'error': str(e),
+                        'n_states': self.n_states,
+                        'n_observations': len(returns),
+                        'warnings': [f'{method} initialization failed: {str(e)}']
+                    }
 
         self.initial_probs_ = initial_probs
         self.transition_matrix_ = transition_matrix
-        self.emission_means_ = means
-        self.emission_stds_ = stds
+
+        # For multivariate, use dedicated multivariate initialization or convert univariate params
+        if self.is_multivariate_:
+            # Check if we already got multivariate parameters from initialization
+            if isinstance(means, np.ndarray) and means.ndim == 2 and means.shape[1] == self.n_features_:
+                # Already multivariate (from KMeans/GMM multivariate functions)
+                self.emission_means_ = means
+                # stds will actually be covs in this case (returned from multivariate init)
+                if isinstance(stds, np.ndarray) and stds.ndim == 3:
+                    self.emission_covs_ = stds
+                else:
+                    # stds is 1D, convert to diagonal covariances
+                    self.emission_covs_ = np.zeros((self.n_states, self.n_features_, self.n_features_))
+                    for i in range(self.n_states):
+                        self.emission_covs_[i] = np.eye(self.n_features_) * (stds[i] ** 2)
+            elif means.ndim == 1:
+                # Uni-dimensional initialization was used, expand to multivariate
+                self.emission_means_ = np.tile(means[:, np.newaxis], (1, self.n_features_))
+                self.emission_covs_ = np.zeros((self.n_states, self.n_features_, self.n_features_))
+                for i in range(self.n_states):
+                    self.emission_covs_[i] = np.eye(self.n_features_) * (stds[i] ** 2)
+            else:
+                raise ValueError(f"Unexpected means shape for multivariate: {means.shape}")
+
+            self.emission_stds_ = None  # Not used in multivariate
+        else:
+            # Univariate
+            self.emission_means_ = means
+            self.emission_stds_ = stds
+            self.emission_covs_ = None  # Not used in univariate
 
         # Store initialization diagnostics in training history
         self.training_history_['initialization_diagnostics'] = initialization_diagnostics
@@ -1032,33 +1290,52 @@ class HiddenMarkovModel(ModelComponent):
 
         prev_log_likelihood = -np.inf
 
-        # Create emission parameters array
-        emission_params = np.column_stack([self.emission_means_, self.emission_stds_])
+        # Branch based on multivariate vs univariate
+        if self.is_multivariate_:
+            # Multivariate path - no emission_params array needed
+            pass
+        else:
+            # Univariate path - create emission parameters array
+            emission_params = np.column_stack([self.emission_means_, self.emission_stds_])
 
         for iteration in range(self.config.max_iterations):
             if HMM_UTILS_AVAILABLE and self._algorithms is not None:
-                # Use sophisticated algorithms
-                gamma, xi, log_likelihood = self._algorithms.forward_backward_algorithm(
-                    returns,
-                    self.initial_probs_,
-                    self.transition_matrix_,
-                    emission_params,
-                )
+                # Use sophisticated algorithms - branch for multivariate vs univariate
+                if self.is_multivariate_:
+                    # E-step: Forward-backward for multivariate observations
+                    gamma, xi, log_likelihood = self._algorithms.forward_backward_algorithm_multivariate(
+                        returns,
+                        self.initial_probs_,
+                        self.transition_matrix_,
+                        self.emission_means_,
+                        self.emission_covs_,
+                    )
+                else:
+                    # E-step: Forward-backward for univariate observations
+                    gamma, xi, log_likelihood = self._algorithms.forward_backward_algorithm(
+                        returns,
+                        self.initial_probs_,
+                        self.transition_matrix_,
+                        emission_params,
+                    )
 
                 # Store parameter snapshot for tracking evolution
                 if (
                     iteration % 5 == 0 or iteration == 0
                 ):  # Store every 5th iteration to save memory
-                    self.training_history_["parameter_snapshots"].append(
-                        {
-                            "iteration": iteration,
-                            "log_likelihood": log_likelihood,
-                            "transition_matrix": self.transition_matrix_.copy(),
-                            "emission_means": self.emission_means_.copy(),
-                            "emission_stds": self.emission_stds_.copy(),
-                            "initial_probs": self.initial_probs_.copy(),
-                        }
-                    )
+                    snapshot = {
+                        "iteration": iteration,
+                        "log_likelihood": log_likelihood,
+                        "transition_matrix": self.transition_matrix_.copy(),
+                        "emission_means": self.emission_means_.copy(),
+                        "initial_probs": self.initial_probs_.copy(),
+                    }
+                    if self.is_multivariate_:
+                        snapshot["emission_covs"] = self.emission_covs_.copy()
+                    else:
+                        snapshot["emission_stds"] = self.emission_stds_.copy()
+
+                    self.training_history_["parameter_snapshots"].append(snapshot)
 
                 # Check convergence
                 if iteration > 0:
@@ -1082,21 +1359,33 @@ class HiddenMarkovModel(ModelComponent):
                         break
 
                 # M-step: Update parameters using sophisticated Baum-Welch
-                self.initial_probs_, self.transition_matrix_, new_emission_params = (
-                    self._algorithms.baum_welch_update(
-                        returns, gamma, xi, regularization=self.config.min_variance
+                if self.is_multivariate_:
+                    # Multivariate Baum-Welch update
+                    self.initial_probs_, self.transition_matrix_, (new_means, new_covs) = (
+                        self._algorithms.baum_welch_update_multivariate(
+                            returns, gamma, xi, regularization=self.config.min_variance
+                        )
                     )
-                )
+                    # Update emission parameters (no financial constraints for multivariate yet)
+                    self.emission_means_ = new_means
+                    self.emission_covs_ = new_covs
+                else:
+                    # Univariate Baum-Welch update
+                    self.initial_probs_, self.transition_matrix_, new_emission_params = (
+                        self._algorithms.baum_welch_update(
+                            returns, gamma, xi, regularization=self.config.min_variance
+                        )
+                    )
 
-                # Apply financial domain constraints to emission parameters
-                constrained_emission_params = self._apply_financial_constraints(
-                    new_emission_params
-                )
+                    # Apply financial domain constraints to emission parameters
+                    constrained_emission_params = self._apply_financial_constraints(
+                        new_emission_params
+                    )
 
-                # Update emission parameters
-                self.emission_means_ = constrained_emission_params[:, 0]
-                self.emission_stds_ = constrained_emission_params[:, 1]
-                emission_params = constrained_emission_params
+                    # Update emission parameters
+                    self.emission_means_ = constrained_emission_params[:, 0]
+                    self.emission_stds_ = constrained_emission_params[:, 1]
+                    emission_params = constrained_emission_params
 
             else:
                 # Fallback to simplified algorithm (with the original bug)
@@ -1123,6 +1412,61 @@ class HiddenMarkovModel(ModelComponent):
             datetime.now() - start_time
         ).total_seconds()
         self.training_history_["fit_timestamps"].append(datetime.now().isoformat())
+
+        # Convergence diagnostics and warnings
+        if not self.training_history_["converged"]:
+            final_ll = self.training_history_["log_likelihoods"][-1]
+            if len(self.training_history_["log_likelihoods"]) > 1:
+                prev_ll = self.training_history_["log_likelihoods"][-2]
+                last_improvement = final_ll - prev_ll
+            else:
+                last_improvement = 0.0
+
+            warning_msg = (
+                f"HMM did not converge after {iteration + 1} iterations. "
+                f"Final log-likelihood: {final_ll:.2f}, "
+                f"Last improvement: {last_improvement:.2e}. "
+            )
+
+            # Add specific recommendations based on diagnostics
+            recommendations = []
+
+            # Check if feature standardization might help (multivariate only)
+            if self.is_multivariate_ and self.scaler_ is None and not SKLEARN_AVAILABLE:
+                recommendations.append(
+                    "Install scikit-learn for automatic feature standardization: pip install scikit-learn"
+                )
+            elif self.is_multivariate_ and self.feature_scales_ is not None:
+                variance_ratio = self.feature_scales_.get('variance_ratio', 1.0)
+                if variance_ratio > 1000:
+                    recommendations.append(
+                        f"Large feature scale mismatch (variance ratio: {variance_ratio:.0f}) may prevent convergence"
+                    )
+
+            # Check if more iterations might help
+            if last_improvement > self.config.tolerance * 10:
+                recommendations.append(
+                    f"Increase max_iterations (current: {self.config.max_iterations}), "
+                    f"improvement still significant"
+                )
+
+            # Check if initialization method might be poor
+            if final_ll < -1e6:
+                recommendations.append(
+                    "Try different initialization_method (kmeans, gmm, or random)"
+                )
+
+            # Check if data quality is the issue
+            if len(returns) < self.n_states * 20:
+                recommendations.append(
+                    f"Limited data ({len(returns)} obs) for {self.n_states} states, "
+                    f"consider reducing n_states or using more data"
+                )
+
+            if recommendations:
+                warning_msg += "Consider: " + "; ".join(recommendations)
+
+            warnings.warn(warning_msg, UserWarning)
 
     def _forward_backward(self, returns: np.ndarray) -> np.ndarray:
         """Simplified forward-backward algorithm returning state probabilities."""

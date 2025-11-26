@@ -60,6 +60,7 @@ class FinancialObservationConfig(ObservationConfig):
     volume_column: str = "volume"
     include_volume_features: bool = False
     normalize_features: bool = True
+    window_size: int = 20  # Rolling window for volatility and other indicators
 
     def validate(self) -> None:
         """Validate financial observation configuration."""
@@ -72,12 +73,14 @@ class FinancialObservationConfig(ObservationConfig):
             "average_price",
             "price_change",
             "volatility",
+            "realized_vol",  # Multivariate HMM: rolling volatility
             "rsi",
             "macd",
             "bollinger_bands",
             "moving_average",
             "volume_sma",
             "volume_ratio",
+            "volume_change",  # Multivariate HMM: log volume change
             "price_volume_trend",
             # Enhanced regime-relevant features
             "momentum_strength",

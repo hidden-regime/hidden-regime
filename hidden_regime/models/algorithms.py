@@ -6,11 +6,11 @@ with numerical stability enhancements for time series state detection.
 """
 
 import warnings
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import numpy as np
 from scipy.special import logsumexp
-from scipy.stats import norm
+from scipy.stats import norm, multivariate_normal
 
 
 class HMMAlgorithms:
@@ -41,6 +41,59 @@ class HMMAlgorithms:
                 # Use scipy.stats.norm for numerical stability
                 log_probs[t, state] = norm.logpdf(
                     observations[t], loc=means[state], scale=stds[state]
+                )
+
+        return log_probs
+
+    @staticmethod
+    def log_emission_probability_multivariate(
+        observations: np.ndarray, means: np.ndarray, covs: np.ndarray,
+        min_eigenvalue: float = 1e-8
+    ) -> np.ndarray:
+        """
+        Calculate log emission probabilities for multivariate Gaussian distributions.
+
+        Args:
+            observations: Observation sequence (T, n_features)
+            means: State means (n_states, n_features)
+            covs: State covariance matrices (n_states, n_features, n_features)
+            min_eigenvalue: Minimum eigenvalue for covariance regularization
+
+        Returns:
+            Log probabilities (T, n_states)
+        """
+        T, n_features = observations.shape
+        n_states = len(means)
+
+        log_probs = np.zeros((T, n_states))
+
+        for state in range(n_states):
+            # Regularize covariance matrix for numerical stability
+            cov = covs[state]
+
+            # Add small diagonal term to ensure positive definiteness
+            cov_reg = cov + np.eye(n_features) * min_eigenvalue
+
+            # Ensure symmetry (numerical errors can break this)
+            cov_reg = (cov_reg + cov_reg.T) / 2
+
+            try:
+                # Use scipy's multivariate_normal for robust computation
+                log_probs[:, state] = multivariate_normal.logpdf(
+                    observations,
+                    mean=means[state],
+                    cov=cov_reg,
+                    allow_singular=False  # We regularized, so should be full rank
+                )
+            except np.linalg.LinAlgError:
+                # Fallback: use larger regularization
+                cov_reg = cov + np.eye(n_features) * (min_eigenvalue * 100)
+                cov_reg = (cov_reg + cov_reg.T) / 2
+                log_probs[:, state] = multivariate_normal.logpdf(
+                    observations,
+                    mean=means[state],
+                    cov=cov_reg,
+                    allow_singular=True
                 )
 
         return log_probs
@@ -332,6 +385,309 @@ class HMMAlgorithms:
             new_emission_params[state, 1] = np.sqrt(weighted_var + regularization)
 
         return new_initial_probs, new_transition_matrix, new_emission_params
+
+    @staticmethod
+    def baum_welch_update_multivariate(
+        observations: np.ndarray,
+        gamma: np.ndarray,
+        xi: np.ndarray,
+        regularization: float = 1e-6,
+    ) -> Tuple[np.ndarray, np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        """
+        Baum-Welch parameter update step for multivariate observations.
+
+        Args:
+            observations: Observation sequence (T, n_features)
+            gamma: State probabilities (T, n_states)
+            xi: Pairwise transition probabilities (T-1, n_states, n_states)
+            regularization: Regularization parameter
+
+        Returns:
+            Tuple of (new_initial_probs, new_transition_matrix, (new_means, new_covs))
+            new_means: (n_states, n_features)
+            new_covs: (n_states, n_features, n_features)
+        """
+        T, n_features = observations.shape
+        _, n_states = gamma.shape
+
+        # Update initial probabilities
+        new_initial_probs = gamma[0] + regularization
+        new_initial_probs /= np.sum(new_initial_probs)
+
+        # Update transition matrix
+        new_transition_matrix = np.sum(xi, axis=0) + regularization
+        # Normalize rows
+        row_sums = np.sum(new_transition_matrix, axis=1, keepdims=True)
+        new_transition_matrix /= row_sums
+
+        # Update emission parameters (means and covariances)
+        new_means = np.zeros((n_states, n_features))
+        new_covs = np.zeros((n_states, n_features, n_features))
+
+        for state in range(n_states):
+            # Weighted mean
+            state_weights = gamma[:, state] + regularization
+            weight_sum = np.sum(state_weights)
+
+            # Compute weighted mean
+            weighted_mean = np.sum(
+                state_weights[:, np.newaxis] * observations, axis=0
+            ) / weight_sum
+            new_means[state] = weighted_mean
+
+            # Compute weighted covariance
+            centered_obs = observations - weighted_mean
+            weighted_cov = np.zeros((n_features, n_features))
+
+            for t in range(T):
+                weighted_cov += state_weights[t] * np.outer(
+                    centered_obs[t], centered_obs[t]
+                )
+
+            weighted_cov /= weight_sum
+
+            # Add regularization to diagonal for numerical stability
+            weighted_cov += np.eye(n_features) * regularization
+
+            new_covs[state] = weighted_cov
+
+        return new_initial_probs, new_transition_matrix, (new_means, new_covs)
+
+    @staticmethod
+    def forward_algorithm_multivariate(
+        observations: np.ndarray,
+        initial_probs: np.ndarray,
+        transition_matrix: np.ndarray,
+        means: np.ndarray,
+        covs: np.ndarray,
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Forward algorithm for multivariate observations.
+
+        Args:
+            observations: Observation sequence (T, n_features)
+            initial_probs: Initial state probabilities (n_states,)
+            transition_matrix: Transition probabilities (n_states, n_states)
+            means: Emission means (n_states, n_features)
+            covs: Emission covariances (n_states, n_features, n_features)
+
+        Returns:
+            Tuple of (forward_probs, log_likelihood)
+            forward_probs: (T, n_states) log forward probabilities
+        """
+        T = len(observations)
+        n_states = len(initial_probs)
+
+        # Initialize forward probabilities in log space
+        forward_probs = np.zeros((T, n_states))
+
+        # Get emission probabilities
+        log_emissions = HMMAlgorithms.log_emission_probability_multivariate(
+            observations, means, covs
+        )
+
+        # Initialize (t=0)
+        forward_probs[0] = np.log(initial_probs + 1e-10) + log_emissions[0]
+
+        # Forward pass
+        log_trans = np.log(transition_matrix + 1e-10)
+
+        for t in range(1, T):
+            for j in range(n_states):
+                log_sum_terms = forward_probs[t - 1] + log_trans[:, j]
+                forward_probs[t, j] = logsumexp(log_sum_terms) + log_emissions[t, j]
+
+        # Compute total log likelihood
+        log_likelihood = logsumexp(forward_probs[T - 1])
+
+        return forward_probs, log_likelihood
+
+    @staticmethod
+    def backward_algorithm_multivariate(
+        observations: np.ndarray,
+        transition_matrix: np.ndarray,
+        means: np.ndarray,
+        covs: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Backward algorithm for multivariate observations.
+
+        Args:
+            observations: Observation sequence (T, n_features)
+            transition_matrix: Transition probabilities (n_states, n_states)
+            means: Emission means (n_states, n_features)
+            covs: Emission covariances (n_states, n_features, n_features)
+
+        Returns:
+            Backward probabilities (T, n_states) in log space
+        """
+        T = len(observations)
+        n_states = transition_matrix.shape[0]
+
+        # Initialize backward probabilities
+        backward_probs = np.zeros((T, n_states))
+
+        # Get emission probabilities
+        log_emissions = HMMAlgorithms.log_emission_probability_multivariate(
+            observations, means, covs
+        )
+
+        # Initialize (t=T-1): log(1) = 0 for all states
+        backward_probs[T - 1] = 0.0
+
+        # Backward pass
+        log_trans = np.log(transition_matrix + 1e-10)
+
+        for t in range(T - 2, -1, -1):
+            for i in range(n_states):
+                log_sum_terms = (
+                    log_trans[i, :] + log_emissions[t + 1] + backward_probs[t + 1]
+                )
+                backward_probs[t, i] = logsumexp(log_sum_terms)
+
+        return backward_probs
+
+    @staticmethod
+    def viterbi_algorithm_multivariate(
+        observations: np.ndarray,
+        initial_probs: np.ndarray,
+        transition_matrix: np.ndarray,
+        means: np.ndarray,
+        covs: np.ndarray,
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Viterbi algorithm for multivariate observations.
+
+        Args:
+            observations: Observation sequence (T, n_features)
+            initial_probs: Initial state probabilities (n_states,)
+            transition_matrix: Transition probabilities (n_states, n_states)
+            means: Emission means (n_states, n_features)
+            covs: Emission covariances (n_states, n_features, n_features)
+
+        Returns:
+            Tuple of (best_path, best_prob)
+            best_path: Most likely state sequence (T,)
+            best_prob: Log probability of best path
+        """
+        T = len(observations)
+        n_states = len(initial_probs)
+
+        # Initialize Viterbi tables
+        viterbi_probs = np.zeros((T, n_states))
+        path_indices = np.zeros((T, n_states), dtype=int)
+
+        # Get emission probabilities
+        log_emissions = HMMAlgorithms.log_emission_probability_multivariate(
+            observations, means, covs
+        )
+
+        # Initialize (t=0)
+        viterbi_probs[0] = np.log(initial_probs + 1e-10) + log_emissions[0]
+
+        # Forward pass
+        log_trans = np.log(transition_matrix + 1e-10)
+
+        for t in range(1, T):
+            for j in range(n_states):
+                # Find most likely previous state
+                transition_probs = viterbi_probs[t - 1] + log_trans[:, j]
+                path_indices[t, j] = np.argmax(transition_probs)
+                viterbi_probs[t, j] = np.max(transition_probs) + log_emissions[t, j]
+
+        # Backtrack to find best path
+        best_path = np.zeros(T, dtype=int)
+
+        # Find best final state
+        best_path[T - 1] = np.argmax(viterbi_probs[T - 1])
+        best_prob = np.max(viterbi_probs[T - 1])
+
+        # Backtrack
+        for t in range(T - 2, -1, -1):
+            best_path[t] = path_indices[t + 1, best_path[t + 1]]
+
+        return best_path, best_prob
+
+    @staticmethod
+    def forward_backward_algorithm_multivariate(
+        observations: np.ndarray,
+        initial_probs: np.ndarray,
+        transition_matrix: np.ndarray,
+        means: np.ndarray,
+        covs: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        """
+        Combined forward-backward algorithm for multivariate observations.
+
+        Args:
+            observations: Observation sequence (T, n_features)
+            initial_probs: Initial state probabilities (n_states,)
+            transition_matrix: Transition probabilities (n_states, n_states)
+            means: Emission means (n_states, n_features)
+            covs: Emission covariances (n_states, n_features, n_features)
+
+        Returns:
+            Tuple of (gamma, xi, log_likelihood)
+            gamma: State probabilities (T, n_states)
+            xi: Pairwise transition probabilities (T-1, n_states, n_states)
+        """
+        # Forward pass
+        forward_probs, log_likelihood = HMMAlgorithms.forward_algorithm_multivariate(
+            observations, initial_probs, transition_matrix, means, covs
+        )
+
+        # Backward pass
+        backward_probs = HMMAlgorithms.backward_algorithm_multivariate(
+            observations, transition_matrix, means, covs
+        )
+
+        T, n_states = forward_probs.shape
+
+        # Compute gamma (state probabilities)
+        gamma = forward_probs + backward_probs
+        # Normalize in log space
+        for t in range(T):
+            log_sum = logsumexp(gamma[t])
+            if np.isinf(log_sum) and log_sum < 0:
+                gamma[t] = np.log(1.0 / n_states)
+            else:
+                gamma[t] = gamma[t] - log_sum
+
+        # Convert to probability space
+        gamma = np.exp(gamma)
+        gamma = np.clip(gamma, 1e-10, 1.0)
+        gamma = gamma / gamma.sum(axis=1, keepdims=True)
+
+        # Compute xi (pairwise transition probabilities)
+        xi = np.zeros((T - 1, n_states, n_states))
+
+        log_emissions = HMMAlgorithms.log_emission_probability_multivariate(
+            observations, means, covs
+        )
+        log_trans = np.log(transition_matrix + 1e-10)
+
+        for t in range(T - 1):
+            for i in range(n_states):
+                for j in range(n_states):
+                    xi[t, i, j] = (
+                        forward_probs[t, i]
+                        + log_trans[i, j]
+                        + log_emissions[t + 1, j]
+                        + backward_probs[t + 1, j]
+                    )
+
+            # Normalize xi[t] in log space
+            xi_t_flat = xi[t].flatten()
+            log_sum = logsumexp(xi_t_flat)
+            if np.isinf(log_sum) and log_sum < 0:
+                xi[t] = np.ones((n_states, n_states)) / (n_states * n_states)
+            else:
+                xi_t_normalized = xi_t_flat - log_sum
+                xi[t] = np.exp(xi_t_normalized.reshape(n_states, n_states))
+                xi[t] = np.clip(xi[t], 1e-10, 1.0)
+                xi[t] = xi[t] / xi[t].sum()
+
+        return gamma, xi, log_likelihood
 
     @staticmethod
     def compute_likelihood(

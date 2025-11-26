@@ -36,6 +36,40 @@ class PipelineFactory:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.component_factory = component_factory
 
+    def _validate_features(self, features: list) -> None:
+        """
+        Validate that requested features are available.
+
+        Args:
+            features: List of feature names to validate
+
+        Raises:
+            ConfigurationError: If any feature is not available
+        """
+        from ..utils.exceptions import ConfigurationError
+
+        # Valid feature names that can be generated
+        valid_features = {
+            "log_return", "return_ratio", "average_price", "price_change",
+            "volatility", "realized_vol",
+            "momentum_strength", "trend_persistence", "volatility_context", "directional_consistency",
+            "rsi", "macd", "bollinger_bands", "moving_average",
+            "volume_sma", "volume_ratio", "volume_change", "price_volume_trend",
+        }
+
+        invalid_features = [f for f in features if f not in valid_features]
+
+        if invalid_features:
+            raise ConfigurationError(
+                f"Invalid features requested: {invalid_features}\n"
+                f"Valid features are: {sorted(valid_features)}\n"
+                f"Common feature combinations:\n"
+                f"  - ['log_return', 'realized_vol'] (recommended for multivariate)\n"
+                f"  - ['log_return', 'momentum_strength']\n"
+                f"  - ['log_return', 'rsi']\n"
+                f"See FinancialObservationGenerator._get_builtin_generator() for all available features."
+            )
+
     def create_pipeline(
         self,
         data_config: DataConfig,
@@ -157,10 +191,13 @@ class PipelineFactory:
         if "observations_config" in kwargs:
             observation_config = kwargs["observations_config"]
         else:
-            observation_config = FinancialObservationConfig.create_default_financial()
             if "observation_config_overrides" in kwargs:
-                for key, value in kwargs["observation_config_overrides"].items():
-                    setattr(observation_config, key, value)
+                # Use copy() method for frozen dataclasses
+                observation_config = FinancialObservationConfig.create_default_financial().copy(
+                    **kwargs["observation_config_overrides"]
+                )
+            else:
+                observation_config = FinancialObservationConfig.create_default_financial()
 
         # Create HMM model configuration
         model_config_params = {"n_states": n_states}
@@ -200,10 +237,13 @@ class PipelineFactory:
         # Create report configuration if requested
         report_config = None
         if include_report:
-            report_config = ReportConfig.create_comprehensive()
             if "report_config_overrides" in kwargs:
-                for key, value in kwargs["report_config_overrides"].items():
-                    setattr(report_config, key, value)
+                # Use copy() method for frozen dataclasses
+                report_config = ReportConfig.create_comprehensive().copy(
+                    **kwargs["report_config_overrides"]
+                )
+            else:
+                report_config = ReportConfig.create_comprehensive()
 
         return self.create_pipeline(
             data_config=data_config,
@@ -327,6 +367,122 @@ class PipelineFactory:
                 "save_plots": True,
             },
         )
+
+    def create_multivariate_pipeline(
+        self,
+        ticker: str = "SPY",
+        n_states: int = 3,
+        features: list = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        **kwargs,
+    ) -> Pipeline:
+        """
+        Create pipeline for multivariate regime detection.
+
+        Args:
+            ticker: Stock ticker symbol
+            n_states: Number of regime states
+            features: List of feature names (default: ['log_return', 'realized_vol'])
+            start_date: Data start date
+            end_date: Data end date
+            **kwargs: Additional configuration overrides
+
+        Returns:
+            Pipeline with multivariate HMM configuration
+
+        Raises:
+            ConfigurationError: If requested features are not available
+
+        Example:
+            >>> factory = PipelineFactory()
+            >>> pipeline = factory.create_multivariate_pipeline(
+            ...     'SPY',
+            ...     features=['log_return', 'realized_vol'],
+            ...     n_states=3
+            ... )
+        """
+        # Default features: returns + realized volatility
+        if features is None:
+            features = ['log_return', 'realized_vol']
+
+        # Validate that all requested features are available
+        self._validate_features(features)
+
+        # Build HMM config with multivariate features
+        from hidden_regime.config.model import ObservationMode
+
+        hmm_config_params = {
+            'n_states': n_states,
+            'observation_mode': ObservationMode.MULTIVARIATE,
+            'observed_signals': features,  # Multivariate mode
+            'initialization_method': 'kmeans',
+            'max_iterations': kwargs.get('max_iterations', 100),
+            'tolerance': kwargs.get('tolerance', 1e-6),
+            'random_seed': kwargs.get('random_seed', None),
+        }
+        hmm_config_params.update(kwargs.get('model_config_overrides', {}))
+        hmm_config = HMMConfig(**hmm_config_params)
+
+        # Build data config
+        data_config_params = {
+            'source': 'yfinance',
+            'ticker': ticker,
+            'start_date': start_date,
+            'end_date': end_date,
+        }
+        data_config_params.update(kwargs.get('data_config_overrides', {}))
+        data_config = FinancialDataConfig(**data_config_params)
+
+        # Build observation config with multivariate features
+        observation_config_params = {
+            'generators': features,
+            'normalize_features': False,  # HMM will handle standardization
+            'window_size': 20,  # For realized_vol calculation
+        }
+        observation_config_params.update(kwargs.get('observation_config_overrides', {}))
+        observation_config = FinancialObservationConfig(**observation_config_params)
+
+        # Create components using component factory
+        data_component = self.component_factory.create_data_component(data_config)
+        observation_component = self.component_factory.create_observation_component(
+            observation_config
+        )
+        model_component = self.component_factory.create_model_component(hmm_config)
+
+        # Create interpreter configuration (required for pipeline)
+        from hidden_regime.config.interpreter import InterpreterConfiguration
+        interpreter_config = InterpreterConfiguration(n_states=n_states)
+        interpreter_config = kwargs.get('interpreter_config_overrides', interpreter_config)
+
+        interpreter_component = self.component_factory.create_interpreter_component(
+            interpreter_config
+        )
+
+        # Create signal generator if requested
+        signal_generator_component = None
+        if kwargs.get('include_signals', False):
+            from hidden_regime.config.signal_generation import SignalGenerationConfiguration
+            signal_config = SignalGenerationConfiguration()
+            signal_generator_component = self.component_factory.create_signal_generator_component(
+                signal_config
+            )
+
+        # Build pipeline with all required components
+        pipeline = Pipeline(
+            data=data_component,
+            observation=observation_component,
+            model=model_component,
+            interpreter=interpreter_component,
+            signal_generator=signal_generator_component,
+            report=None  # No report for multivariate pipelines by default
+        )
+
+        self.logger.info(
+            f"Successfully created multivariate pipeline for {ticker} with features {features}"
+        )
+
+        return pipeline
 
     def create_case_study_pipeline(
         self,

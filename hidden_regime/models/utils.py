@@ -1137,3 +1137,270 @@ def calculate_state_statistics(
             stats["state_stats"][state] = state_statistics
 
     return stats
+
+
+# ============================================================================
+# Multivariate Initialization Functions
+# ============================================================================
+
+
+def initialize_parameters_kmeans_multivariate(
+    n_states: int, observations: np.ndarray, random_seed: Optional[int] = None
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, Dict[str, Any]]:
+    """
+    Initialize multivariate HMM parameters using K-means clustering.
+
+    Uses K-means to cluster N-dimensional observations and estimates covariance
+    matrices for each cluster.
+
+    Args:
+        n_states: Number of hidden states
+        observations: Multivariate observations (T, n_features)
+        random_seed: Random seed for reproducibility
+
+    Returns:
+        Tuple of (initial_probs, transition_matrix, means, covs, diagnostics)
+        - initial_probs: (n_states,) initial state probabilities
+        - transition_matrix: (n_states, n_states) transition probabilities
+        - means: (n_states, n_features) emission means
+        - covs: (n_states, n_features, n_features) emission covariances
+        - diagnostics: dict with clustering quality metrics
+    """
+    if observations.ndim != 2:
+        raise ValueError(f"observations must be 2D array, got shape {observations.shape}")
+
+    T, n_features = observations.shape
+
+    if T < n_states:
+        warnings.warn(
+            f"Insufficient observations ({T}) for {n_states} states in KMeans initialization"
+        )
+        # Fall back to diagonal covariance initialization
+        return _initialize_parameters_diagonal_multivariate(
+            n_states, observations, random_seed
+        )
+
+    # K-means clustering on multivariate observations
+    kmeans = KMeans(n_clusters=n_states, random_state=random_seed, n_init=10)
+    try:
+        cluster_labels = kmeans.fit_predict(observations)
+    except Exception as e:
+        warnings.warn(f"KMeans failed: {e}, using diagonal initialization")
+        return _initialize_parameters_diagonal_multivariate(
+            n_states, observations, random_seed
+        )
+
+    # Extract cluster centers as emission means
+    means = kmeans.cluster_centers_  # (n_states, n_features)
+
+    # Estimate covariance matrix for each cluster
+    covs = np.zeros((n_states, n_features, n_features))
+    cluster_sizes = np.zeros(n_states, dtype=int)
+
+    for k in range(n_states):
+        cluster_mask = cluster_labels == k
+        cluster_obs = observations[cluster_mask]
+        cluster_sizes[k] = len(cluster_obs)
+
+        if len(cluster_obs) > 1:
+            # Compute sample covariance matrix
+            cov = np.cov(cluster_obs, rowvar=False)
+            # Ensure positive definite by adding small regularization
+            if n_features == 1:
+                covs[k] = np.array([[cov + 1e-6]])
+            else:
+                covs[k] = cov + np.eye(n_features) * 1e-6
+        else:
+            # Not enough data in cluster, use diagonal covariance
+            covs[k] = np.eye(n_features) * 0.01
+
+    # Generate transition matrix with self-persistence bias
+    transition_matrix = np.ones((n_states, n_states)) * 0.1  # Small off-diagonal
+    for i in range(n_states):
+        transition_matrix[i, i] = 0.7  # Higher self-transition
+    # Normalize rows
+    transition_matrix = transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
+
+    # Initial probabilities based on cluster sizes
+    initial_probs = cluster_sizes / cluster_sizes.sum()
+    # Smooth to avoid zeros
+    initial_probs = (initial_probs + 0.01) / (initial_probs + 0.01).sum()
+
+    # Compute clustering quality metrics
+    diagnostics = {
+        'method': 'kmeans_multivariate',
+        'n_states': n_states,
+        'n_features': n_features,
+        'n_observations': T,
+        'cluster_sizes': cluster_sizes.tolist(),
+        'warnings': []
+    }
+
+    # Silhouette score (if enough samples)
+    if T >= n_states * 2:
+        try:
+            silhouette = silhouette_score(observations, cluster_labels)
+            diagnostics['silhouette_score'] = float(silhouette)
+        except:
+            pass
+
+    # Check for small clusters
+    min_cluster_size = 5
+    for k in range(n_states):
+        if cluster_sizes[k] < min_cluster_size:
+            diagnostics['warnings'].append(
+                f"State {k} has only {cluster_sizes[k]} observations (< {min_cluster_size})"
+            )
+
+    return initial_probs, transition_matrix, means, covs, diagnostics
+
+
+def initialize_parameters_gmm_multivariate(
+    n_states: int, observations: np.ndarray, random_seed: Optional[int] = None
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, Dict[str, Any]]:
+    """
+    Initialize multivariate HMM parameters using Gaussian Mixture Model.
+
+    Uses GMM to fit a mixture of Gaussians to the observations and extracts
+    the learned means and covariances.
+
+    Args:
+        n_states: Number of hidden states
+        observations: Multivariate observations (T, n_features)
+        random_seed: Random seed for reproducibility
+
+    Returns:
+        Tuple of (initial_probs, transition_matrix, means, covs, diagnostics)
+        - initial_probs: (n_states,) initial state probabilities
+        - transition_matrix: (n_states, n_states) transition probabilities
+        - means: (n_states, n_features) emission means
+        - covs: (n_states, n_features, n_features) emission covariances
+        - diagnostics: dict with GMM quality metrics
+    """
+    if observations.ndim != 2:
+        raise ValueError(f"observations must be 2D array, got shape {observations.shape}")
+
+    T, n_features = observations.shape
+
+    if T < n_states * 2:
+        warnings.warn(
+            f"Insufficient observations ({T}) for {n_states} states in GMM initialization"
+        )
+        # Fall back to KMeans
+        return initialize_parameters_kmeans_multivariate(
+            n_states, observations, random_seed
+        )
+
+    # Fit Gaussian Mixture Model
+    gmm = GaussianMixture(
+        n_components=n_states,
+        covariance_type='full',  # Full covariance matrices
+        random_state=random_seed,
+        n_init=10,
+        max_iter=100
+    )
+
+    try:
+        gmm.fit(observations)
+    except Exception as e:
+        warnings.warn(f"GMM failed: {e}, falling back to KMeans")
+        return initialize_parameters_kmeans_multivariate(
+            n_states, observations, random_seed
+        )
+
+    # Extract learned parameters
+    means = gmm.means_  # (n_states, n_features)
+    covs = gmm.covariances_  # (n_states, n_features, n_features)
+    weights = gmm.weights_  # (n_states,) mixture weights
+
+    # Use mixture weights as initial probabilities
+    initial_probs = weights
+
+    # Generate transition matrix with self-persistence bias
+    transition_matrix = np.ones((n_states, n_states)) * 0.1
+    for i in range(n_states):
+        transition_matrix[i, i] = 0.7
+    transition_matrix = transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
+
+    # Diagnostics
+    diagnostics = {
+        'method': 'gmm_multivariate',
+        'n_states': n_states,
+        'n_features': n_features,
+        'n_observations': T,
+        'converged': bool(gmm.converged_),
+        'n_iter': int(gmm.n_iter_),
+        'bic': float(gmm.bic(observations)),
+        'aic': float(gmm.aic(observations)),
+        'log_likelihood': float(gmm.score(observations) * T),  # score() returns mean log-likelihood
+        'weights': weights.tolist(),
+        'warnings': []
+    }
+
+    if not gmm.converged_:
+        diagnostics['warnings'].append(
+            f"GMM did not converge after {gmm.n_iter_} iterations"
+        )
+
+    # Check covariance condition numbers
+    for k in range(n_states):
+        cond_number = np.linalg.cond(covs[k])
+        if cond_number > 1e10:
+            diagnostics['warnings'].append(
+                f"State {k} covariance matrix is ill-conditioned (cond={cond_number:.2e})"
+            )
+            # Add regularization
+            covs[k] += np.eye(n_features) * 1e-6
+
+    return initial_probs, transition_matrix, means, covs, diagnostics
+
+
+def _initialize_parameters_diagonal_multivariate(
+    n_states: int, observations: np.ndarray, random_seed: Optional[int] = None
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, Dict[str, Any]]:
+    """
+    Fallback diagonal covariance initialization for multivariate HMM.
+
+    Used when KMeans/GMM fail or have insufficient data.
+
+    Args:
+        n_states: Number of hidden states
+        observations: Multivariate observations (T, n_features)
+        random_seed: Random seed for reproducibility
+
+    Returns:
+        Tuple of (initial_probs, transition_matrix, means, covs, diagnostics)
+    """
+    T, n_features = observations.shape
+
+    # Use quantiles to initialize means
+    quantiles = np.linspace(0, 1, n_states + 2)[1:-1]  # Exclude 0 and 1
+    means = np.zeros((n_states, n_features))
+    for j in range(n_features):
+        means[:, j] = np.quantile(observations[:, j], quantiles)
+
+    # Initialize diagonal covariances using feature-wise variance
+    covs = np.zeros((n_states, n_features, n_features))
+    feature_vars = np.var(observations, axis=0)
+    for k in range(n_states):
+        covs[k] = np.diag(feature_vars)
+
+    # Uniform initial probabilities
+    initial_probs = np.ones(n_states) / n_states
+
+    # Transition matrix with self-persistence
+    transition_matrix = np.ones((n_states, n_states)) * 0.1
+    for i in range(n_states):
+        transition_matrix[i, i] = 0.7
+    transition_matrix = transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
+
+    diagnostics = {
+        'method': 'diagonal_multivariate',
+        'reason': 'fallback',
+        'n_states': n_states,
+        'n_features': n_features,
+        'n_observations': T,
+        'warnings': ['Using diagonal covariance initialization (fallback)']
+    }
+
+    return initial_probs, transition_matrix, means, covs, diagnostics

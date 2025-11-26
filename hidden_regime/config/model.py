@@ -5,8 +5,10 @@ Provides configuration for Hidden Markov Models with comprehensive
 parameter sets for training and inference.
 """
 
+import warnings
 from dataclasses import dataclass
-from typing import Any, Literal, Optional
+from enum import Enum
+from typing import Any, List, Literal, Optional
 
 import numpy as np
 
@@ -14,14 +16,26 @@ from ..utils.exceptions import ConfigurationError
 from .base import BaseConfig
 
 
+class ObservationMode(Enum):
+    """Observation mode for HMM - univariate or multivariate."""
+
+    UNIVARIATE = "univariate"
+    MULTIVARIATE = "multivariate"
+
+
 @dataclass(frozen=True)
 class ModelConfig(BaseConfig):
     """
     Base configuration for model components.
+
+    Supports both univariate and multivariate observation modes with explicit
+    mode selection to prevent configuration errors.
     """
 
     n_states: int = 3
+    observation_mode: ObservationMode = ObservationMode.UNIVARIATE
     observed_signal: str = "log_return"
+    observed_signals: Optional[List[str]] = None
     random_seed: Optional[int] = None
 
     def validate(self) -> None:
@@ -38,8 +52,28 @@ class ModelConfig(BaseConfig):
                 f"n_states should not exceed 10 for practical reasons, got {self.n_states}"
             )
 
-        if not self.observed_signal:
-            raise ConfigurationError("observed_signal cannot be empty")
+        # Validate based on observation mode
+        if self.observation_mode == ObservationMode.UNIVARIATE:
+            if not self.observed_signal:
+                raise ConfigurationError(
+                    "observed_signal is required in UNIVARIATE mode"
+                )
+            if self.observed_signals is not None:
+                raise ConfigurationError(
+                    "observed_signals must be None in UNIVARIATE mode. "
+                    "To use multivariate, set observation_mode=ObservationMode.MULTIVARIATE"
+                )
+
+        elif self.observation_mode == ObservationMode.MULTIVARIATE:
+            if not self.observed_signals or len(self.observed_signals) < 1:
+                raise ConfigurationError(
+                    "observed_signals must contain at least 1 signal in MULTIVARIATE mode"
+                )
+            if len(self.observed_signals) > 10:
+                raise ConfigurationError(
+                    f"observed_signals should not exceed 10 features for practical reasons, "
+                    f"got {len(self.observed_signals)}"
+                )
 
     def create_component(self) -> Any:
         """Create model component - to be implemented by specific configs."""
@@ -292,6 +326,7 @@ class HMMConfig(ModelConfig):
         """Create conservative configuration for stable, slow-adapting HMM."""
         return cls(
             n_states=3,
+            observation_mode=ObservationMode.UNIVARIATE,
             observed_signal="log_return",
             max_iterations=200,
             tolerance=1e-8,
@@ -308,6 +343,7 @@ class HMMConfig(ModelConfig):
         """Create aggressive configuration for fast-adapting HMM."""
         return cls(
             n_states=4,
+            observation_mode=ObservationMode.UNIVARIATE,
             observed_signal="log_return",
             max_iterations=50,
             tolerance=1e-4,
@@ -325,6 +361,7 @@ class HMMConfig(ModelConfig):
         """Create balanced configuration for general-purpose HMM."""
         return cls(
             n_states=3,
+            observation_mode=ObservationMode.UNIVARIATE,
             observed_signal="log_return",
             max_iterations=100,
             tolerance=1e-6,
@@ -369,12 +406,63 @@ class HMMConfig(ModelConfig):
 
         return cls(
             n_states=len(regime_specs),
+            observation_mode=ObservationMode.UNIVARIATE,
             observed_signal=observed_signal,
             initialization_method='custom',
             custom_emission_means=means,
             custom_emission_stds=stds,
             **kwargs
         )
+
+    @classmethod
+    def from_legacy_config(
+        cls,
+        n_states: int,
+        observed_signal: Optional[str] = None,
+        observed_signals: Optional[List[str]] = None,
+        **kwargs
+    ) -> "HMMConfig":
+        """
+        Create config from legacy dual-parameter style (backward compatibility).
+
+        Automatically detects multivariate from observed_signals parameter.
+
+        Args:
+            n_states: Number of states
+            observed_signal: Univariate signal (used if observed_signals is None)
+            observed_signals: Multivariate signals (overrides observed_signal if provided)
+            **kwargs: Additional configuration overrides
+
+        Returns:
+            HMMConfig with appropriate observation mode
+
+        Example:
+            >>> # Univariate (legacy style)
+            >>> config = HMMConfig.from_legacy_config(
+            ...     n_states=3,
+            ...     observed_signal='log_return'
+            ... )
+
+            >>> # Multivariate (legacy style)
+            >>> config = HMMConfig.from_legacy_config(
+            ...     n_states=3,
+            ...     observed_signals=['log_return', 'realized_vol']
+            ... )
+        """
+        if observed_signals is not None and len(observed_signals) > 1:
+            return cls(
+                n_states=n_states,
+                observation_mode=ObservationMode.MULTIVARIATE,
+                observed_signals=observed_signals,
+                **kwargs
+            )
+        else:
+            return cls(
+                n_states=n_states,
+                observation_mode=ObservationMode.UNIVARIATE,
+                observed_signal=observed_signal or "log_return",
+                **kwargs
+            )
 
     def get_cache_key(self) -> str:
         """Generate cache key for this model configuration."""

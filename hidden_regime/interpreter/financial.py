@@ -49,6 +49,11 @@ class FinancialInterpreter(BaseInterpreter):
         self._emission_means: Optional[np.ndarray] = None
         self._emission_stds: Optional[np.ndarray] = None
 
+        # Multivariate support
+        self._emission_covs: Optional[np.ndarray] = None
+        self._is_multivariate: bool = False
+        self._feature_names: List[str] = []
+
         # Try to import performance analyzer
         try:
             from hidden_regime.analysis.performance import RegimePerformanceAnalyzer
@@ -119,6 +124,9 @@ class FinancialInterpreter(BaseInterpreter):
         if raw_data is not None and 'log_return' in raw_data.columns:
             interpreted = self._add_volatility_analysis(interpreted)
 
+        # Add multivariate analysis if multivariate model
+        interpreted = self._add_multivariate_analysis(interpreted)
+
         # Store for API methods
         self._last_interpretation = interpreted.copy()
 
@@ -130,6 +138,7 @@ class FinancialInterpreter(BaseInterpreter):
         """Assign regime labels using data-driven characteristics.
 
         Implements BaseInterpreter abstract method.
+        Supports both univariate and multivariate model outputs.
 
         Args:
             model_output: Model output including emission parameters
@@ -143,6 +152,13 @@ class FinancialInterpreter(BaseInterpreter):
             for state_idx, label in enumerate(self.config.force_regime_labels):
                 labels[state_idx] = label
             return labels
+
+        # Detect multivariate mode from model output
+        self._is_multivariate = "emission_covs" in model_output.columns
+        if self._is_multivariate and "feature_names" in model_output.columns:
+            # Extract feature names for multivariate interpretation
+            first_row = model_output.iloc[0]
+            self._feature_names = first_row.get("feature_names", [])
 
         # Extract emission parameters from model output
         if "emission_means" not in model_output.columns:
@@ -561,6 +577,169 @@ class FinancialInterpreter(BaseInterpreter):
             return "Low Volatility"
         else:
             return "Normal Volatility"
+
+    def _add_multivariate_analysis(self, interpretation: pd.DataFrame) -> pd.DataFrame:
+        """Add multivariate regime characteristics.
+
+        Computes eigenvalue analysis and covariance-based regime metrics for
+        multivariate HMM outputs. Provides financial interpretation of covariance structure.
+
+        Args:
+            interpretation: Interpreted regime data
+
+        Returns:
+            DataFrame with multivariate analysis columns added
+        """
+        if not self._is_multivariate or self._last_model_output is None:
+            return interpretation
+
+        # Extract covariance matrices from model output
+        if "emission_covs" not in self._last_model_output.columns:
+            return interpretation
+
+        try:
+            first_row = self._last_model_output.iloc[0]
+            emission_covs = first_row.get("emission_covs")
+
+            if emission_covs is None:
+                return interpretation
+
+            self._emission_covs = np.array(emission_covs)
+
+            # Compute multivariate characteristics for each state
+            multivariate_metrics = {}
+            for state_idx in range(self.config.n_states):
+                cov_matrix = self._emission_covs[state_idx]
+
+                # Ensure matrix is 2D
+                if cov_matrix.ndim < 2:
+                    continue
+
+                try:
+                    # Eigenvalue decomposition
+                    eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
+
+                    # Sort by magnitude (descending)
+                    idx = np.argsort(eigenvalues)[::-1]
+                    eigenvalues = eigenvalues[idx]
+                    eigenvectors = eigenvectors[:, idx]
+
+                    # Compute metrics
+                    eigenvalue_ratio = (
+                        eigenvalues[0] / eigenvalues[-1]
+                        if len(eigenvalues) > 1 and eigenvalues[-1] > 1e-10
+                        else 0.0
+                    )
+
+                    # PCA explained variance in first component
+                    pca_explained = (
+                        eigenvalues[0] / np.sum(eigenvalues)
+                        if np.sum(eigenvalues) > 1e-10
+                        else 0.0
+                    )
+
+                    # Correlation matrix from covariance
+                    stds = np.sqrt(np.diag(cov_matrix))
+                    if np.all(stds > 1e-10):
+                        correlation_matrix = cov_matrix / np.outer(stds, stds)
+                        avg_correlation = np.abs(
+                            correlation_matrix[np.triu_indices_from(correlation_matrix, k=1)]
+                        ).mean()
+                    else:
+                        avg_correlation = 0.0
+
+                    # Condition number
+                    condition_number = np.linalg.cond(cov_matrix)
+
+                    # Financial interpretation of eigenvalue ratio
+                    variance_concentration = self._interpret_eigenvalue_ratio(eigenvalue_ratio)
+
+                    # Interpret feature correlations
+                    correlation_regime = self._interpret_correlation(avg_correlation)
+
+                    multivariate_metrics[state_idx] = {
+                        "eigenvalue_ratio": eigenvalue_ratio,
+                        "pca_explained_variance": pca_explained,
+                        "avg_feature_correlation": avg_correlation,
+                        "condition_number": condition_number,
+                        "covariance_trace": np.trace(cov_matrix),
+                        "variance_concentration": variance_concentration,
+                        "correlation_regime": correlation_regime,
+                    }
+
+                except (np.linalg.LinAlgError, ValueError):
+                    # If decomposition fails, use defaults
+                    multivariate_metrics[state_idx] = {
+                        "eigenvalue_ratio": 0.0,
+                        "pca_explained_variance": 0.0,
+                        "avg_feature_correlation": 0.0,
+                        "condition_number": 0.0,
+                        "covariance_trace": np.trace(cov_matrix),
+                        "variance_concentration": "Unknown",
+                        "correlation_regime": "Unknown",
+                    }
+
+            # Add metrics to interpretation
+            if multivariate_metrics:
+                for metric_name in [
+                    "eigenvalue_ratio",
+                    "pca_explained_variance",
+                    "avg_feature_correlation",
+                    "condition_number",
+                    "covariance_trace",
+                    "variance_concentration",
+                    "correlation_regime",
+                ]:
+                    interpretation[f"multivariate_{metric_name}"] = interpretation[
+                        "state"
+                    ].map(lambda s: multivariate_metrics.get(s, {}).get(metric_name, 0.0))
+
+        except Exception as e:
+            warnings.warn(
+                f"Error computing multivariate analysis: {e}. "
+                "Skipping multivariate metrics."
+            )
+
+        return interpretation
+
+    def _interpret_eigenvalue_ratio(self, ratio: float) -> str:
+        """Interpret eigenvalue ratio in financial terms.
+
+        Higher ratio means one variance direction dominates (concentrated risk).
+        Lower ratio means risk spread across multiple dimensions (diversified).
+
+        Args:
+            ratio: Ratio of largest to smallest eigenvalue
+
+        Returns:
+            Financial interpretation
+        """
+        if ratio < 1.5:
+            return "Isotropic"  # Balanced risk across dimensions
+        elif ratio < 3.0:
+            return "Moderate Concentration"  # One direction somewhat dominant
+        elif ratio < 10.0:
+            return "High Concentration"  # One direction strongly dominant
+        else:
+            return "Extreme Concentration"  # Risk entirely in one direction
+
+    def _interpret_correlation(self, avg_correlation: float) -> str:
+        """Interpret average feature correlation in financial terms.
+
+        Args:
+            avg_correlation: Average absolute correlation between features
+
+        Returns:
+            Financial interpretation
+        """
+        if avg_correlation < 0.2:
+            return "Uncorrelated"  # Features move independently
+        elif avg_correlation < 0.5:
+            return "Low Correlation"  # Weak relationship
+        elif avg_correlation < 0.7:
+            return "Moderate Correlation"  # Clear relationship
+        else:
+            return "High Correlation"  # Features move together
 
     def add_multitimeframe_columns(
         self, output_df: pd.DataFrame
