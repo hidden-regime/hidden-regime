@@ -4,23 +4,35 @@ This document describes all available parameters for the `BasicRegimeSwitching` 
 
 ## How to Use Parameters
 
-### QuantConnect Cloud/IDE
-1. Open the algorithm settings
-2. Add parameters with the names and values listed below
-3. Click "Backtest" or "Live Trade"
+### QuantConnect Cloud/IDE (Recommended for Multiple Tickers)
+1. Create an account at https://www.quantconnect.com
+2. Create a new project and upload `basic_regime_switching.py`
+3. Open the algorithm settings
+4. Add parameters with the names and values listed below
+5. Click "Backtest" to run with your parameters
+6. View results, charts, and statistics instantly
 
-### Command Line (LEAN)
+**Advantages:**
+- Access to 2M+ securities (stocks, crypto, forex, futures, options)
+- Fast backtesting on cloud infrastructure
+- Beautiful web-based analysis and charting
+- Live trading support
+- No data limitations
+
+### Command Line (Local LEAN - Limited Data)
 ```bash
 ./lean backtest "quantconnect_templates/basic_regime_switching.py" \
-  --parameter ticker=QQQ \
+  --parameter ticker=SPY \
   --parameter start_year=2019 \
   --parameter bull_allocation=0.8
 ```
 
-### Docker
+**Note:** Local LEAN Docker only includes SPY data. Use `ticker=SPY` for local testing.
+
+### Docker (Local - SPY Only)
 ```bash
 docker run -v $(pwd):/app lean-hidden-regime:latest \
-  --parameter ticker=IWM \
+  --parameter ticker=SPY \
   --parameter n_states=4 \
   --parameter lookback_days=126
 ```
@@ -134,6 +146,32 @@ All parameters are read at runtime via `GetParameter()`. You can change:
 - Different model configurations
 
 **Without rebuilding the Docker container or editing any code.**
+
+---
+
+## Data Availability
+
+### Local Docker (Included in lean-hidden-regime image)
+- **SPY** ✅ (all dates)
+- Most other tickers ❌ (not included)
+
+The local LEAN Docker container includes only SPY data to keep the image size manageable. For other tickers, use QuantConnect Cloud.
+
+### QuantConnect Cloud
+- **2M+ securities** including:
+  - 10,000+ US stocks
+  - 50+ cryptocurrencies
+  - Forex pairs
+  - Futures contracts
+  - Options data
+- All going back 10+ years for most assets
+- Real-time data for live trading
+
+### Strategy
+1. **Develop locally:** Use `ticker=SPY` to test your strategy logic
+2. **Test variations:** Push to QC Cloud to test with QQQ, IWM, TLT, etc.
+3. **Optimize:** Run parameter sweeps on the cloud platform
+4. **Deploy:** Go live with funded accounts on QC Live Trading
 
 ---
 
