@@ -152,12 +152,16 @@ All parameters are read at runtime via `GetParameter()`. You can change:
 ## Data Availability
 
 ### Local Docker (Included in lean-hidden-regime image)
-- **SPY** ✅ (all dates)
-- Most other tickers ❌ (not included)
+- **SPY** ✅ (free tier, all dates)
+- Most other tickers ❌ (requires QuantConnect subscription or cloud)
 
-The local LEAN Docker container includes only SPY data to keep the image size manageable. For other tickers, use QuantConnect Cloud.
+The Docker image inherits from QuantConnect's official `quantconnect/lean:17389` which includes SPY data with the free tier. Additional tickers require either:
+1. QuantConnect Cloud (recommended)
+2. Manually downloading data files to `/Lean/Data/` in the Docker container
 
-### QuantConnect Cloud
+**Note:** The backtest script doesn't mount a data volume, so local data additions require rebuilding the Docker image.
+
+### QuantConnect Cloud (Recommended for Multiple Tickers)
 - **2M+ securities** including:
   - 10,000+ US stocks
   - 50+ cryptocurrencies
@@ -166,12 +170,16 @@ The local LEAN Docker container includes only SPY data to keep the image size ma
   - Options data
 - All going back 10+ years for most assets
 - Real-time data for live trading
+- **Free tier:** Access to major indices (SPY, IWM, QQQ, TLT, etc.)
+- **Premium tiers:** Unlocks additional data
 
-### Strategy
+### Workflow Recommendation
 1. **Develop locally:** Use `ticker=SPY` to test your strategy logic
-2. **Test variations:** Push to QC Cloud to test with QQQ, IWM, TLT, etc.
-3. **Optimize:** Run parameter sweeps on the cloud platform
-4. **Deploy:** Go live with funded accounts on QC Live Trading
+2. **Cloud testing:** Push to https://www.quantconnect.com to test with other tickers
+   - Free account includes major US indices
+   - No data download/setup needed on cloud
+3. **Parameter optimization:** Run sweeps on cloud (supports parameter iterations)
+4. **Deployment:** Go live with funded accounts or backtested strategy
 
 ---
 
