@@ -182,7 +182,7 @@ HiddenRegimeAlgorithm
 
 ## The Data Flow: From Bars to Trades
 
-Here's a detailed 6-step walkthrough:
+Here's a detailed 6-step walkthrough. This happens **every day** in the backtest when a new bar arrives:
 
 ### Step 1: Bar Buffering
 
@@ -194,7 +194,7 @@ def OnData(self, data):
     self.on_tradebar("SPY", bar)  # Buffer it
 ```
 
-The adapter stores the bar in a rolling window (last 252 days by default).
+The adapter stores the bar in a rolling window (last 252 days by default, or your configured `lookback_days`).
 
 ### Step 2: DataFrame Creation
 
@@ -969,6 +969,28 @@ self.AddEquity("TLT", Resolution.Daily)  # Bonds
 # RISKY: Penny stocks, illiquid symbols
 self.AddEquity("PENNY", Resolution.Daily)  # May have gaps
 ```
+
+### "Signals are generated but allocations are always 0.0 (no trades)"
+
+**Symptom:** Algorithm runs, no errors, but `set_holdings()` is never called with non-zero allocation.
+
+**Cause:** Signal adapter column name mismatch - was looking for non-existent `regime_name` field instead of interpreter's `regime_label`.
+
+**Solution:** This was a critical bug that was fixed in the latest version. Ensure you're on the latest code:
+
+```bash
+git pull origin qcleap
+```
+
+The signal adapter now correctly:
+- Extracts `regime_label` from interpreter output (not `regime_name`)
+- Uses `regime_confidence` for confidence scores (not `confidence`)
+- Handles variable regime labels via fuzzy matching (Bull-1, Bull-2, etc.)
+
+If still having issues after updating:
+1. Check that `regime_is_ready()` returns True (enough data buffered)
+2. Verify regimes are being detected: check logs for "Created/retrained regime pipeline"
+3. Test signal generation manually with a simple test script
 
 ---
 
