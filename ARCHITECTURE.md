@@ -751,6 +751,86 @@ pipeline = pipeline_factory.create_pipeline(
 result = pipeline.update()
 ```
 
+### Level 6: Streaming Data Ingestion (QuantConnect, Real-Time APIs)
+
+**Use Case:** Integrate with streaming data sources like QuantConnect LEAN engine or real-time market data feeds
+
+**Key Principle:** Users pass only the latest data bar; the pipeline accumulates and processes internally through the mandatory financial pipeline.
+
+```python
+import pandas as pd
+from hidden_regime.config.data import FinancialDataConfig
+from hidden_regime.data.financial import FinancialDataLoader
+
+# Create data component
+config = FinancialDataConfig(ticker='AAPL')
+data_loader = FinancialDataLoader(config)
+
+# Simulate streaming data (e.g., from QuantConnect OnData callback)
+# Each call represents one new bar arriving
+new_bar = pd.DataFrame({
+    'Open': [150.0],
+    'High': [151.0],
+    'Low': [149.5],
+    'Close': [150.5],
+    'Volume': [1000000]
+}, index=pd.DatetimeIndex(['2024-01-15']))
+
+# Ingest with public interface (NEW in v2.0.0)
+pipeline.update(data=new_bar)
+
+# Inspect accumulated data at any time
+accumulated = pipeline.data.get_data()
+print(f"Total bars: {len(accumulated)}")
+print(f"Columns: {list(accumulated.columns)}")  # Includes mandatory pipeline columns
+```
+
+**What Happens Internally:**
+
+1. **Validation**: Input DataFrame checked for OHLCV columns and DatetimeIndex
+2. **Mandatory Pipeline**: New data processed through:
+   - OHLC average calculation: `(O+H+L+C)/4`
+   - Percentage change calculation
+   - Log returns calculation
+3. **Accumulation**: New data appended to internal accumulator (with duplicate detection)
+4. **State Consistency**: Cache invalidated, `_last_data` updated
+5. **Ready for Pipeline**: Accumulated data passed downstream to Observation component
+
+**QuantConnect Example:**
+
+```python
+from hidden_regime.quantconnect import HiddenRegimeAlgorithm
+
+class MyAlgorithm(HiddenRegimeAlgorithm):
+    def OnData(self, data):
+        # Get the latest bar for SPY
+        spy_bar = data['SPY']
+
+        if spy_bar is None:
+            return
+
+        # Convert to DataFrame format for pipeline
+        bar_df = pd.DataFrame({
+            'Open': [spy_bar.Open],
+            'High': [spy_bar.High],
+            'Low': [spy_bar.Low],
+            'Close': [spy_bar.Close],
+            'Volume': [spy_bar.Volume]
+        }, index=pd.DatetimeIndex([spy_bar.Time]))
+
+        # Update regime detection with latest bar
+        # Pipeline internally accumulates and retrains on rolling window
+        self.update_regime('SPY')  # Handles data ingestion internally
+```
+
+**Design Rationale:**
+
+- **User-Friendly**: Users pass only new data; pipeline handles accumulation internally
+- **Data Quality**: All data passes through mandatory financial pipeline
+- **Transparent**: Users can inspect accumulated data with `pipeline.data.get_data()`
+- **General-Purpose**: Works for any streaming source (QuantConnect, Alpaca, IB, custom APIs)
+- **Efficient**: Only new data is processed; cache invalidation ensures correctness
+
 ---
 
 ## Extension Points
