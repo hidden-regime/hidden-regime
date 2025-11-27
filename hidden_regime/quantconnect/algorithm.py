@@ -269,7 +269,7 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             adapter = self._data_adapters[tick]
 
             # Check if we have enough data
-            if not adapter.is_ready(min_bars=30):
+            if not adapter.is_ready():
                 continue
 
             # Get DataFrame

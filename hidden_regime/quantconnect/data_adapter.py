@@ -92,17 +92,18 @@ class QuantConnectDataAdapter:
 
         return df
 
-    def is_ready(self, min_bars: int = 30) -> bool:
+    def is_ready(self, min_bars: Optional[int] = None) -> bool:
         """
         Check if adapter has sufficient data for regime detection.
 
         Args:
-            min_bars: Minimum number of bars required
+            min_bars: Minimum number of bars required. If None, uses lookback_days.
 
         Returns:
             True if sufficient data is available
         """
-        return len(self._data_buffer) >= min_bars
+        threshold = min_bars if min_bars is not None else self.lookback_days
+        return len(self._data_buffer) >= threshold
 
     def clear(self) -> None:
         """Clear the data buffer."""
@@ -204,14 +205,18 @@ class RollingWindowDataAdapter:
 
         return df
 
-    def is_ready(self) -> bool:
+    def is_ready(self, min_bars: Optional[int] = None) -> bool:
         """
         Check if window has sufficient data.
 
+        Args:
+            min_bars: Minimum number of bars required. If None, uses window_size.
+
         Returns:
-            True if window has at least 30 bars
+            True if window has at least min_bars (or window_size if min_bars is None)
         """
-        return len(self._window_data) >= 30
+        threshold = min_bars if min_bars is not None else self.window_size
+        return len(self._window_data) >= threshold
 
     @property
     def count(self) -> int:

@@ -175,7 +175,7 @@ class HiddenRegimeAlphaModel(AlphaModel):  # type: ignore
         adapter = self._data_adapters[symbol]
 
         # Need sufficient data
-        if not adapter.is_ready(min_bars=30):
+        if not adapter.is_ready():
             return None
 
         # Get DataFrame
