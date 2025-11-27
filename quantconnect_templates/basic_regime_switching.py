@@ -57,7 +57,7 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
             Minimum confidence threshold for regime signals (default: 0.6)
         """
         # === EASY PARAMETERS TO MODIFY ===
-        ticker = self.GetParameter("ticker", "SPY")
+        ticker = self.GetParameter("ticker", "QQQ")
         start_year = int(self.GetParameter("start_year", 2020))
         start_month = int(self.GetParameter("start_month", 1))
         start_day = int(self.GetParameter("start_day", 1))

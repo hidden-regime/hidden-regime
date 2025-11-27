@@ -1,17 +1,19 @@
 """
-Regime type definitions and profiles for financial interpretation.
+Regime type definitions for financial interpretation.
 
-This module contains ALL financial domain knowledge about regime types:
-- RegimeType enum (bull, bear, sideways, crisis, mixed)
-- RegimeProfile dataclass (comprehensive financial characteristics)
+This module contains the SINGLE SOURCE OF TRUTH for regime types:
+- RegimeLabel: Complete encapsulation of a regime's financial and trading semantics
+- RegimeCharacteristics: Financial metrics (returns, volatility, drawdown, etc.)
+- TradingSemantics: How this regime should be traded (bias, position sign, thresholds)
 - Color mappings for visualization
 
-This enforces Principle #3: ALL financial domain knowledge in the interpreter.
+This enforces the Architecture Principle: ALL financial domain knowledge in one place.
+RegimeLabel is what the Interpreter PRODUCES and what Strategy objects CONSUME.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Dict, Literal, Optional
 
 
 class RegimeType(Enum):
@@ -19,6 +21,8 @@ class RegimeType(Enum):
 
     These represent the semantic interpretation of HMM states.
     The model only knows states 0, 1, 2... The interpreter adds this meaning.
+
+    Kept for backward compatibility and visualization lookups.
     """
 
     BULLISH = "bullish"  # Strong positive returns, moderate volatility
@@ -39,57 +43,99 @@ REGIME_TYPE_COLORS = {
 }
 
 
-@dataclass
-class RegimeProfile:
+@dataclass(frozen=True)
+class RegimeCharacteristics:
     """
-    Complete financial profile of a detected regime.
+    Financial metrics characterizing a regime type.
 
-    Contains ALL financial characteristics computed by the interpreter:
-    - Returns and volatility (annualized)
-    - Trading statistics (win rate, drawdown)
-    - Regime behavior (persistence, transitions)
-    - Visualization (color-blind safe colors)
-
-    This is the OUTPUT of the interpreter - it contains all financial domain knowledge
-    derived from the mathematical HMM states.
+    These are statistics computed from actual market data within this regime.
+    Immutable to prevent accidental modification.
     """
-
-    # State identification
-    state_id: int  # HMM state index (0, 1, 2...)
-    regime_type: RegimeType  # Enum classification (for backward compatibility)
-    color: str  # Colorblind-safe hex color for visualization
 
     # Return characteristics
-    mean_daily_return: float  # Average daily return
-    daily_volatility: float  # Daily standard deviation
-    annualized_return: float  # Annualized return
-    annualized_volatility: float  # Annualized volatility
-
-    # Regime behavior
-    persistence_days: float  # How persistent this regime is
-    regime_strength: float  # How distinct this regime is from others
-    confidence_score: float  # Statistical confidence in classification
+    mean_daily_return: float
+    annualized_return: float
+    daily_volatility: float
+    annualized_volatility: float
 
     # Trading characteristics
     win_rate: float  # Percentage of positive return days
     max_drawdown: float  # Maximum drawdown during this regime
     return_skewness: float  # Distribution shape
     return_kurtosis: float  # Tail risk
+    sharpe_ratio: float  # Risk-adjusted return
 
-    # Transition behavior
-    avg_duration: float  # Average time spent in this regime
+    # Regime behavior
+    persistence_days: float  # How persistent this regime is (avg duration)
+    regime_strength: float  # How distinct from others (0-1)
     transition_volatility: float  # Volatility around regime changes
 
-    # Data-driven label (replaces heuristic enum-based labeling)
-    regime_type_str: Optional[str] = None
+    # Transition probabilities to other regimes
+    transition_probs: Dict[str, float] = field(default_factory=dict)
+
+    # Optional state-level info
+    state_id: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class TradingSemantics:
+    """
+    How this regime should be fundamentally traded.
+
+    These are strategy-agnostic fundamentals that ANY trading strategy should respect.
+    Immutable to prevent accidental modification.
+    """
+
+    # Fundamental bias
+    bias: Literal["positive", "negative", "neutral"]
+
+    # Typical position direction (strategy-independent)
+    typical_position_sign: int  # +1 for long, -1 for short, 0 for flat/neutral
+
+    # When is this regime actionable?
+    confidence_threshold: float  # Minimum confidence to act on this regime
+
+    # Position sizing hints
+    position_sizing_bias: float = 1.0  # 1.0 = normal, 0.5 = half, 2.0 = double
+
+
+@dataclass(frozen=True)
+class RegimeLabel:
+    """
+    SINGLE SOURCE OF TRUTH for what a regime means financially and tradingly.
+
+    This is what the Interpreter PRODUCES.
+    This is what Strategy objects CONSUME.
+
+    By encapsulating regime semantics here, we prevent interpretation drift:
+    - Change RegimeLabel definition once
+    - All strategies automatically use the new definition
+    - QuantConnect reads the same RegimeLabel, no re-interpretation needed
+
+    Immutable to prevent accidental modification and enable safe sharing.
+    """
+
+    # Identity
+    name: str  # "BULLISH", "BEARISH", "SIDEWAYS", "CRISIS", "MIXED"
+    regime_type: RegimeType  # Enum for color lookup and backward compat
+    color: str  # Colorblind-safe hex color for visualization
+
+    # Financial characteristics (what this regime looks like in data)
+    characteristics: RegimeCharacteristics
+
+    # Trading semantics (how this regime should be traded)
+    trading_semantics: TradingSemantics
+
+    # Confidence in this classification
+    regime_strength: float  # 0-1, how distinct this regime is
+
+    # Optional metadata (e.g., timeframe_alignment for multi-timeframe strategies)
+    metadata: dict = field(default_factory=dict)
 
     def get_display_name(self) -> str:
-        """
-        Get the display name for this regime.
+        """Get the display name for this regime."""
+        return self.name
 
-        Returns data-driven regime_type_str if available,
-        otherwise falls back to enum value for backward compatibility.
-        """
-        if self.regime_type_str is not None:
-            return self.regime_type_str
-        return self.regime_type.value
+    def __hash__(self):
+        """Make RegimeLabel hashable for use in dicts."""
+        return hash(self.name)
