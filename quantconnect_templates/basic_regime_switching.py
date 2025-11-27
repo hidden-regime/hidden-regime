@@ -88,7 +88,7 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
             ticker=ticker,
             n_states=n_states,
             lookback_days=lookback_days,
-            retrain_frequency="monthly",
+            retrain_frequency="never",
             regime_allocations={
                 "Bull": bull_allocation,
                 "Bear": bear_allocation,
