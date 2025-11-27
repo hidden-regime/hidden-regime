@@ -42,7 +42,7 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
         """
         # Backtest configuration
         self.SetStartDate(2020, 1, 1)
-        self.SetEndDate(2024, 1, 1)
+        self.SetEndDate(2022, 1, 1)
         self.SetCash(100000)
 
         # Add SPY
