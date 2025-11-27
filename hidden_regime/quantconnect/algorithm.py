@@ -287,11 +287,15 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
                 reason = "initial" if pipeline is None else "scheduled retrain"
                 self.logger.log_pipeline_training(tick, self.Time, reason=reason)
 
-                # Create/recreate pipeline
+                # Create/recreate pipeline with safeguard against external data fetch
+                # In QuantConnect backtest context, only QuantConnect-provided data should be used
+                kwargs = pipeline_info.get("pipeline_kwargs", {})
+                kwargs["allow_external_data_fetch"] = False
+
                 pipeline = hr.create_financial_pipeline(
                     ticker=tick,
                     n_states=pipeline_info["n_states"],
-                    **pipeline_info.get("pipeline_kwargs", {}),
+                    **kwargs,
                 )
                 pipeline_info["pipeline"] = pipeline
                 # Use backtest time (self.Time) not wall-clock time (datetime.now())

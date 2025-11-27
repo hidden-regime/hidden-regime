@@ -104,9 +104,21 @@ class FinancialDataLoader(DataComponent):
             self._ingest_and_process(data)
         # Handle batch mode (current_date parameter)
         elif current_date is not None:
+            # Check if external data fetch is allowed
+            if not self.config.allow_external_data_fetch:
+                raise RuntimeError(
+                    "External data fetch is disabled. Cannot load data with current_date parameter. "
+                    "Streaming data ingestion requires explicit data parameter."
+                )
             self._last_data = self._load_data(end_date_override=current_date)
         # Load initial data if nothing available
         elif self._last_data is None:
+            # Check if external data fetch is allowed
+            if not self.config.allow_external_data_fetch:
+                raise RuntimeError(
+                    "External data fetch is disabled. No data available. "
+                    "Must provide data via update(data=df) parameter for streaming ingestion."
+                )
             self._last_data = self._load_data()
 
         return self._last_data.copy()

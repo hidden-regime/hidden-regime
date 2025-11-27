@@ -201,6 +201,7 @@ class FinancialDataConfig(DataConfig):
 
     source: str = "yfinance"
     ticker: str = "SPY"
+    allow_external_data_fetch: bool = True
 
     def validate(self) -> None:
         """Validate financial data configuration."""
@@ -248,4 +249,5 @@ class FinancialDataConfig(DataConfig):
             and self.end_date == other.end_date
             and self.num_samples == other.num_samples
             and self.frequency == other.frequency
+            and self.allow_external_data_fetch == other.allow_external_data_fetch
         )

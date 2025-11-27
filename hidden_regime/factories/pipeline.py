@@ -153,6 +153,7 @@ class PipelineFactory:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         include_report: bool = True,
+        allow_external_data_fetch: bool = True,
         # Common model parameters
         tolerance: Optional[float] = None,
         max_iterations: Optional[int] = None,
@@ -169,6 +170,9 @@ class PipelineFactory:
             start_date: Data start date (YYYY-MM-DD)
             end_date: Data end date (YYYY-MM-DD)
             include_report: Whether to include report generation
+            allow_external_data_fetch: Whether to allow fetching data from external sources
+                (yfinance, etc.). Set to False in QuantConnect backtest context to prevent
+                lookahead bias from data sources outside of backtester.
             **kwargs: Additional configuration overrides
 
         Returns:
@@ -180,6 +184,7 @@ class PipelineFactory:
             "ticker": ticker,
             "start_date": start_date,
             "end_date": end_date,
+            "allow_external_data_fetch": allow_external_data_fetch,
         }
 
         # Add any additional data config overrides
