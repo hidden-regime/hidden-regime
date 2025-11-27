@@ -58,10 +58,10 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
         """
         # === EASY PARAMETERS TO MODIFY ===
         ticker = self.GetParameter("ticker", "SPY")
-        start_year = int(self.GetParameter("start_year", 2017))
+        start_year = int(self.GetParameter("start_year", 2020))
         start_month = int(self.GetParameter("start_month", 1))
         start_day = int(self.GetParameter("start_day", 1))
-        end_year = int(self.GetParameter("end_year", 2019))
+        end_year = int(self.GetParameter("end_year", 2021))
         end_month = int(self.GetParameter("end_month", 1))
         end_day = int(self.GetParameter("end_day", 1))
         initial_cash = float(self.GetParameter("cash", 100000))
