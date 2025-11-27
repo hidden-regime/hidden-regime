@@ -134,9 +134,15 @@ class RegimeDetectionLogger:
         confidence: float,
     ) -> None:
         """Log trading signal generation."""
+        # Handle enums
+        direction_str = (
+            direction.name if hasattr(direction, "name") else str(direction)
+        )
+        strength_str = strength.name if hasattr(strength, "name") else str(strength)
+
         self.algo.Debug(
             f"SIGNAL: {ticker} @ {timestamp.date()} "
-            f"{direction.upper()} ({strength}) "
+            f"{direction_str} ({strength_str}) "
             f"Allocation={allocation:.1%} "
             f"Confidence={confidence:.1%}"
         )
