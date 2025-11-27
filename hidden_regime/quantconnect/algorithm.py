@@ -180,6 +180,10 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
         adapter = self._data_adapters[ticker]
 
         # Add bar to adapter (handle both QC TradeBars and test dicts)
+        if bar is None:
+            # Skip if no bar data
+            return
+
         if hasattr(bar, "Time"):
             adapter.add_bar(
                 time=bar.Time,
@@ -189,8 +193,8 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
                 close=bar.Close,
                 volume=bar.Volume,
             )
-        else:
-            # For testing
+        elif isinstance(bar, dict):
+            # For testing with dict objects
             adapter.add_bar(
                 time=bar.get("Time", datetime.now()),
                 open_price=bar.get("Open", 0),
@@ -199,6 +203,8 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
                 close=bar.get("Close", 0),
                 volume=bar.get("Volume", 0),
             )
+        else:
+            self.Debug(f"Warning: Unexpected bar type: {type(bar)}")
 
     def update_regime(self, ticker: Optional[str] = None) -> bool:
         """
@@ -262,11 +268,16 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
                 pipeline.data._data = df
 
                 # Run pipeline update
-                result = pipeline.update()
+                pipeline.update()
+
+                # Get interpreter output (DataFrame with regime information)
+                interpreter_output = pipeline.component_outputs.get("interpreter")
+                if interpreter_output is None or interpreter_output.empty:
+                    raise ValueError("No regime interpretation available")
 
                 # Generate signal
                 signal_adapter = self._signal_adapters[tick]
-                signal = signal_adapter.from_pipeline_result(result)
+                signal = signal_adapter.from_pipeline_result(interpreter_output)
 
                 # Store signal
                 self._current_signals[tick] = signal

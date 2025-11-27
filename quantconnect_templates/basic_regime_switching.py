@@ -10,12 +10,10 @@ Author: hidden-regime
 License: MIT
 """
 
-# Note: When running in QuantConnect LEAN, uncomment this line:
-# from AlgorithmImports import *
+# Import QuantConnect API
+from AlgorithmImports import *
 
-# For local testing/development:
-import sys
-sys.path.insert(0, '..')
+# Import Hidden-Regime components
 from hidden_regime.quantconnect import HiddenRegimeAlgorithm
 
 
