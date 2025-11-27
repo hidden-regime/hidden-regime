@@ -285,7 +285,7 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             if pipeline is None or self._should_retrain(tick):
                 # Log training event
                 reason = "initial" if pipeline is None else "scheduled retrain"
-                self.logger.log_pipeline_training(tick, datetime.now(), reason=reason)
+                self.logger.log_pipeline_training(tick, self.Time, reason=reason)
 
                 # Create/recreate pipeline
                 pipeline = hr.create_financial_pipeline(
@@ -294,7 +294,8 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
                     **pipeline_info.get("pipeline_kwargs", {}),
                 )
                 pipeline_info["pipeline"] = pipeline
-                self._last_retrain[tick] = datetime.now()
+                # Use backtest time (self.Time) not wall-clock time (datetime.now())
+                self._last_retrain[tick] = self.Time
 
                 self.Debug(f"Created/retrained regime pipeline for {tick}")
 
@@ -460,6 +461,9 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
         """
         Check if pipeline should be retrained.
 
+        Uses backtest time (self.Time) not wall-clock time to ensure
+        retraining happens at the right frequency during backtesting.
+
         Args:
             ticker: Ticker symbol
 
@@ -473,7 +477,8 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             return True
 
         last_train = self._last_retrain[ticker]
-        days_since = (datetime.now() - last_train).days
+        # Use self.Time (backtest time) not datetime.now() (wall-clock time)
+        days_since = (self.Time.date() - last_train.date()).days
 
         frequency = self._qc_config.retrain_frequency
         if frequency == "never":
