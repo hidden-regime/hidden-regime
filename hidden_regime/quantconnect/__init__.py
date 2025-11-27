@@ -43,6 +43,7 @@ from .signal_adapter import (
     SignalDirection,
     SignalStrength,
 )
+from .regime_label_adapter import RegimeLabelQuantConnectAdapter
 from .config import (
     QuantConnectConfig,
     RegimeTradingConfig,
@@ -73,12 +74,14 @@ __all__ = [
     "QuantConnectDataAdapter",
     "RollingWindowDataAdapter",
     "HistoryDataAdapter",
-    # Signal generation
+    # Signal generation (legacy)
     "RegimeSignalAdapter",
     "TradingSignal",
     "MultiAssetSignalAdapter",
     "SignalDirection",
     "SignalStrength",
+    # Signal generation (new - RegimeLabel based)
+    "RegimeLabelQuantConnectAdapter",
     # Configuration
     "QuantConnectConfig",
     "RegimeTradingConfig",

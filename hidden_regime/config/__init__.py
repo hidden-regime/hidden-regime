@@ -13,6 +13,7 @@ from .observation import FinancialObservationConfig, ObservationConfig
 from .pipeline import PipelineConfiguration
 from .report import ReportConfig, ReportConfiguration
 from .signal_generation import SignalGenerationConfiguration
+from .strategy import ComposedStrategyConfiguration, StrategyConfiguration
 
 __all__ = [
     # Base configuration
@@ -29,6 +30,9 @@ __all__ = [
     "ObservationMode",
     # Interpreter configurations
     "InterpreterConfiguration",
+    # Strategy configurations
+    "StrategyConfiguration",
+    "ComposedStrategyConfiguration",
     # Signal generation configurations
     "SignalGenerationConfiguration",
     # Report configurations
