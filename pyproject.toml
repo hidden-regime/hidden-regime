@@ -4,7 +4,6 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hidden-regime"
-dynamic = ["version"]
 authors = [
     {name = "aoaustin", email = "contact@hiddenregime.com"},
 ]
@@ -112,9 +111,6 @@ hidden-regime-mcp = "hidden_regime_mcp.server:main"
 [tool.setuptools]
 packages = ["hidden_regime", "hidden_regime.config", "hidden_regime.data", "hidden_regime.models", "hidden_regime.utils", "hidden_regime.visualization", "hidden_regime_mcp"]
 include-package-data = true
-
-[tool.setuptools.dynamic]
-version = {attr = "hidden_regime._version.__version__"}
 
 [tool.setuptools.package-data]
 hidden_regime = ["py.typed", "*.pyi"]

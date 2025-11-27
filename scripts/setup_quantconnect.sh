@@ -1,16 +1,22 @@
 #!/bin/bash
 #
-# Complete setup script for QuantConnect LEAN with Hidden-Regime
+# Setup script for QuantConnect LEAN with Hidden-Regime
 #
 # This script:
-# 1. Checks prerequisites
-# 2. Installs LEAN CLI (optional)
-# 3. Builds custom Docker image
-# 4. Configures LEAN CLI
-# 5. Creates example project
+# 1. Verifies Docker is installed and running
+# 2. Builds the custom Docker image
+# 3. Provides quick-start instructions
 #
 # Usage:
-#   ./scripts/setup_quantconnect.sh [--skip-lean-cli] [--skip-docker]
+#   ./scripts/setup_quantconnect.sh [OPTIONS]
+#
+# Options:
+#   --help      Show this help message
+#
+# What this sets up:
+#   • Docker image with QuantConnect LEAN + hidden-regime
+#   • Simple docker run workflow for strategy backtesting
+#   • No external dependencies (Docker is sufficient)
 
 set -e
 
@@ -21,192 +27,109 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Flags
-SKIP_LEAN_CLI=false
-SKIP_DOCKER=false
-
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --skip-lean-cli)
-            SKIP_LEAN_CLI=true
-            shift
-            ;;
-        --skip-docker)
-            SKIP_DOCKER=true
-            shift
+        --help)
+            grep "^#" "$0" | grep -v "^#!/" | sed 's/^# //'
+            exit 0
             ;;
         *)
             echo -e "${RED}Unknown option: $1${NC}"
+            echo "Use --help for usage information"
             exit 1
             ;;
     esac
 done
 
+# Banner
+echo ""
 echo -e "${BLUE}"
 cat << "EOF"
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
 ║   Hidden-Regime × QuantConnect LEAN Setup                ║
 ║                                                           ║
-║   Setting up your 5-minute backtest workflow...          ║
+║   Docker-based strategy backtesting                      ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
 EOF
 echo -e "${NC}"
 
 # Step 1: Check prerequisites
-echo -e "${GREEN}Step 1: Checking prerequisites...${NC}"
+echo -e "${BLUE}Step 1: Checking prerequisites${NC}"
 echo ""
 
-# Check Docker
+# Check Docker is installed
 if ! command -v docker &> /dev/null; then
     echo -e "${RED}✗ Docker not found${NC}"
-    echo "  Please install Docker: https://docs.docker.com/get-docker/"
+    echo ""
+    echo "Install Docker from: https://docs.docker.com/get-docker/"
     exit 1
-else
-    echo -e "${GREEN}✓ Docker installed$(docker --version | cut -d' ' -f3)${NC}"
 fi
+echo -e "${GREEN}✓ Docker installed ($(docker --version))${NC}"
 
 # Check Docker is running
 if ! docker info > /dev/null 2>&1; then
     echo -e "${RED}✗ Docker is not running${NC}"
-    echo "  Please start Docker and try again"
+    echo ""
+    echo "Please start Docker and try again"
     exit 1
-else
-    echo -e "${GREEN}✓ Docker is running${NC}"
 fi
+echo -e "${GREEN}✓ Docker is running${NC}"
 
-# Check Python
-if ! command -v python3 &> /dev/null; then
-    echo -e "${YELLOW}⚠ Python 3 not found (optional for local development)${NC}"
-else
-    echo -e "${GREEN}✓ Python 3 installed ($(python3 --version | cut -d' ' -f2))${NC}"
-fi
+echo ""
 
-# Check .NET (for LEAN CLI)
-if ! command -v dotnet &> /dev/null; then
-    echo -e "${YELLOW}⚠ .NET SDK not found (required for LEAN CLI)${NC}"
-    if [ "$SKIP_LEAN_CLI" = false ]; then
-        echo "  Install from: https://dotnet.microsoft.com/download"
-        echo "  Or run with --skip-lean-cli to skip LEAN CLI installation"
-        exit 1
-    fi
-else
-    echo -e "${GREEN}✓ .NET SDK installed ($(dotnet --version))${NC}"
+# Step 2: Build Docker image
+echo -e "${BLUE}Step 2: Building Docker image${NC}"
+echo ""
+
+bash scripts/build_docker.sh
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo -e "${RED}✗ Docker build failed${NC}"
+    exit 1
 fi
 
 echo ""
 
-# Step 2: Install LEAN CLI (optional)
-if [ "$SKIP_LEAN_CLI" = false ]; then
-    echo -e "${GREEN}Step 2: Installing LEAN CLI...${NC}"
-    echo ""
-
-    if command -v lean &> /dev/null; then
-        echo -e "${GREEN}✓ LEAN CLI already installed${NC}"
-    else
-        echo "Installing LEAN CLI via dotnet tool..."
-        dotnet tool install -g QuantConnect.Lean.CLI
-
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}✓ LEAN CLI installed successfully${NC}"
-        else
-            echo -e "${RED}✗ Failed to install LEAN CLI${NC}"
-            exit 1
-        fi
-    fi
-    echo ""
-else
-    echo -e "${YELLOW}Step 2: Skipping LEAN CLI installation${NC}"
-    echo ""
-fi
-
-# Step 3: Build Docker image
-if [ "$SKIP_DOCKER" = false ]; then
-    echo -e "${GREEN}Step 3: Building custom LEAN Docker image...${NC}"
-    echo ""
-
-    # Build the image
-    bash scripts/build_docker.sh --tag latest
-
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}✗ Docker build failed${NC}"
-        exit 1
-    fi
-    echo ""
-else
-    echo -e "${YELLOW}Step 3: Skipping Docker build${NC}"
-    echo ""
-fi
-
-# Step 4: Configure LEAN CLI
-if [ "$SKIP_LEAN_CLI" = false ] && command -v lean &> /dev/null; then
-    echo -e "${GREEN}Step 4: Configuring LEAN CLI...${NC}"
-    echo ""
-
-    IMAGE_NAME="quantconnect/lean:hidden-regime-latest"
-
-    # Configure engine image
-    lean config set engine-image ${IMAGE_NAME}
-    echo -e "${GREEN}✓ Configured LEAN to use: ${IMAGE_NAME}${NC}"
-
-    # Configure research image (optional)
-    lean config set research-image ${IMAGE_NAME}
-    echo -e "${GREEN}✓ Configured research image${NC}"
-
-    echo ""
-else
-    echo -e "${YELLOW}Step 4: Skipping LEAN CLI configuration${NC}"
-    echo ""
-fi
-
-# Step 5: Summary and next steps
+# Step 3: Summary and next steps
 echo -e "${BLUE}"
 cat << "EOF"
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║   Setup Complete! 🎉                                     ║
+║   Setup Complete! ✓                                      ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
 EOF
 echo -e "${NC}"
 
-echo -e "${GREEN}Your 5-minute backtest workflow is ready!${NC}"
 echo ""
-echo "Quick Start Options:"
-echo ""
-
-if [ "$SKIP_LEAN_CLI" = false ]; then
-    echo -e "${YELLOW}Option 1: LEAN CLI (Recommended)${NC}"
-    echo "  1. Create a new project:"
-    echo "     lean project-create MyRegimeStrategy"
-    echo ""
-    echo "  2. Copy a template:"
-    echo "     cp quantconnect_templates/basic_regime_switching.py MyRegimeStrategy/main.py"
-    echo ""
-    echo "  3. Run backtest:"
-    echo "     cd MyRegimeStrategy && lean backtest MyRegimeStrategy"
-    echo ""
-fi
-
-echo -e "${YELLOW}Option 2: Docker Compose${NC}"
-echo "  1. Start services:"
-echo "     cd docker && docker-compose up -d"
-echo ""
-echo "  2. View logs:"
-echo "     docker-compose logs -f lean-hidden-regime"
+echo -e "${GREEN}Your Docker environment is ready for backtesting!${NC}"
 echo ""
 
-echo -e "${YELLOW}Option 3: Direct Docker${NC}"
-echo "  docker run --rm -v \$(pwd)/quantconnect_templates:/Lean/Algorithm.Python \\"
-echo "    quantconnect/lean:hidden-regime-latest"
+echo -e "${BLUE}Quick Start:${NC}"
+echo ""
+echo "  1. Test the setup:"
+echo "     docker run --rm lean-hidden-regime:latest python -c \\\"import hidden_regime; print('Success')\\\""
+echo ""
+echo "  2. Run a strategy backtest:"
+echo "     bash scripts/backtest_docker.sh quantconnect_templates/basic_regime_switching.py"
+echo ""
+echo "  3. View results:"
+echo "     ls backtest_results/"
 echo ""
 
-echo "Documentation:"
-echo "  • Templates: ./quantconnect_templates/README.md"
-echo "  • Roadmap: ./QC_ROADMAP.md"
-echo "  • Phase 1 Summary: ./QUANTCONNECT_PHASE1_COMPLETE.md"
+echo -e "${BLUE}Available templates:${NC}"
+echo ""
+ls -1 quantconnect_templates/*.py | sed 's/quantconnect_templates\//  • /' | sed 's/\.py$//'
 echo ""
 
-echo -e "${GREEN}Happy Trading! 🚀${NC}"
+echo -e "${BLUE}Documentation:${NC}"
+echo "  • Usage guide: ./quantconnect_templates/README.md"
+echo "  • Strategy examples: ./quantconnect_templates/TEMPLATES_GUIDE.md"
+echo ""
+
+echo -e "${GREEN}Happy backtesting! 🚀${NC}"
+echo ""

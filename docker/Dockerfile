@@ -3,65 +3,66 @@
 # This Dockerfile creates a custom LEAN image with hidden-regime pre-installed
 # for seamless regime-based algorithmic trading.
 #
+# Build from project root:
+#   docker build -t lean-hidden-regime:latest -f docker/Dockerfile .
+#
 # Base: Official QuantConnect LEAN image
-# Additions: hidden-regime and dependencies
+# Additions: hidden-regime and core dependencies
 
-FROM quantconnect/lean:latest
+FROM quantconnect/lean:17389
 
 LABEL maintainer="hidden-regime <contact@hiddenregime.com>"
 LABEL description="QuantConnect LEAN with Hidden-Regime market regime detection"
-LABEL version="1.0.0"
+LABEL version="2.0.0"
 
 # Set working directory
 WORKDIR /Lean
 
 # Update pip to latest version
-RUN pip install --upgrade pip
+RUN pip install --upgrade pip setuptools wheel
 
-# Install hidden-regime and its dependencies
-# Pin versions for reproducibility
+# Install hidden-regime dependencies directly
+# We install dependencies separately to avoid setuptools-scm issues in Docker
 RUN pip install --no-cache-dir \
     numpy>=2.3.2 \
     pandas>=2.3.2 \
     scipy>=1.7.0 \
     matplotlib>=3.4.0 \
-    scikit-learn>=1.0.0 \
+    seaborn>=0.11.0 \
+    tqdm>=4.50.0 \
     yfinance>=0.2.0 \
-    ta>=0.10.2
+    ta>=0.10.2 \
+    scikit-learn>=1.0.0 \
+    plotly>=5.0.0 \
+    Pillow>=9.0.0
 
-# Install hidden-regime
-# For development, use local package
-# For production, use: RUN pip install --no-cache-dir hidden-regime
-COPY . /tmp/hidden-regime
-RUN pip install --no-cache-dir /tmp/hidden-regime && \
-    rm -rf /tmp/hidden-regime
+# Copy hidden-regime module directly (no package build needed)
+COPY hidden_regime/ /usr/local/lib/python3.11/site-packages/hidden_regime/
+COPY hidden_regime_mcp/ /usr/local/lib/python3.11/site-packages/hidden_regime_mcp/
 
-# Pre-compile Python modules for faster startup
-RUN python -c "import hidden_regime; print('Hidden-Regime imported successfully')"
+# Create __init__.py files if missing
+RUN touch /usr/local/lib/python3.11/site-packages/hidden_regime/__init__.py && \
+    touch /usr/local/lib/python3.11/site-packages/hidden_regime_mcp/__init__.py
 
-# Verify installation
-RUN python -c "from hidden_regime.quantconnect import HiddenRegimeAlgorithm; print('QC integration verified')"
+# Verify hidden-regime modules are accessible
+RUN python -c "import sys; sys.path.insert(0, '/usr/local/lib/python3.11/site-packages'); import hidden_regime; print('✓ Hidden-Regime imported successfully')"
 
-# Copy template algorithms to Algorithm.Python directory
-COPY quantconnect_templates/*.py /Lean/Algorithm.Python/
+# Verify visualization support
+RUN python -c "import plotly; print('✓ Visualization support verified')"
 
-# Set Python path to include hidden-regime
-ENV PYTHONPATH="${PYTHONPATH}:/usr/local/lib/python3.11/site-packages"
+# Create algorithm directory for strategy templates (mounted as volume at runtime)
+RUN mkdir -p /Lean/Algorithm.Python
 
-# Default command (inherited from base image)
-# ENTRYPOINT ["dotnet", "QuantConnect.Lean.Launcher.dll"]
+# Set Python path
+# Using . ensures we can import modules from current directory
+ENV PYTHONPATH="/usr/local/lib/python3.11/site-packages:/Lean:."
 
-# Expose default LEAN ports
+# Set working directory back to LEAN for execution
+WORKDIR /Lean
+
+# Health check to ensure hidden-regime is working
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import hidden_regime; import plotly" || exit 1
+
+# Expose LEAN debugger port
 EXPOSE 5678
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD python -c "import hidden_regime" || exit 1
-
-# Build metadata
-ARG BUILD_DATE
-ARG VCS_REF
-LABEL org.label-schema.build-date=$BUILD_DATE \
-      org.label-schema.vcs-ref=$VCS_REF \
-      org.label-schema.vcs-url="https://github.com/hidden-regime/hidden-regime" \
-      org.label-schema.schema-version="1.0"

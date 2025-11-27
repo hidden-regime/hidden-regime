@@ -3,108 +3,139 @@
 # Build QuantConnect LEAN Docker image with Hidden-Regime
 #
 # Usage:
-#   ./scripts/build_docker.sh [--pypi] [--tag TAG]
+#   ./scripts/build_docker.sh [OPTIONS]
 #
 # Options:
-#   --pypi      Build using PyPI version (production)
-#   --tag TAG   Custom image tag (default: latest)
-#   --no-cache  Build without cache
+#   --tag TAG       Custom image tag (default: lean-hidden-regime:latest)
+#   --no-cache      Build without using Docker cache
+#   --help          Show this help message
+#
+# Examples:
+#   ./scripts/build_docker.sh
+#   ./scripts/build_docker.sh --tag my-lean:v1.0
+#   ./scripts/build_docker.sh --no-cache
 
-set -e  # Exit on error
+set -e
 
 # Color output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}Building LEAN with Hidden-Regime${NC}"
-echo -e "${GREEN}========================================${NC}"
-echo ""
-
-# Default values
-USE_PYPI=false
-IMAGE_TAG="latest"
-NO_CACHE=""
-DOCKERFILE="docker/Dockerfile"
+# Defaults
+TAG="lean-hidden-regime:latest"
+BUILD_ARGS=""
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --pypi)
-            USE_PYPI=true
-            DOCKERFILE="docker/Dockerfile.pypi"
-            shift
-            ;;
         --tag)
-            IMAGE_TAG="$2"
+            TAG="$2"
             shift 2
             ;;
         --no-cache)
-            NO_CACHE="--no-cache"
+            BUILD_ARGS="$BUILD_ARGS --no-cache"
             shift
+            ;;
+        --help)
+            grep "^#" "$0" | grep -v "^#!/" | sed 's/^# //'
+            exit 0
             ;;
         *)
             echo -e "${RED}Unknown option: $1${NC}"
+            echo "Use --help for usage information"
             exit 1
             ;;
     esac
 done
 
-# Build metadata
-BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-VCS_REF=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-
-# Image name
-IMAGE_NAME="quantconnect/lean:hidden-regime-${IMAGE_TAG}"
-
-echo -e "${YELLOW}Configuration:${NC}"
-echo "  Dockerfile: ${DOCKERFILE}"
-echo "  Image: ${IMAGE_NAME}"
-echo "  Build Date: ${BUILD_DATE}"
-echo "  VCS Ref: ${VCS_REF}"
-echo "  Use PyPI: ${USE_PYPI}"
+# Pre-flight checks
+echo -e "${BLUE}Checking prerequisites...${NC}"
 echo ""
 
-# Check if Docker is running
+# Check Docker is installed
+if ! command -v docker &> /dev/null; then
+    echo -e "${RED}✗ Docker not found${NC}"
+    echo "  Install Docker: https://docs.docker.com/get-docker/"
+    exit 1
+fi
+echo -e "${GREEN}✓ Docker installed${NC}"
+
+# Check Docker is running
 if ! docker info > /dev/null 2>&1; then
-    echo -e "${RED}Error: Docker is not running${NC}"
+    echo -e "${RED}✗ Docker is not running${NC}"
     exit 1
 fi
+echo -e "${GREEN}✓ Docker is running${NC}"
 
-# Build the image
-echo -e "${GREEN}Building Docker image...${NC}"
+# Check required files exist
+echo ""
+echo -e "${BLUE}Verifying project structure...${NC}"
+echo ""
+
+if [ ! -f "$PROJECT_ROOT/pyproject.toml" ]; then
+    echo -e "${RED}✗ pyproject.toml not found${NC}"
+    echo "  Expected at: $PROJECT_ROOT/pyproject.toml"
+    echo "  Are you running from the project root?"
+    exit 1
+fi
+echo -e "${GREEN}✓ pyproject.toml found${NC}"
+
+if [ ! -d "$PROJECT_ROOT/hidden_regime" ]; then
+    echo -e "${RED}✗ hidden_regime directory not found${NC}"
+    echo "  Expected at: $PROJECT_ROOT/hidden_regime"
+    exit 1
+fi
+echo -e "${GREEN}✓ hidden_regime module found${NC}"
+
+if [ ! -d "$PROJECT_ROOT/hidden_regime_mcp" ]; then
+    echo -e "${RED}✗ hidden_regime_mcp directory not found${NC}"
+    echo "  Expected at: $PROJECT_ROOT/hidden_regime_mcp"
+    exit 1
+fi
+echo -e "${GREEN}✓ hidden_regime_mcp module found${NC}"
+
+if [ ! -f "$PROJECT_ROOT/docker/Dockerfile" ]; then
+    echo -e "${RED}✗ Dockerfile not found${NC}"
+    echo "  Expected at: $PROJECT_ROOT/docker/Dockerfile"
+    exit 1
+fi
+echo -e "${GREEN}✓ Dockerfile found${NC}"
+
+echo ""
+echo -e "${BLUE}Building Docker image...${NC}"
+echo -e "${YELLOW}Tag: $TAG${NC}"
+echo ""
+
+# Build the image from project root
+cd "$PROJECT_ROOT"
 docker build \
-    ${NO_CACHE} \
-    -f ${DOCKERFILE} \
-    -t ${IMAGE_NAME} \
-    --build-arg BUILD_DATE="${BUILD_DATE}" \
-    --build-arg VCS_REF="${VCS_REF}" \
-    .
+  -f docker/Dockerfile \
+  -t "$TAG" \
+  $BUILD_ARGS \
+  .
 
-if [ $? -eq 0 ]; then
+if [ $? -ne 0 ]; then
     echo ""
-    echo -e "${GREEN}========================================${NC}"
-    echo -e "${GREEN}Build successful!${NC}"
-    echo -e "${GREEN}========================================${NC}"
-    echo ""
-    echo "Image: ${IMAGE_NAME}"
-    echo ""
-    echo "To configure LEAN CLI to use this image:"
-    echo -e "${YELLOW}  lean config set engine-image ${IMAGE_NAME}${NC}"
-    echo ""
-    echo "To run a backtest:"
-    echo -e "${YELLOW}  docker run --rm -v \$(pwd):/Lean/Algorithm.Python ${IMAGE_NAME}${NC}"
-    echo ""
-    echo "To start docker-compose services:"
-    echo -e "${YELLOW}  cd docker && docker-compose up${NC}"
-    echo ""
-else
-    echo -e "${RED}Build failed!${NC}"
+    echo -e "${RED}✗ Build failed${NC}"
     exit 1
 fi
 
-# Show image size
-echo "Image size:"
-docker images ${IMAGE_NAME} --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+echo ""
+echo -e "${GREEN}✓ Build complete!${NC}"
+echo ""
+echo -e "${BLUE}Image information:${NC}"
+docker images --filter "reference=$TAG" --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}"
+
+echo ""
+echo -e "${BLUE}Next steps:${NC}"
+echo "  1. Test the image:"
+echo "     docker run --rm $TAG python -c \"import hidden_regime; print('Success')\""
+echo ""
+echo "  2. Run a backtest:"
+echo "     bash scripts/backtest_docker.sh quantconnect_templates/basic_regime_switching.py"
+echo ""

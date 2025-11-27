@@ -55,7 +55,7 @@ docs/_build/
 !quantconnect_templates/README.md
 
 # Git
-.git/
+# NOTE: .git is NOT excluded because setuptools-scm needs it for version detection
 .gitignore
 .gitattributes
 
