@@ -61,7 +61,7 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
         start_year = int(self.GetParameter("start_year", 2017))
         start_month = int(self.GetParameter("start_month", 1))
         start_day = int(self.GetParameter("start_day", 1))
-        end_year = int(self.GetParameter("end_year", 2023))
+        end_year = int(self.GetParameter("end_year", 2019))
         end_month = int(self.GetParameter("end_month", 1))
         end_day = int(self.GetParameter("end_day", 1))
         initial_cash = float(self.GetParameter("cash", 100000))
@@ -69,6 +69,7 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
         n_states = int(self.GetParameter("n_states", 3))
         lookback_days = int(self.GetParameter("lookback_days", 252))
         min_confidence = float(self.GetParameter("min_confidence", 0.6))
+        random_seed = int(self.GetParameter("random_seed", 4242))
 
         # Regime allocations (can be customized per regime)
         bull_allocation = float(self.GetParameter("bull_allocation", 1.0))
@@ -88,16 +89,45 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
             ticker=ticker,
             n_states=n_states,
             lookback_days=lookback_days,
-            retrain_frequency="never",
+            retrain_frequency="weekly",
             regime_allocations={
                 "Bull": bull_allocation,
                 "Bear": bear_allocation,
                 "Sideways": sideways_allocation,
             },
             min_confidence=min_confidence,
+            random_seed=random_seed,
         )
 
         self.Debug(f"BasicRegimeSwitching initialized: {ticker} ({start_year}-{start_month}-{start_day} to {end_year}-{end_month}-{end_day})")
+
+    def OnWarmupFinished(self):
+        """
+        Called when the warmup period completes.
+
+        Fetch historical data from the warmup period and pre-populate
+        the regime detector's buffer so training can begin immediately.
+        """
+        ticker = self.GetParameter("ticker", "SPY")
+        lookback_days = int(self.GetParameter("lookback_days", 252))
+
+        # Fetch history from warmup period
+        history = self.History(self.symbol, lookback_days, Resolution.Daily)  # noqa: F405
+
+        if not history.empty:
+            # Add each bar to the regime detector
+            for index, row in history.iterrows():
+                bar = {
+                    'Time': index if not isinstance(index, tuple) else index[1],
+                    'Open': row['open'],
+                    'High': row['high'],
+                    'Low': row['low'],
+                    'Close': row['close'],
+                    'Volume': row['volume'],
+                }
+                self.on_tradebar(ticker, bar)
+
+            self.Debug(f"Loaded {len(history)} warmup bars for {ticker}")
 
     def OnData(self, data):
         """
