@@ -96,13 +96,18 @@ class Pipeline:
         # Configure logging
         self.logger = logging.getLogger(f"Pipeline-{id(self)}")
 
-    def update(self, current_date: Optional[str] = None) -> str:
+    def update(
+        self, data: Optional[pd.DataFrame] = None, current_date: Optional[str] = None
+    ) -> str:
         """
         Execute complete pipeline flow:
         Data → Observations → Model → Interpreter → Signal Generator → Report
 
         Args:
-            current_date: Optional date for data updates (YYYY-MM-DD format)
+            data: Optional DataFrame with external data to ingest (for streaming sources like QuantConnect).
+                  Can be a single row (latest bar) or multiple rows.
+                  Will be validated, processed through mandatory pipeline, and accumulated.
+            current_date: Optional date for data updates (YYYY-MM-DD format, for batch mode)
 
         Returns:
             Report output (typically markdown string) or interpreter output if no report component
@@ -113,7 +118,7 @@ class Pipeline:
 
             # Step 1: Update data
             self.logger.debug("Step 1: Updating data component")
-            data_output = self.data.update(current_date=current_date)
+            data_output = self.data.update(data=data, current_date=current_date)
             self.component_outputs["data"] = data_output
 
             if len(data_output) == 0:

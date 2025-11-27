@@ -299,13 +299,11 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
 
                 self.Debug(f"Created/retrained regime pipeline for {tick}")
 
-            # Update pipeline with data (inject data directly)
+            # Update pipeline with data (use public interface)
             try:
-                # Inject data into pipeline's data component
-                pipeline.data._data = df
-
-                # Run pipeline update
-                pipeline.update()
+                # Run pipeline update with new data
+                # Pipeline will validate, process through mandatory pipeline, and accumulate
+                pipeline.update(data=df)
 
                 # Get interpreter output (DataFrame with regime information)
                 interpreter_output = pipeline.component_outputs.get("interpreter")

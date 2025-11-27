@@ -66,19 +66,49 @@ class FinancialDataLoader(DataComponent):
 
         return self._last_data.copy()
 
-    def update(self, current_date: Optional[str] = None) -> pd.DataFrame:
+    def get_data(self) -> pd.DataFrame:
         """
-        Update data, optionally fetching new data up to current_date.
-
-        Args:
-            current_date: Optional date to update data up to
+        Get accumulated data (public interface for streaming data sources).
 
         Returns:
-            Updated DataFrame with any new data
+            DataFrame with all accumulated and processed data
+
+        Raises:
+            ValueError: If no data has been loaded or ingested yet
         """
-        # For now, we'll reload all data each time
-        # In future, this could be optimized to only fetch new data
-        self._last_data = self._load_data(end_date_override=current_date)
+        if self._last_data is None:
+            raise ValueError("No data available. Call update() with data first.")
+
+        return self._last_data.copy()
+
+    def update(
+        self, data: Optional[pd.DataFrame] = None, current_date: Optional[str] = None
+    ) -> pd.DataFrame:
+        """
+        Update data, optionally with external data input for streaming sources.
+
+        Args:
+            data: Optional DataFrame with new data to ingest (single row or multiple rows).
+                  Will be validated, processed through mandatory pipeline, and accumulated.
+            current_date: Optional date to update data up to (for batch mode)
+
+        Returns:
+            Updated DataFrame with accumulated data
+
+        Raises:
+            ValueError: If data format is invalid
+            ValidationError: If data fails quality checks
+        """
+        # Handle streaming data ingestion (new data parameter)
+        if data is not None:
+            self._ingest_and_process(data)
+        # Handle batch mode (current_date parameter)
+        elif current_date is not None:
+            self._last_data = self._load_data(end_date_override=current_date)
+        # Load initial data if nothing available
+        elif self._last_data is None:
+            self._last_data = self._load_data()
+
         return self._last_data.copy()
 
     def load_data(self, end_date_override: Optional[str] = None) -> pd.DataFrame:
@@ -200,6 +230,59 @@ class FinancialDataLoader(DataComponent):
                     continue
                 else:
                     raise DataLoadError(f"Failed to load data for {ticker}: {e}")
+
+    def _ingest_and_process(self, new_data: pd.DataFrame) -> None:
+        """
+        Ingest and process external data from streaming sources.
+
+        This method handles the streaming data ingestion pattern for sources like QuantConnect.
+        It validates the input, processes it through the mandatory financial pipeline,
+        and accumulates it with existing data.
+
+        Args:
+            new_data: DataFrame with new OHLCV data (single row or multiple rows)
+                      Expected columns: Open, High, Low, Close, Volume (case-insensitive)
+                      Index should be DatetimeIndex
+
+        Raises:
+            ValueError: If data format is invalid
+            ValidationError: If data fails quality checks
+        """
+        if not isinstance(new_data, pd.DataFrame):
+            raise ValueError(f"Expected DataFrame, got {type(new_data)}")
+
+        if new_data.empty:
+            raise ValueError("Cannot ingest empty DataFrame")
+
+        # Validate that it has required OHLCV columns (case-insensitive check)
+        columns_lower = [col.lower() for col in new_data.columns]
+        required_cols = {"open", "high", "low", "close", "volume"}
+        available_cols = set(columns_lower)
+
+        if not required_cols.issubset(available_cols):
+            missing = required_cols - available_cols
+            raise ValueError(f"Missing required OHLCV columns: {missing}")
+
+        # Ensure DatetimeIndex
+        if not isinstance(new_data.index, pd.DatetimeIndex):
+            raise ValueError("Data must have DatetimeIndex")
+
+        # Process the new data through mandatory pipeline
+        processed_new = self._process_raw_data(new_data)
+
+        # Accumulate with existing data
+        if self._last_data is None:
+            # First ingestion
+            self._last_data = processed_new
+        else:
+            # Append new rows, removing duplicates by index
+            combined = pd.concat([self._last_data, processed_new])
+            self._last_data = combined[~combined.index.duplicated(keep="last")]
+            # Ensure sorted by datetime
+            self._last_data = self._last_data.sort_index()
+
+        # Invalidate cache since data has changed
+        self._cache.clear()
 
     def _process_raw_data(self, raw_data: pd.DataFrame) -> pd.DataFrame:
         """

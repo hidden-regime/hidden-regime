@@ -63,15 +63,29 @@ class DataComponent(PipelineComponent):
         pass
 
     @abstractmethod
-    def update(self, current_date: Optional[str] = None) -> pd.DataFrame:
+    def get_data(self) -> pd.DataFrame:
         """
-        Update data, optionally fetching new data up to current_date.
-
-        Args:
-            current_date: Optional date to update data up to
+        Get accumulated data (public interface for streaming data sources).
 
         Returns:
-            Updated DataFrame with any new data
+            DataFrame with all accumulated and processed data
+        """
+        pass
+
+    @abstractmethod
+    def update(
+        self, data: Optional[pd.DataFrame] = None, current_date: Optional[str] = None
+    ) -> pd.DataFrame:
+        """
+        Update data, optionally with external data input for streaming sources.
+
+        Args:
+            data: Optional DataFrame with new data to ingest (single row or multiple rows)
+                  Will be validated, processed through mandatory pipeline, and accumulated
+            current_date: Optional date to update data up to (for batch mode)
+
+        Returns:
+            Updated DataFrame with accumulated data
         """
         pass
 
