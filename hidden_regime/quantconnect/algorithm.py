@@ -319,7 +319,7 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
                 # Log inference result
                 self.logger.log_pipeline_inference(
                     ticker=tick,
-                    timestamp=datetime.now(),
+                    timestamp=self.Time,
                     regime=signal.regime_name,
                     state=signal.regime_state,
                     confidence=signal.confidence,
@@ -328,7 +328,7 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
                 # Log signal generation
                 self.logger.log_signal_generation(
                     ticker=tick,
-                    timestamp=datetime.now(),
+                    timestamp=self.Time,
                     regime=signal.regime_name,
                     allocation=signal.allocation,
                     direction=signal.direction,
@@ -350,7 +350,7 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
                     if old_regime != self.current_regime and old_regime is not None:
                         self.logger.log_regime_change(
                             ticker=tick,
-                            timestamp=datetime.now(),
+                            timestamp=self.Time,
                             old_regime=old_regime,
                             new_regime=self.current_regime,
                             confidence=self.regime_confidence,
@@ -401,7 +401,7 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             )
             self.logger.log_position_update(
                 ticker=ticker,
-                timestamp=datetime.now(),
+                timestamp=self.Time,
                 old_allocation=old_alloc_pct,
                 new_allocation=signal.allocation,
                 portfolio_value=self.Portfolio.TotalPortfolioValue,
