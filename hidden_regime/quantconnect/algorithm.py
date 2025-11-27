@@ -33,6 +33,7 @@ except ImportError:
 from .config import QuantConnectConfig, RegimeTradingConfig
 from .data_adapter import QuantConnectDataAdapter
 from .signal_adapter import RegimeSignalAdapter, TradingSignal
+from .logging import RegimeDetectionLogger
 
 
 class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
@@ -83,6 +84,9 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
         # Caching and retraining
         self._last_retrain: Dict[str, datetime] = {}
         self._retrain_enabled: bool = True
+
+        # Comprehensive logging
+        self.logger = RegimeDetectionLogger(self)
 
     def initialize_regime_detection(
         self,
@@ -159,6 +163,15 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
         warmup_period = timedelta(days=lookback_days)
         self.SetWarmUp(warmup_period)
 
+        # Log initialization
+        self.logger.log_regime_setup(
+            ticker=ticker,
+            n_states=n_states,
+            lookback_days=lookback_days,
+            retrain_frequency=retrain_frequency,
+            allocations=regime_allocations or self._trading_config.regime_allocations,
+        )
+
         self.Debug(
             f"Initialized regime detection for {ticker}: "
             f"{n_states} states, {lookback_days} day lookback"
@@ -184,7 +197,12 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             # Skip if no bar data
             return
 
+        bar_time = None
+        bar_close = None
+
         if hasattr(bar, "Time"):
+            bar_time = bar.Time
+            bar_close = bar.Close
             adapter.add_bar(
                 time=bar.Time,
                 open_price=bar.Open,
@@ -195,16 +213,30 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             )
         elif isinstance(bar, dict):
             # For testing with dict objects
+            bar_time = bar.get("Time", datetime.now())
+            bar_close = bar.get("Close", 0)
             adapter.add_bar(
-                time=bar.get("Time", datetime.now()),
+                time=bar_time,
                 open_price=bar.get("Open", 0),
                 high=bar.get("High", 0),
                 low=bar.get("Low", 0),
-                close=bar.get("Close", 0),
+                close=bar_close,
                 volume=bar.get("Volume", 0),
             )
         else:
             self.Debug(f"Warning: Unexpected bar type: {type(bar)}")
+            return
+
+        # Log bar received
+        if bar_time and bar_close is not None:
+            self.logger.log_bar_received(ticker, bar_time, bar_close)
+
+        # Check readiness after receiving bar
+        if adapter.is_ready() and ticker in self._regime_pipelines:
+            if self._regime_pipelines[ticker]["pipeline"] is None:
+                self.logger.log_regime_readiness(
+                    ticker, len(adapter), ready=True
+                )
 
     def update_regime(self, ticker: Optional[str] = None) -> bool:
         """
@@ -251,6 +283,10 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             pipeline = pipeline_info["pipeline"]
 
             if pipeline is None or self._should_retrain(tick):
+                # Log training event
+                reason = "initial" if pipeline is None else "scheduled retrain"
+                self.logger.log_pipeline_training(tick, datetime.now(), reason=reason)
+
                 # Create/recreate pipeline
                 pipeline = hr.create_financial_pipeline(
                     ticker=tick,
@@ -279,6 +315,26 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
                 signal_adapter = self._signal_adapters[tick]
                 signal = signal_adapter.from_pipeline_result(interpreter_output)
 
+                # Log inference result
+                self.logger.log_pipeline_inference(
+                    ticker=tick,
+                    timestamp=datetime.now(),
+                    regime=signal.regime_name,
+                    state=signal.regime_state,
+                    confidence=signal.confidence,
+                )
+
+                # Log signal generation
+                self.logger.log_signal_generation(
+                    ticker=tick,
+                    timestamp=datetime.now(),
+                    regime=signal.regime_name,
+                    allocation=signal.allocation,
+                    direction=signal.direction,
+                    strength=signal.strength,
+                    confidence=signal.confidence,
+                )
+
                 # Store signal
                 self._current_signals[tick] = signal
 
@@ -291,6 +347,13 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
 
                     # Call regime change handler
                     if old_regime != self.current_regime and old_regime is not None:
+                        self.logger.log_regime_change(
+                            ticker=tick,
+                            timestamp=datetime.now(),
+                            old_regime=old_regime,
+                            new_regime=self.current_regime,
+                            confidence=self.regime_confidence,
+                        )
                         self.on_regime_change(
                             old_regime=old_regime,
                             new_regime=self.current_regime,
@@ -328,6 +391,21 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             ...     if new_regime == "Bear":
             ...         self.Liquidate()
         """
+        # Log position update if we're trading
+        signal = self.get_regime_signal(ticker)
+        if signal and self._qc_config and self._qc_config.log_regime_changes:
+            old_allocation = self.Portfolio.Positions.get(ticker, None)
+            old_alloc_pct = (
+                old_allocation.Percentage if old_allocation else 0.0
+            )
+            self.logger.log_position_update(
+                ticker=ticker,
+                timestamp=datetime.now(),
+                old_allocation=old_alloc_pct,
+                new_allocation=signal.allocation,
+                portfolio_value=self.Portfolio.TotalPortfolioValue,
+            )
+
         if self._qc_config and self._qc_config.log_regime_changes:
             self.Log(
                 f"Regime change [{ticker}]: {old_regime} → {new_regime} "
