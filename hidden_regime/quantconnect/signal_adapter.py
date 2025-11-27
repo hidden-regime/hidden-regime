@@ -135,17 +135,47 @@ class RegimeSignalAdapter:
         Generate trading signal from regime detection.
 
         Args:
-            regime_name: Current regime name (e.g., "Bull", "Bear")
+            regime_name: Current regime name (e.g., "Bull", "Bear", "Bull-1", etc.)
             regime_state: Numeric regime state
             confidence: Detection confidence (0.0 to 1.0)
             timestamp: Signal timestamp
-            **metadata: Additional signal metadata
+            **metadata: Additional signal metadata (regime_type can infer allocation)
 
         Returns:
             TradingSignal object
         """
         # Get allocation for this regime
-        allocation = self.regime_allocations.get(regime_name, 0.0)
+        # First try exact match
+        allocation = self.regime_allocations.get(regime_name)
+
+        if allocation is None:
+            # Try fuzzy matching based on regime_type if available
+            regime_type = metadata.get("regime_type", "").lower()
+
+            # Map regime types to allocations
+            type_to_allocation = {
+                "bullish": self.regime_allocations.get("Bull", 1.0),
+                "bearish": self.regime_allocations.get("Bear", 0.0),
+                "sideways": self.regime_allocations.get("Sideways", 0.5),
+                "crisis": self.regime_allocations.get("Crisis", 0.0),
+                "high": self.regime_allocations.get("Bull", 1.0),  # Alternative labels
+                "low": self.regime_allocations.get("Bear", 0.0),
+                "medium": self.regime_allocations.get("Sideways", 0.5),
+            }
+
+            allocation = type_to_allocation.get(regime_type)
+
+            # If still not found, use regime_type to determine direction
+            if allocation is None:
+                # Last resort: infer from regime_type
+                if "bullish" in regime_type or "high" in regime_type:
+                    allocation = self.regime_allocations.get("Bull", 1.0)
+                elif "bearish" in regime_type or "crisis" in regime_type:
+                    allocation = self.regime_allocations.get("Bear", 0.0)
+                elif "sideways" in regime_type or "medium" in regime_type:
+                    allocation = self.regime_allocations.get("Sideways", 0.5)
+                else:
+                    allocation = 0.0  # Default to cash if unclear
 
         # Determine direction
         if allocation > 0.1:
@@ -199,9 +229,19 @@ class RegimeSignalAdapter:
         latest = result_df.iloc[-1]
 
         # Extract regime information
-        regime_name = latest.get("regime_name", "Unknown")
-        regime_state = int(latest.get("regime_state", -1))
-        confidence = float(latest.get("confidence", 0.0))
+        # The interpreter outputs 'regime_label' not 'regime_name'
+        regime_name = latest.get("regime_label", latest.get("regime_name", "Unknown"))
+
+        # Use 'regime_state' if available, otherwise fall back to 'predicted_state' or 'state'
+        if "regime_state" in latest:
+            regime_state = int(latest.get("regime_state", -1))
+        elif "state" in latest:
+            regime_state = int(latest.get("state", -1))
+        else:
+            regime_state = int(latest.get("predicted_state", -1))
+
+        # The interpreter outputs 'regime_confidence' not 'confidence'
+        confidence = float(latest.get("regime_confidence", latest.get("confidence", 0.0)))
         timestamp = result_df.index[-1]
 
         # Extract additional metadata
@@ -212,6 +252,11 @@ class RegimeSignalAdapter:
             "win_rate",
             "avg_regime_duration",
             "regime_strength",
+            "regime_type",
+            "days_in_regime",
+            "expected_return",
+            "expected_volatility",
+            "max_drawdown",
         ]
         for field in optional_fields:
             if field in latest:
