@@ -5,6 +5,9 @@
 .claude
 TODO*.md
 
+# Testing
+pytest.log
+
 # QC
 backtest_results/**
 
