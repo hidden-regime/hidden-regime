@@ -62,12 +62,7 @@ class RegimeDetectionLogger:
     def log_bar_received(self, ticker: str, timestamp: datetime, close: float) -> None:
         """Log when a new bar is received."""
         self.bars_received[ticker] = self.bars_received.get(ticker, 0) + 1
-        # Only log every 10 bars to avoid spam
-        if self.bars_received[ticker] % 10 == 0:
-            self.algo.Debug(
-                f"DATA: {ticker} bar #{self.bars_received[ticker]} "
-                f"@ {timestamp.date()} ${close:.2f}"
-            )
+        # DISABLED: Don't log bars to avoid spam in backtests
 
     def log_regime_readiness(self, ticker: str, bars_available: int, ready: bool) -> None:
         """Log when regime detection becomes ready."""
@@ -90,10 +85,7 @@ class RegimeDetectionLogger:
         confidence: float,
     ) -> None:
         """Log regime inference result for the day."""
-        self.algo.Debug(
-            f"INFER: {ticker} @ {timestamp.date()} "
-            f"Regime={regime} State={state} Confidence={confidence:.1%}"
-        )
+        # DISABLED: Don't log daily inferences to reduce spam
 
     def log_regime_change(
         self,
@@ -104,15 +96,11 @@ class RegimeDetectionLogger:
         confidence: float,
     ) -> None:
         """Log regime transition."""
-        self.algo.Debug("")
-        self.algo.Debug("!" * 80)
+        # Log regime changes (important events only)
         self.algo.Debug(
-            f"REGIME CHANGE: {ticker} @ {timestamp.date()}"
+            f"REGIME: {ticker} {old_regime} → {new_regime} "
+            f"(confidence: {confidence:.1%})"
         )
-        self.algo.Debug(f"  {old_regime} → {new_regime}")
-        self.algo.Debug(f"  Confidence: {confidence:.1%}")
-        self.algo.Debug("!" * 80)
-        self.algo.Debug("")
 
         # Track regime changes for analysis
         if ticker not in self.regimes_detected:
@@ -134,18 +122,7 @@ class RegimeDetectionLogger:
         confidence: float,
     ) -> None:
         """Log trading signal generation."""
-        # Handle enums
-        direction_str = (
-            direction.name if hasattr(direction, "name") else str(direction)
-        )
-        strength_str = strength.name if hasattr(strength, "name") else str(strength)
-
-        self.algo.Debug(
-            f"SIGNAL: {ticker} @ {timestamp.date()} "
-            f"{direction_str} ({strength_str}) "
-            f"Allocation={allocation:.1%} "
-            f"Confidence={confidence:.1%}"
-        )
+        # DISABLED: Don't log every daily signal to reduce spam
 
     def log_position_update(
         self,
