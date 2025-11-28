@@ -37,7 +37,7 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
         - Backtest period
         - Initial cash
         - Equity
-        - Regime detection
+        - Regime detection with adaptive parameter updating
 
         Parameters:
         -----------
@@ -55,6 +55,14 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
             Historical data window for HMM training (default: 252)
         min_confidence : float
             Minimum confidence threshold for regime signals (default: 0.6)
+        retrain_frequency : str
+            Schedule-based retraining safety net ('daily', 'weekly', 'monthly', 'never')
+            Works alongside automatic adaptive re-fitting which continuously updates
+            parameters based on drift detection. Default: "weekly"
+
+            NOTE: Adaptive re-fitting happens automatically when drift is detected.
+            retrain_frequency is a safety mechanism to ensure model refresh on a schedule
+            regardless of drift signals. Recommended: "weekly" for production trading.
         """
         # === EASY PARAMETERS TO MODIFY ===
         ticker = self.GetParameter("ticker", "SPY")
@@ -67,7 +75,7 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
         initial_cash = float(self.GetParameter("cash", 100000))
 
         n_states = int(self.GetParameter("n_states", 3))
-        lookback_days = int(self.GetParameter("lookback_days", 252))
+        lookback_days = int(self.GetParameter("lookback_days", 2*252))
         min_confidence = float(self.GetParameter("min_confidence", 0.6))
         random_seed = int(self.GetParameter("random_seed", 4242))
 
@@ -75,6 +83,8 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
         bull_allocation = float(self.GetParameter("bull_allocation", 1.0))
         bear_allocation = float(self.GetParameter("bear_allocation", 0.0))
         sideways_allocation = float(self.GetParameter("sideways_allocation", 0.5))
+
+        retrain_frequency = self.GetParameter("retrain_frequency", "weekly")
 
         # === BACKTEST CONFIGURATION ===
         self.SetStartDate(start_year, start_month, start_day)
@@ -84,12 +94,21 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
         # Add equity
         self.symbol = self.AddEquity(ticker, Resolution.Daily).Symbol  # noqa: F405
 
-        # Initialize regime detection
+        # Initialize regime detection with adaptive parameter updating
+        # The system uses TWO mechanisms for parameter updates:
+        # 1. Adaptive re-fitting (automatic): Updates parameters in real-time when drift detected
+        #    - Emission-only updates (~1% cost) for volatility changes
+        #    - Transition-only updates (~5% cost) for persistence changes
+        #    - Full retrains (~100% cost) for major structural changes
+        # 2. Retraining schedule (safety net): Ensures model refresh regardless of drift signals
+        #    - Prevents over-reliance on drift detection alone
+        #    - Provides baseline refresh frequency (daily/weekly/monthly/never)
+        # See: hidden_regime/models/hmm.py for adaptive orchestration details
         self.initialize_regime_detection(
             ticker=ticker,
             n_states=n_states,
             lookback_days=lookback_days,
-            retrain_frequency="weekly",
+            retrain_frequency=retrain_frequency, 
             regime_allocations={
                 "Bull": bull_allocation,
                 "Bear": bear_allocation,

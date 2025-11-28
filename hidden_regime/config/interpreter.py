@@ -29,6 +29,10 @@ class InterpreterConfiguration:
             If provided, must have exactly n_states labels
         acknowledge_override: Must be True if using force_regime_labels
             Prevents accidental overrides without explicit acknowledgment
+        use_anchored_interpretation: Enable anchored regime interpretation
+            with slowly-adapting anchor points (default True)
+        anchor_update_rate: Exponential smoothing rate for anchor updates (0.0-1.0)
+            Higher = faster adaptation (default 0.01 for moderate settings)
     """
 
     n_states: int
@@ -49,6 +53,10 @@ class InterpreterConfiguration:
     # Manual label override
     force_regime_labels: Optional[List[str]] = None
     acknowledge_override: bool = False
+
+    # Anchored interpretation parameters
+    use_anchored_interpretation: bool = True
+    anchor_update_rate: float = 0.01
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
@@ -84,6 +92,18 @@ class InterpreterConfiguration:
         if self.min_regime_days < 1:
             raise ValueError(f"min_regime_days must be >= 1, got {self.min_regime_days}")
 
+        # Validate anchored interpretation parameters
+        if not isinstance(self.use_anchored_interpretation, bool):
+            raise ValueError(
+                f"use_anchored_interpretation must be bool, "
+                f"got {type(self.use_anchored_interpretation)}"
+            )
+        if not (0.0 <= self.anchor_update_rate <= 1.0):
+            raise ValueError(
+                f"anchor_update_rate must be in [0.0, 1.0], "
+                f"got {self.anchor_update_rate}"
+            )
+
     def get_regime_color(self, regime_label: str) -> str:
         """Get color for a specific regime label.
 
@@ -114,6 +134,8 @@ class InterpreterConfiguration:
             "regime_colors": self.regime_colors,
             "force_regime_labels": self.force_regime_labels,
             "acknowledge_override": self.acknowledge_override,
+            "use_anchored_interpretation": self.use_anchored_interpretation,
+            "anchor_update_rate": self.anchor_update_rate,
         }
 
     @classmethod

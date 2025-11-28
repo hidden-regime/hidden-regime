@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 
 from hidden_regime.config.interpreter import InterpreterConfiguration
+from hidden_regime.interpreter.anchored import AnchoredInterpreter
 from hidden_regime.interpreter.base import BaseInterpreter
 from hidden_regime.utils.exceptions import ValidationError
 
@@ -53,6 +54,13 @@ class FinancialInterpreter(BaseInterpreter):
         self._emission_covs: Optional[np.ndarray] = None
         self._is_multivariate: bool = False
         self._feature_names: List[str] = []
+
+        # Anchored interpretation (for stable regime labels)
+        self._anchored_interpreter: Optional[AnchoredInterpreter] = None
+        if config.use_anchored_interpretation:
+            self._anchored_interpreter = AnchoredInterpreter(
+                anchor_update_rate=config.anchor_update_rate
+            )
 
         # Try to import performance analyzer
         try:
@@ -116,6 +124,9 @@ class FinancialInterpreter(BaseInterpreter):
         # Add duration analysis
         interpreted = self._add_duration_analysis(interpreted)
 
+        # Add regime stability metrics
+        interpreted = self._add_regime_stability_metrics(interpreted)
+
         # Add return analysis if raw data available
         if raw_data is not None and 'log_return' in raw_data.columns:
             interpreted = self._add_return_analysis(interpreted)
@@ -139,6 +150,7 @@ class FinancialInterpreter(BaseInterpreter):
 
         Implements BaseInterpreter abstract method.
         Supports both univariate and multivariate model outputs.
+        Optionally uses anchored interpretation for stable, slowly-adapting labels.
 
         Args:
             model_output: Model output including emission parameters
@@ -164,13 +176,81 @@ class FinancialInterpreter(BaseInterpreter):
         if "emission_means" not in model_output.columns:
             return self._default_labels(self.config.n_states)
 
-        # Use data-driven labeling based on emission parameters
+        # Get base data-driven labels
         if self.config.interpretation_method == "data_driven":
-            return self._data_driven_labels(model_output)
+            base_labels = self._data_driven_labels(model_output)
         elif self.config.interpretation_method == "threshold":
-            return self._threshold_based_labels(model_output)
+            base_labels = self._threshold_based_labels(model_output)
         else:
-            return self._default_labels(self.config.n_states)
+            base_labels = self._default_labels(self.config.n_states)
+
+        # Apply anchored interpretation if enabled
+        if self._anchored_interpreter is not None:
+            first_row = model_output.iloc[0]
+            emission_means = first_row.get("emission_means")
+            emission_stds = first_row.get("emission_stds")
+
+            if emission_means is not None and emission_stds is not None:
+                # Use anchored interpreter to map states to regimes
+                anchored_labels = self._apply_anchored_interpretation(
+                    emission_means=np.array(emission_means),
+                    emission_stds=np.array(emission_stds),
+                    base_labels=base_labels
+                )
+                return anchored_labels
+
+        return base_labels
+
+    def _apply_anchored_interpretation(
+        self,
+        emission_means: np.ndarray,
+        emission_stds: np.ndarray,
+        base_labels: Dict[int, str]
+    ) -> Dict[int, str]:
+        """Apply anchored interpretation to stabilize regime labels.
+
+        Uses AnchoredInterpreter to map HMM states to regime labels based on
+        KL divergence to slowly-adapting anchors. This provides stable labels
+        even as model parameters drift through online updates.
+
+        Args:
+            emission_means: Array of emission means for each state
+            emission_stds: Array of emission standard deviations for each state
+            base_labels: Data-driven regime labels from _data_driven_labels
+
+        Returns:
+            Anchored regime labels Dict[state_id -> regime_label]
+        """
+        anchored_labels = {}
+
+        for state_id in range(len(emission_means)):
+            state_mean = float(emission_means[state_id])
+            state_std = float(emission_stds[state_id])
+
+            # Compute KL divergence to each regime anchor
+            kl_scores = {}
+            for regime_name, anchor in self._anchored_interpreter.regime_anchors.items():
+                kl_dist = self._anchored_interpreter._gaussian_kl_divergence(
+                    mean1=state_mean,
+                    std1=state_std,
+                    mean2=anchor.mean,
+                    std2=anchor.std
+                )
+                kl_scores[regime_name] = kl_dist
+
+            # Assign to regime with minimum KL divergence
+            best_regime = min(kl_scores, key=kl_scores.get)
+
+            # Update anchor slowly toward observed state
+            self._anchored_interpreter._update_anchor(
+                best_regime,
+                state_mean=state_mean,
+                state_std=state_std
+            )
+
+            anchored_labels[state_id] = best_regime
+
+        return anchored_labels
 
     def _data_driven_labels(self, model_output: pd.DataFrame) -> Dict[int, str]:
         """Assign labels based on actual regime characteristics.
@@ -432,6 +512,119 @@ class FinancialInterpreter(BaseInterpreter):
                 lambda row: max(1, row["expected_duration"] - row["days_in_regime"]),
                 axis=1
             )
+
+        return interpretation
+
+    def _add_regime_stability_metrics(self, interpretation: pd.DataFrame) -> pd.DataFrame:
+        """Add regime stability and transition metrics.
+
+        Computes diagnostic metrics to assess market coherence and inform position sizing:
+        - stability_score: Overall market coherence (0-1, >0.8=stable)
+        - transition_rate_recent: % of days with regime changes (20-day window)
+        - regime_transitions_all: Binary indicator of regime change
+        - expected_regime_persistence: Expected days for current regime type
+
+        Args:
+            interpretation: Interpreted regime data
+
+        Returns:
+            DataFrame with stability metrics added
+        """
+        if "days_in_regime" not in interpretation.columns:
+            return interpretation
+
+        # Mark regime transitions
+        interpretation["regime_transitions_all"] = (
+            interpretation["state"] != interpretation["state"].shift(1)
+        ).astype(int)
+
+        # Calculate recent transition rate (20-day rolling window)
+        window = min(20, len(interpretation))
+        if window > 1:
+            rolling_transitions = (
+                interpretation["regime_transitions_all"]
+                .rolling(window=window, min_periods=1)
+                .sum()
+            )
+            interpretation["transition_rate_recent"] = (
+                rolling_transitions / window
+            )
+        else:
+            interpretation["transition_rate_recent"] = 0.0
+
+        # Calculate stability score (inverse of transition frequency)
+        # Formula: 1.0 / (1.0 + transitions_in_window)
+        # High score (>0.8): Stable regime, good for trend-following
+        # Medium score (0.5-0.8): Moderate conditions
+        # Low score (<0.3): Regime collapse, go defensive
+        transitions_window = interpretation["regime_transitions_all"].rolling(
+            window=window, min_periods=1
+        ).sum()
+        interpretation["stability_score"] = 1.0 / (1.0 + transitions_window)
+
+        # Calculate expected regime persistence based on historical data
+        # Uses the current regime's observed persistence
+        expected_durations = {}
+        for state_idx in range(self.config.n_states):
+            state_episodes = interpretation[interpretation["state"] == state_idx][
+                "days_in_regime"
+            ]
+            if len(state_episodes) > 0:
+                # Use median persistence for this regime type
+                expected_durations[state_idx] = float(state_episodes.median())
+            else:
+                expected_durations[state_idx] = 10.0
+
+        interpretation["expected_regime_persistence"] = interpretation["state"].map(
+            expected_durations
+        )
+
+        # Calculate regime fit quality using KL divergence to anchor
+        # (if anchored interpretation is enabled)
+        if self._anchored_interpreter is not None and self._emission_means is not None:
+            fit_qualities = []
+            for i, row in interpretation.iterrows():
+                state_idx = int(row["state"])
+                if state_idx < len(self._emission_means):
+                    state_mean = float(self._emission_means[state_idx])
+                    state_std = float(self._emission_stds[state_idx]) if self._emission_stds is not None else 0.01
+
+                    # Get KL distance to the assigned regime anchor
+                    regime_label = row.get("regime_label", "Unknown")
+                    anchor = self._anchored_interpreter.regime_anchors.get(regime_label)
+
+                    if anchor is not None:
+                        kl_dist = self._anchored_interpreter._gaussian_kl_divergence(
+                            mean1=state_mean,
+                            std1=state_std,
+                            mean2=anchor.mean,
+                            std2=anchor.std
+                        )
+                        # Confidence is inverse of KL distance
+                        regime_fit_quality = 1.0 / (1.0 + kl_dist)
+                    else:
+                        regime_fit_quality = 0.5
+                else:
+                    regime_fit_quality = 0.5
+
+                fit_qualities.append(regime_fit_quality)
+
+            interpretation["regime_fit_quality"] = fit_qualities
+
+        # Add interpretation for stability score
+        def stability_interpretation(score):
+            if score > 0.8:
+                return "Stable"
+            elif score > 0.5:
+                return "Moderate"
+            elif score > 0.3:
+                return "Low"
+            else:
+                return "Collapse"
+
+        interpretation["stability_interpretation"] = interpretation[
+            "stability_score"
+        ].apply(stability_interpretation)
 
         return interpretation
 
@@ -1104,3 +1297,52 @@ class FinancialInterpreter(BaseInterpreter):
 
         plt.tight_layout()
         return fig
+
+    def get_anchored_interpretation_status(self) -> Dict[str, Any]:
+        """Get status of anchored interpretation system.
+
+        Returns:
+            Dictionary with anchored interpretation status and anchor parameters
+        """
+        if self._anchored_interpreter is None:
+            return {"enabled": False, "status": "Anchored interpretation disabled"}
+
+        status = {
+            "enabled": True,
+            "anchor_update_rate": self._anchored_interpreter.anchor_update_rate,
+            "regime_anchors": {}
+        }
+
+        # Add regime anchor information
+        for regime_name, anchor in self._anchored_interpreter.regime_anchors.items():
+            status["regime_anchors"][regime_name] = {
+                "mean": float(anchor.mean),
+                "std": float(anchor.std)
+            }
+
+        # Add anchor update history summary
+        status["anchor_update_history_counts"] = {
+            regime_name: len(history)
+            for regime_name, history in self._anchored_interpreter.anchor_update_history.items()
+        }
+
+        return status
+
+    def reset_anchored_interpretation(self) -> None:
+        """Reset anchored interpretation system to initial state.
+
+        This clears all anchor update history and resets to default anchors.
+        """
+        if self._anchored_interpreter is not None:
+            # Clear the update history
+            for regime_name in self._anchored_interpreter.anchor_update_history:
+                self._anchored_interpreter.anchor_update_history[regime_name].clear()
+
+            # Reset anchors to default values
+            from hidden_regime.interpreter.anchored import RegimeAnchor
+            self._anchored_interpreter.regime_anchors = {
+                'BULLISH': RegimeAnchor(mean=0.0010, std=0.008),
+                'BEARISH': RegimeAnchor(mean=-0.0008, std=0.012),
+                'SIDEWAYS': RegimeAnchor(mean=0.0001, std=0.006),
+                'CRISIS': RegimeAnchor(mean=-0.0030, std=0.025),
+            }

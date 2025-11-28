@@ -127,6 +127,12 @@ class HiddenMarkovModel(ModelComponent):
             "fit_observations": None,  # Store fit data for comparison
         }
 
+        # Adaptive retraining scheduling variables
+        self.days_since_emission_update = 0  # Days since last emission-only update
+        self.days_since_transition_update = 0  # Days since last transition-only update
+        self.days_since_full_retrain = 0  # Days since last full retrain
+        self.days_since_last_update = 0  # Days since any update (emission, transition, or full)
+
         # Algorithm implementation
         if HMM_UTILS_AVAILABLE:
             self._algorithms = HMMAlgorithms()
@@ -585,7 +591,7 @@ class HiddenMarkovModel(ModelComponent):
 
         return results
 
-    def update(self, observations: pd.DataFrame) -> pd.DataFrame:
+    def update(self, observations: pd.DataFrame, adaptive_config: Optional['AdaptiveRetrainingConfig'] = None) -> pd.DataFrame:
         """
         Process observations with adaptive update strategy.
 
@@ -593,9 +599,11 @@ class HiddenMarkovModel(ModelComponent):
         - "static": Fit once, predict only
         - "incremental": Smooth online parameter updates
         - "adaptive_refit": Monitor quality, refit when needed
+        - "adaptive_hierarchical": Adaptive with drift monitoring and hierarchical updates
 
         Args:
             observations: Input observations DataFrame
+            adaptive_config: Optional AdaptiveRetrainingConfig for hierarchical adaptive mode
 
         Returns:
             DataFrame with predictions
@@ -614,6 +622,11 @@ class HiddenMarkovModel(ModelComponent):
             self.training_history_["fit_observations"] = observations[
                 self.config.observed_signal
             ].values
+
+            # Initialize adaptive retraining if configured
+            if adaptive_config is not None and self.config.update_strategy == "adaptive_hierarchical":
+                self._initialize_adaptive_retraining(adaptive_config)
+
             return self.predict(observations)
 
         # Extract new data
@@ -685,9 +698,177 @@ class HiddenMarkovModel(ModelComponent):
 
             return self.predict(observations)
 
+        # Strategy: Adaptive Hierarchical - drift monitoring + hierarchical updates
+        elif self.config.update_strategy == "adaptive_hierarchical":
+            if adaptive_config is None:
+                raise ValueError(
+                    "adaptive_hierarchical strategy requires adaptive_config parameter"
+                )
+
+            # Get predictions before any updates
+            result = self.predict(observations)
+
+            # Update adaptive retraining orchestration
+            result = self._orchestrate_adaptive_retraining(
+                observations, result, adaptive_config
+            )
+
+            return result
+
         else:
             # Unknown strategy - default to static
             return self.predict(observations)
+
+    def _initialize_adaptive_retraining(self, adaptive_config: 'AdaptiveRetrainingConfig') -> None:
+        """Initialize adaptive retraining system with drift monitoring and scheduling.
+
+        Args:
+            adaptive_config: AdaptiveRetrainingConfig with monitoring and retraining policies
+        """
+        from ..monitoring.drift_detector import ParameterMonitor
+        from ..monitoring.retraining_policy import RetrainingPolicy
+
+        # Initialize drift detection
+        self._parameter_monitor = ParameterMonitor(
+            slrt_threshold=adaptive_config.slrt_threshold,
+            kl_hard_threshold=adaptive_config.kl_hard_threshold,
+            kl_soft_threshold=adaptive_config.kl_soft_threshold
+        )
+
+        # Initialize retraining policy
+        self._retraining_policy = RetrainingPolicy(
+            adaptive_config.update_schedule
+        )
+
+        # Store config and old model for comparison
+        self._adaptive_config = adaptive_config
+        self._old_model_for_comparison = None
+
+        # Initialize training history for adaptive mode
+        self.training_history_["adaptive_decisions"] = []
+        self.training_history_["drift_assessments"] = []
+
+    def _orchestrate_adaptive_retraining(
+        self,
+        observations: pd.DataFrame,
+        predictions: pd.DataFrame,
+        adaptive_config: 'AdaptiveRetrainingConfig'
+    ) -> pd.DataFrame:
+        """Orchestrate adaptive retraining: drift monitoring + update scheduling.
+
+        Decision flow:
+        1. Assess parameter drift using ParameterMonitor (SLRT, KL divergence)
+        2. Check RetrainingPolicy for scheduled updates
+        3. Execute appropriate update (emission_only, transition_only, or full_retrain)
+        4. Record decision and metrics
+
+        Args:
+            observations: Input observations
+            predictions: Current predictions
+            adaptive_config: Adaptive retraining configuration
+
+        Returns:
+            Updated predictions with adaptive retraining metadata
+        """
+        from ..monitoring.drift_detector import ParameterMonitor
+        from ..monitoring.retraining_policy import RetrainingPolicy
+
+        # Lazy initialization if needed
+        if not hasattr(self, '_parameter_monitor'):
+            self._initialize_adaptive_retraining(adaptive_config)
+
+        new_returns = observations[self.config.observed_signal].values
+
+        # Step 1: Assess drift by comparing current model to stored model
+        drift_decision = 'continue'
+        drift_metrics = {}
+
+        if self._old_model_for_comparison is not None:
+            drift_decision, drift_metrics = self._parameter_monitor.assess_drift(
+                self._old_model_for_comparison,
+                self,  # Current model
+                new_returns
+            )
+
+        # Step 2: Check retraining policy for update decision
+        update_type, reason = self._retraining_policy.should_update(
+            drift_decision,
+            drift_metrics
+        )
+
+        # Step 3: Execute update if needed
+        if update_type == 'emission_only':
+            try:
+                cost_ratio = self.update_emissions_only(observations)
+                self._retraining_policy.record_emission_update()
+                update_status = f"emission_only (cost={cost_ratio:.3f})"
+            except Exception as e:
+                update_status = f"emission_only_failed: {str(e)}"
+                warnings.warn(f"Emission-only update failed: {e}")
+
+        elif update_type == 'transition_only':
+            try:
+                cost_ratio = self.update_transitions_only(observations)
+                self._retraining_policy.record_transition_update()
+                update_status = f"transition_only (cost={cost_ratio:.3f})"
+            except Exception as e:
+                update_status = f"transition_only_failed: {str(e)}"
+                warnings.warn(f"Transition-only update failed: {e}")
+
+        elif update_type == 'full_retrain':
+            try:
+                cost_ratio = self.full_retrain_with_informed_prior(observations)
+                self._retraining_policy.record_full_retrain()
+                update_status = f"full_retrain (cost={cost_ratio:.3f})"
+            except Exception as e:
+                update_status = f"full_retrain_failed: {str(e)}"
+                warnings.warn(f"Full retrain failed: {e}")
+
+        else:  # 'none'
+            update_status = "none"
+
+        # Record decision in history
+        decision_record = {
+            "timestamp": datetime.now(),
+            "drift_decision": drift_decision,
+            "drift_metrics": drift_metrics,
+            "retraining_decision": update_type,
+            "reason": reason,
+            "update_status": update_status,
+            "policy_status": self._retraining_policy.get_status()
+        }
+        self.training_history_["adaptive_decisions"].append(decision_record)
+
+        # Store current model as reference for next comparison
+        # (shallow copy is sufficient since we only compare parameters)
+        self._old_model_for_comparison = self._create_model_snapshot()
+
+        # Re-predict with updated model if update was performed
+        if update_type != 'none':
+            predictions = self.predict(observations)
+
+        # Add adaptive metadata to predictions
+        predictions['adaptive_update_type'] = update_type
+        predictions['drift_decision'] = drift_decision
+        if 'max_kl_divergence' in drift_metrics:
+            predictions['kl_divergence'] = drift_metrics['max_kl_divergence']
+
+        return predictions
+
+    def _create_model_snapshot(self) -> 'HiddenMarkovModel':
+        """Create a shallow snapshot of current model for comparison.
+
+        Returns:
+            Object with current model parameters for drift comparison
+        """
+        class ModelSnapshot:
+            """Minimal snapshot for drift comparison."""
+            def __init__(self, model):
+                self.n_states = model.n_states
+                self.means_ = model.emission_means_.copy() if hasattr(model, 'emission_means_') else model.means_.copy()
+                self.covars_ = model.emission_covs_.copy() if hasattr(model, 'emission_covs_') else model.covars_.copy()
+
+        return ModelSnapshot(self)
 
     def plot(self, ax=None, **kwargs) -> plt.Figure:
         """
@@ -2800,4 +2981,376 @@ class HiddenMarkovModel(ModelComponent):
                     else None
                 ),
             },
+        }
+
+    # ========================================================================
+    # Hierarchical Update Methods (Tier 3: Adaptive Retraining)
+    # ========================================================================
+
+    def update_emissions_only(self, observations: pd.DataFrame) -> Dict[str, float]:
+        """
+        Update emission parameters (means and stds) while keeping transitions fixed.
+
+        Cost: ~1% of full retrain (M-step only for emission parameters).
+
+        This method performs a partial EM update on emission parameters while
+        keeping the transition matrix and initial probabilities constant. Useful for
+        rapid adaptation when only return distributions shift, not regime structure.
+
+        Args:
+            observations: DataFrame with observed signal column
+
+        Returns:
+            Dict with update metrics:
+            - 'means_change': L2 norm of mean parameter changes
+            - 'stds_change': L2 norm of std parameter changes
+            - 'total_change': Combined parameter change magnitude
+            - 'log_likelihood': New model likelihood on observations
+            - 'cost_ratio': Estimated cost relative to full retrain (should be ~0.01)
+
+        Raises:
+            ValueError: If model not fitted or signal column missing
+        """
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before emission-only update")
+
+        if self.config.observed_signal not in observations.columns:
+            raise ValueError(f"Signal '{self.config.observed_signal}' not in observations")
+
+        # Extract observations
+        returns = observations[self.config.observed_signal].values
+        returns = returns[~np.isnan(returns)]
+
+        if len(returns) == 0:
+            raise ValueError("No valid observations for update")
+
+        # Store old parameters for comparison
+        old_means = self.emission_means_.copy()
+        old_stds = self.emission_stds_.copy()
+
+        # Forward-backward pass (E-step only)
+        if self.is_multivariate_:
+            # Multivariate path
+            gamma, xi, log_likelihood = self._algorithms.forward_backward_algorithm_multivariate(
+                returns, self.initial_probs_, self.transition_matrix_,
+                self.emission_means_, self.emission_covs_
+            )
+        else:
+            # Univariate path
+            emission_params = np.column_stack([self.emission_means_, self.emission_stds_])
+            gamma, xi, log_likelihood = self._algorithms.forward_backward_algorithm(
+                returns, self.initial_probs_, self.transition_matrix_, emission_params
+            )
+
+        # M-step for emissions only
+        T = len(returns)
+        gamma_normalized = gamma / np.sum(gamma, axis=1, keepdims=True)
+
+        state_weights = np.sum(gamma_normalized, axis=0)
+        for k in range(self.n_states):
+            if state_weights[k] > 0:
+                # Update means
+                self.emission_means_[k] = (
+                    np.sum(gamma_normalized[:, k] * returns) / state_weights[k]
+                )
+                # Update stds
+                self.emission_stds_[k] = np.sqrt(
+                    np.sum(gamma_normalized[:, k] * (returns - self.emission_means_[k]) ** 2)
+                    / state_weights[k]
+                )
+                # Ensure minimum variance
+                self.emission_stds_[k] = max(self.emission_stds_[k], self.config.min_variance)
+
+        # Calculate parameter changes
+        means_change = np.linalg.norm(self.emission_means_ - old_means)
+        stds_change = np.linalg.norm(self.emission_stds_ - old_stds)
+        total_change = means_change + stds_change
+
+        # Log update
+        update_record = {
+            "type": "emission_only",
+            "observation_count": len(returns),
+            "timestamp": datetime.now().isoformat(),
+            "parameter_changes": {
+                "means_change": float(means_change),
+                "stds_change": float(stds_change),
+                "total_change": float(total_change),
+            },
+            "log_likelihood": float(log_likelihood),
+            "cost_ratio": 0.01,  # Estimated: ~1% of full retrain cost
+        }
+        self.training_history_["update_history"].append(update_record)
+
+        # Update scheduling counters
+        self.days_since_emission_update = 0
+        self.days_since_last_update = 0
+
+        return {
+            "means_change": float(means_change),
+            "stds_change": float(stds_change),
+            "total_change": float(total_change),
+            "log_likelihood": float(log_likelihood),
+            "cost_ratio": 0.01,
+        }
+
+    def update_transitions_only(self, observations: pd.DataFrame) -> Dict[str, float]:
+        """
+        Update transition parameters while keeping emissions fixed.
+
+        Cost: ~5% of full retrain (M-step only for transition matrix).
+
+        This method performs a partial EM update on the transition matrix while
+        keeping emission parameters (means and stds) constant. Useful when regime
+        persistence or structure changes without return distributions shifting.
+
+        Args:
+            observations: DataFrame with observed signal column
+
+        Returns:
+            Dict with update metrics:
+            - 'transition_change': L2 norm of transition matrix changes
+            - 'persistence_change': Change in regime persistence (diagonal values)
+            - 'log_likelihood': New model likelihood on observations
+            - 'cost_ratio': Estimated cost relative to full retrain (should be ~0.05)
+
+        Raises:
+            ValueError: If model not fitted or signal column missing
+        """
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before transition-only update")
+
+        if self.config.observed_signal not in observations.columns:
+            raise ValueError(f"Signal '{self.config.observed_signal}' not in observations")
+
+        # Extract observations
+        returns = observations[self.config.observed_signal].values
+        returns = returns[~np.isnan(returns)]
+
+        if len(returns) == 0:
+            raise ValueError("No valid observations for update")
+
+        # Store old parameters for comparison
+        old_transitions = self.transition_matrix_.copy()
+        old_persistence = np.diag(self.transition_matrix_).copy()
+
+        # Forward-backward pass (E-step only)
+        if self.is_multivariate_:
+            gamma, xi, log_likelihood = self._algorithms.forward_backward_algorithm_multivariate(
+                returns, self.initial_probs_, self.transition_matrix_,
+                self.emission_means_, self.emission_covs_
+            )
+        else:
+            emission_params = np.column_stack([self.emission_means_, self.emission_stds_])
+            gamma, xi, log_likelihood = self._algorithms.forward_backward_algorithm(
+                returns, self.initial_probs_, self.transition_matrix_, emission_params
+            )
+
+        # M-step for transitions only
+        T = len(returns)
+        gamma_normalized = gamma / np.sum(gamma, axis=1, keepdims=True)
+
+        # Use the xi from forward-backward (if available)
+        # Recalculate to be sure, using the standard Baum-Welch formula
+        xi_numerator = np.zeros((self.n_states, self.n_states))
+        xi_denominator = np.zeros(self.n_states)
+
+        for t in range(T - 1):
+            for i in range(self.n_states):
+                xi_denominator[i] += gamma_normalized[t, i]
+                for j in range(self.n_states):
+                    # Standard Baum-Welch: ξ(i,j) expectation
+                    xi_numerator[i, j] += (
+                        gamma_normalized[t, i]
+                        * self.transition_matrix_[i, j]
+                        * self._emission_probability(returns[t + 1])[j]
+                    )
+
+        # Normalize to get new transition matrix
+        # Avoid division by zero
+        xi_denominator = np.where(xi_denominator > 0, xi_denominator, 1e-10)
+        for i in range(self.n_states):
+            self.transition_matrix_[i, :] = xi_numerator[i, :] / xi_denominator[i]
+            # Ensure row sums to 1 (row stochastic)
+            row_sum = np.sum(self.transition_matrix_[i, :])
+            if row_sum > 0:
+                self.transition_matrix_[i, :] /= row_sum
+
+        # Calculate parameter changes
+        transition_change = np.linalg.norm(self.transition_matrix_ - old_transitions)
+        new_persistence = np.diag(self.transition_matrix_)
+        persistence_change = np.linalg.norm(new_persistence - old_persistence)
+
+        # Log update
+        update_record = {
+            "type": "transition_only",
+            "observation_count": len(returns),
+            "timestamp": datetime.now().isoformat(),
+            "parameter_changes": {
+                "transition_change": float(transition_change),
+                "persistence_change": float(persistence_change),
+            },
+            "log_likelihood": float(log_likelihood),
+            "cost_ratio": 0.05,  # Estimated: ~5% of full retrain cost
+        }
+        self.training_history_["update_history"].append(update_record)
+
+        # Update scheduling counters
+        self.days_since_transition_update = 0
+        self.days_since_last_update = 0
+
+        return {
+            "transition_change": float(transition_change),
+            "persistence_change": float(persistence_change),
+            "log_likelihood": float(log_likelihood),
+            "cost_ratio": 0.05,
+        }
+
+    def full_retrain_with_informed_prior(self, observations: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Full Baum-Welch retrain using current parameters as informed prior.
+
+        Cost: 100% (full EM algorithm).
+
+        This method performs a complete EM retrain, starting from the current
+        parameter values as an informed prior. More stable than random initialization
+        when adapting existing models.
+
+        The retrain preserves the overall regime structure while allowing all
+        parameters (emissions, transitions, initial probs) to adapt.
+
+        Args:
+            observations: DataFrame with observed signal column
+
+        Returns:
+            Dict with retrain metrics:
+            - 'converged': Whether EM converged
+            - 'iterations': Number of EM iterations
+            - 'log_likelihood': Final log-likelihood
+            - 'means_change': Change in emission means from start to end
+            - 'transitions_change': Change in transition matrix
+            - 'training_time': Wall-clock time in seconds
+
+        Raises:
+            ValueError: If model not fitted or signal column missing
+        """
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before full retrain")
+
+        if self.config.observed_signal not in observations.columns:
+            raise ValueError(f"Signal '{self.config.observed_signal}' not in observations")
+
+        # Extract observations
+        returns = observations[self.config.observed_signal].values
+        returns = returns[~np.isnan(returns)]
+
+        if len(returns) == 0:
+            raise ValueError("No valid observations for retrain")
+
+        # Store initial parameters for comparison
+        initial_means = self.emission_means_.copy()
+        initial_transitions = self.transition_matrix_.copy()
+
+        start_time = datetime.now()
+
+        # Full Baum-Welch training
+        prev_log_likelihood = -np.inf
+        for iteration in range(self.config.max_iterations):
+            if self.is_multivariate_:
+                gamma, xi, log_likelihood = self._algorithms.forward_backward_algorithm_multivariate(
+                    returns, self.initial_probs_, self.transition_matrix_,
+                    self.emission_means_, self.emission_covs_
+                )
+            else:
+                emission_params = np.column_stack([self.emission_means_, self.emission_stds_])
+                gamma, xi, log_likelihood = self._algorithms.forward_backward_algorithm(
+                    returns, self.initial_probs_, self.transition_matrix_, emission_params
+                )
+
+            # Check convergence
+            if iteration > 0:
+                improvement = log_likelihood - prev_log_likelihood
+                if improvement < self.config.tolerance:
+                    self.training_history_["converged"] = True
+                    break
+
+            # M-step: Update all parameters using gamma and xi from E-step
+            # Note: _update_parameters expects (returns, alpha, beta) but we use gamma and xi
+            # The EM update formulas use gamma directly for emissions and xi for transitions
+            T = len(returns)
+            gamma_normalized = gamma / np.sum(gamma, axis=1, keepdims=True)
+
+            # Update initial probabilities
+            self.initial_probs_ = gamma_normalized[0] / np.sum(gamma_normalized[0])
+
+            # Update transition matrix
+            xi_numerator = np.zeros((self.n_states, self.n_states))
+            xi_denominator = np.zeros(self.n_states)
+            for t in range(T - 1):
+                for i in range(self.n_states):
+                    xi_denominator[i] += gamma_normalized[t, i]
+                    for j in range(self.n_states):
+                        xi_numerator[i, j] += (
+                            gamma_normalized[t, i]
+                            * self.transition_matrix_[i, j]
+                            * self._emission_probability(returns[t + 1])[j]
+                        )
+
+            xi_denominator = np.where(xi_denominator > 0, xi_denominator, 1e-10)
+            for i in range(self.n_states):
+                self.transition_matrix_[i, :] = xi_numerator[i, :] / xi_denominator[i]
+                row_sum = np.sum(self.transition_matrix_[i, :])
+                if row_sum > 0:
+                    self.transition_matrix_[i, :] /= row_sum
+
+            # Update emission parameters
+            state_weights = np.sum(gamma_normalized, axis=0)
+            for k in range(self.n_states):
+                if state_weights[k] > 0:
+                    self.emission_means_[k] = (
+                        np.sum(gamma_normalized[:, k] * returns) / state_weights[k]
+                    )
+                    self.emission_stds_[k] = np.sqrt(
+                        np.sum(gamma_normalized[:, k] * (returns - self.emission_means_[k]) ** 2)
+                        / state_weights[k]
+                    )
+                    self.emission_stds_[k] = max(self.emission_stds_[k], self.config.min_variance)
+
+            prev_log_likelihood = log_likelihood
+
+        # Calculate parameter changes
+        means_change = np.linalg.norm(self.emission_means_ - initial_means)
+        transitions_change = np.linalg.norm(self.transition_matrix_ - initial_transitions)
+        training_time = (datetime.now() - start_time).total_seconds()
+
+        # Log retrain
+        retrain_record = {
+            "type": "full_retrain_informed",
+            "observation_count": len(returns),
+            "timestamp": datetime.now().isoformat(),
+            "converged": self.training_history_["converged"],
+            "iterations": iteration + 1,
+            "log_likelihood": float(log_likelihood),
+            "parameter_changes": {
+                "means_change": float(means_change),
+                "transitions_change": float(transitions_change),
+            },
+            "training_time": training_time,
+            "cost_ratio": 1.0,  # Full retrain = 100% cost
+        }
+        self.training_history_["update_history"].append(retrain_record)
+
+        # Update all scheduling counters
+        self.days_since_emission_update = 0
+        self.days_since_transition_update = 0
+        self.days_since_full_retrain = 0
+        self.days_since_last_update = 0
+
+        return {
+            "converged": self.training_history_["converged"],
+            "iterations": iteration + 1,
+            "log_likelihood": float(log_likelihood),
+            "means_change": float(means_change),
+            "transitions_change": float(transitions_change),
+            "training_time": training_time,
+            "cost_ratio": 1.0,
         }

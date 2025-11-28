@@ -6,7 +6,7 @@ parameter sets for training and inference.
 """
 
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, List, Literal, Optional
 
@@ -467,3 +467,257 @@ class HMMConfig(ModelConfig):
     def get_cache_key(self) -> str:
         """Generate cache key for this model configuration."""
         return f"hmm_{self.n_states}_{self.observed_signal}_{self.initialization_method}_{hash(self)}"
+
+
+@dataclass(frozen=True)
+class AdaptiveRetrainingConfig(BaseConfig):
+    """
+    Configuration for hierarchical adaptive HMM retraining system.
+
+    Implements a three-tier update strategy:
+    - Weekly: emission-only updates (~1% computational cost)
+    - Monthly: transition-only updates (~5% computational cost)
+    - Quarterly: full Baum-Welch retrains (~100% computational cost)
+
+    Plus drift-triggered retrains when market structure significantly changes.
+
+    Attributes - Update Schedule:
+        emission_update_frequency_days: Days between emission-only updates (default 5)
+        transition_update_frequency_days: Days between transition-only updates (default 21)
+        full_retrain_frequency_days: Days between full retrains (default 63)
+        max_days_without_retrain: Maximum days before forced full retrain (default 90)
+        min_days_between_retrains: Minimum days between any retrains, prevents thrashing (default 14)
+
+    Attributes - Drift Detection:
+        slrt_threshold: SLRT (Sequential Likelihood Ratio Test) threshold (default 10.0)
+            - α ≈ 0.005 (false alarm rate ~1 per 200 days)
+        slrt_forgetting_factor: Exponential forgetting for SLRT cusum (default 0.99)
+        kl_divergence_hard_threshold: Critical drift threshold in nats (default 2.0)
+            - Triggers immediate full retrain
+        kl_divergence_soft_threshold: Elevated drift threshold in nats (default 1.0)
+            - Triggers retrain if reasonable time passed
+        hellinger_distance_threshold: Substantial drift threshold, bounded [0,1] (default 0.3)
+            - Cross-validates other metrics
+
+    Attributes - Data Weighting:
+        exponential_decay_halflife_days: Halflife for exponential weighting in days (default 60)
+            - Effective sample size (ESS) ≈ 87 observations
+            - Balances responsiveness vs stability
+        adaptive_halflife_enabled: Scale halflife by regime persistence (default False)
+
+    Attributes - Anchored Interpretation:
+        use_anchored_interpretation: Enable stable regime labels (default True)
+            - Recommended: keep True for user-facing applications
+        anchor_update_rate: Exponential smoothing coefficient for anchors (default 0.01)
+            - α=0.01 → 69 days to half-adapt (slow, stable)
+            - α=0.05 → 14 days to half-adapt (more responsive)
+        regime_anchors: Dict mapping regime names to mean/std templates (default canonical values)
+            - Values are daily returns (e.g., 0.001 = +0.1% daily)
+    """
+
+    # Update Schedule
+    emission_update_frequency_days: int = 5
+    transition_update_frequency_days: int = 21
+    full_retrain_frequency_days: int = 63
+    max_days_without_retrain: int = 90
+    min_days_between_retrains: int = 14
+
+    # Drift Detection
+    slrt_threshold: float = 10.0
+    slrt_forgetting_factor: float = 0.99
+    kl_divergence_hard_threshold: float = 2.0
+    kl_divergence_soft_threshold: float = 1.0
+    hellinger_distance_threshold: float = 0.3
+
+    # Data Weighting
+    exponential_decay_halflife_days: int = 60
+    adaptive_halflife_enabled: bool = False
+
+    # Anchored Interpretation
+    use_anchored_interpretation: bool = True
+    anchor_update_rate: float = 0.01
+    regime_anchors: dict = field(
+        default_factory=lambda: {
+            'BULLISH': {'mean': 0.0010, 'std': 0.008},
+            'BEARISH': {'mean': -0.0008, 'std': 0.012},
+            'SIDEWAYS': {'mean': 0.0001, 'std': 0.006},
+            'CRISIS': {'mean': -0.0030, 'std': 0.025},
+        }
+    )
+
+    def validate(self) -> None:
+        """Validate adaptive retraining configuration."""
+        super().validate()
+
+        # Validate schedule parameters
+        if self.emission_update_frequency_days < 1:
+            raise ConfigurationError(
+                f"emission_update_frequency_days must be >= 1, "
+                f"got {self.emission_update_frequency_days}"
+            )
+
+        if self.transition_update_frequency_days < 1:
+            raise ConfigurationError(
+                f"transition_update_frequency_days must be >= 1, "
+                f"got {self.transition_update_frequency_days}"
+            )
+
+        if self.full_retrain_frequency_days < 1:
+            raise ConfigurationError(
+                f"full_retrain_frequency_days must be >= 1, "
+                f"got {self.full_retrain_frequency_days}"
+            )
+
+        # Validate constraints
+        if self.min_days_between_retrains < 1:
+            raise ConfigurationError(
+                f"min_days_between_retrains must be >= 1, "
+                f"got {self.min_days_between_retrains}"
+            )
+
+        if self.max_days_without_retrain < self.min_days_between_retrains:
+            raise ConfigurationError(
+                f"max_days_without_retrain ({self.max_days_without_retrain}) "
+                f"must be >= min_days_between_retrains ({self.min_days_between_retrains})"
+            )
+
+        # Validate drift thresholds
+        if self.slrt_threshold <= 0:
+            raise ConfigurationError(
+                f"slrt_threshold must be > 0, got {self.slrt_threshold}"
+            )
+
+        if not (0 < self.slrt_forgetting_factor < 1):
+            raise ConfigurationError(
+                f"slrt_forgetting_factor must be in (0, 1), "
+                f"got {self.slrt_forgetting_factor}"
+            )
+
+        if self.kl_divergence_hard_threshold <= 0:
+            raise ConfigurationError(
+                f"kl_divergence_hard_threshold must be > 0, "
+                f"got {self.kl_divergence_hard_threshold}"
+            )
+
+        if self.kl_divergence_soft_threshold <= 0:
+            raise ConfigurationError(
+                f"kl_divergence_soft_threshold must be > 0, "
+                f"got {self.kl_divergence_soft_threshold}"
+            )
+
+        if self.kl_divergence_soft_threshold > self.kl_divergence_hard_threshold:
+            raise ConfigurationError(
+                f"kl_divergence_soft_threshold ({self.kl_divergence_soft_threshold}) "
+                f"must be <= kl_divergence_hard_threshold ({self.kl_divergence_hard_threshold})"
+            )
+
+        if not (0 < self.hellinger_distance_threshold <= 1):
+            raise ConfigurationError(
+                f"hellinger_distance_threshold must be in (0, 1], "
+                f"got {self.hellinger_distance_threshold}"
+            )
+
+        # Validate data weighting
+        if self.exponential_decay_halflife_days < 1:
+            raise ConfigurationError(
+                f"exponential_decay_halflife_days must be >= 1, "
+                f"got {self.exponential_decay_halflife_days}"
+            )
+
+        # Validate anchored interpretation
+        if not (0 < self.anchor_update_rate < 1):
+            raise ConfigurationError(
+                f"anchor_update_rate must be in (0, 1), "
+                f"got {self.anchor_update_rate}"
+            )
+
+        if not isinstance(self.regime_anchors, dict):
+            raise ConfigurationError(
+                f"regime_anchors must be dict, got {type(self.regime_anchors)}"
+            )
+
+        # Validate regime anchor values
+        for regime_name, anchor_params in self.regime_anchors.items():
+            if not isinstance(anchor_params, dict):
+                raise ConfigurationError(
+                    f"regime_anchors[{regime_name}] must be dict, "
+                    f"got {type(anchor_params)}"
+                )
+
+            if 'mean' not in anchor_params or 'std' not in anchor_params:
+                raise ConfigurationError(
+                    f"regime_anchors[{regime_name}] must have 'mean' and 'std' keys, "
+                    f"got {list(anchor_params.keys())}"
+                )
+
+            if anchor_params['std'] <= 0:
+                raise ConfigurationError(
+                    f"regime_anchors[{regime_name}]['std'] must be > 0, "
+                    f"got {anchor_params['std']}"
+                )
+
+    @classmethod
+    def moderate(cls) -> 'AdaptiveRetrainingConfig':
+        """
+        Create Moderate configuration (RECOMMENDED DEFAULT).
+
+        Balanced for most use cases: 90-day retrain cycle with moderate thresholds.
+        Good responsiveness to market changes while maintaining label stability.
+
+        Returns:
+            AdaptiveRetrainingConfig with moderate settings
+        """
+        return cls(
+            emission_update_frequency_days=5,
+            transition_update_frequency_days=21,
+            full_retrain_frequency_days=63,
+            max_days_without_retrain=90,
+            min_days_between_retrains=14,
+            slrt_threshold=10.0,
+            kl_divergence_hard_threshold=2.0,
+            kl_divergence_soft_threshold=1.0,
+        )
+
+    @classmethod
+    def conservative(cls) -> 'AdaptiveRetrainingConfig':
+        """
+        Create Conservative configuration.
+
+        For regulatory/compliance use: longer retrain cycle, higher thresholds.
+        Minimizes disruption but slower adaptation to market changes.
+
+        Returns:
+            AdaptiveRetrainingConfig with conservative settings
+        """
+        return cls(
+            emission_update_frequency_days=10,
+            transition_update_frequency_days=42,
+            full_retrain_frequency_days=180,
+            max_days_without_retrain=180,
+            min_days_between_retrains=30,
+            slrt_threshold=15.0,
+            kl_divergence_hard_threshold=3.0,
+            kl_divergence_soft_threshold=1.5,
+        )
+
+    @classmethod
+    def aggressive(cls) -> 'AdaptiveRetrainingConfig':
+        """
+        Create Aggressive configuration.
+
+        For high-frequency trading: rapid updates, sensitive drift detection.
+        Fast adaptation but may cause regime label changes.
+
+        Returns:
+            AdaptiveRetrainingConfig with aggressive settings
+        """
+        return cls(
+            emission_update_frequency_days=2,
+            transition_update_frequency_days=7,
+            full_retrain_frequency_days=30,
+            max_days_without_retrain=30,
+            min_days_between_retrains=7,
+            slrt_threshold=5.0,
+            kl_divergence_hard_threshold=1.0,
+            kl_divergence_soft_threshold=0.5,
+        )
