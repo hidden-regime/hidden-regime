@@ -32,36 +32,31 @@ fi
 echo "Creating deployment package..."
 mkdir -p "$OUTPUT_DIR"
 
-# Copy hidden_regime library
-echo "Copying hidden_regime library..."
-cp -r hidden_regime "$OUTPUT_DIR/"
+# Copy hidden_regime library (Python files only)
+echo "Copying hidden_regime library (Python files only)..."
+mkdir -p "$OUTPUT_DIR/hidden_regime"
+
+# Copy all .py files from hidden_regime, preserving directory structure
+find hidden_regime -name "*.py" -type f | while read file; do
+    dir=$(dirname "$OUTPUT_DIR/$file")
+    mkdir -p "$dir"
+    cp "$file" "$OUTPUT_DIR/$file"
+done
 
 # Copy template as main.py
 echo "Copying template: $TEMPLATE_NAME"
 cp "$TEMPLATE_FILE" "$OUTPUT_DIR/main.py"
 
-# Remove non-essential directories
-echo "Cleaning up non-essential files..."
-rm -rf "$OUTPUT_DIR/hidden_regime/tests"
-rm -rf "$OUTPUT_DIR/hidden_regime/examples"
-rm -rf "$OUTPUT_DIR/hidden_regime/docs"
-rm -rf "$OUTPUT_DIR/hidden_regime/visualization"
-
-# Remove Python cache
-find "$OUTPUT_DIR" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-find "$OUTPUT_DIR" -name "*.pyc" -delete
-find "$OUTPUT_DIR" -name "*.pyo" -delete
-find "$OUTPUT_DIR" -name ".pytest_cache" -type d -exec rm -rf {} + 2>/dev/null || true
-
-# Create .gitkeep files for git to track empty dirs
-find "$OUTPUT_DIR" -type d -empty -exec touch {}/.gitkeep \; 2>/dev/null || true
-
 # Verify structure
 echo ""
 echo "Deployment package created successfully!"
 echo ""
-echo "Directory structure:"
-tree -L 2 "$OUTPUT_DIR" 2>/dev/null || find "$OUTPUT_DIR" -type f -name "*.py" | head -20
+echo "Python files included:"
+find "$OUTPUT_DIR" -type f -name "*.py" | wc -l
+echo "files"
+echo ""
+echo "Sample structure:"
+tree -L 2 "$OUTPUT_DIR" 2>/dev/null || find "$OUTPUT_DIR" -type d | head -20
 
 echo ""
 echo "Next steps:"
