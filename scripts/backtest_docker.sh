@@ -156,6 +156,19 @@ echo ""
 if [ -d "$RESULT_PATH" ] && [ "$(ls -A "$RESULT_PATH")" ]; then
     echo -e "${BLUE}Generated files:${NC}"
     ls -lh "$RESULT_PATH" | awk 'NR > 1 { printf "  %s  %s\n", $5, $9 }'
+
+    # Check for debug CSVs (they get written to same dir as backtest results)
+    if [ -d "$RESULT_PATH" ] && ls "$RESULT_PATH"/debug_* &>/dev/null 2>&1; then
+        echo ""
+        echo -e "${BLUE}Debug CSV analysis files:${NC}"
+        for ticker_dir in "$RESULT_PATH"/debug_*/; do
+            if [ -d "$ticker_dir" ]; then
+                ticker=$(basename "$ticker_dir")
+                echo -e "  ${GREEN}$ticker${NC}:"
+                ls -lh "$ticker_dir" | awk 'NR > 1 { printf "    %s  %s\n", $5, $9 }'
+            fi
+        done
+    fi
 else
     echo -e "${YELLOW}⚠ No results generated (check backtest.log for errors)${NC}"
 fi
@@ -163,5 +176,7 @@ fi
 echo ""
 echo -e "${BLUE}Next steps:${NC}"
 echo "  • View logs: tail -f $RESULT_PATH/backtest.log"
-echo "  • Analyze results: python scripts/analyze_backtest.py $RESULT_PATH"
+echo "  • View debug CSVs: ls -lh $RESULT_PATH/debug_SPY/"
+echo "  • Load & analyze: python -c \"import pandas as pd; df = pd.read_csv('$RESULT_PATH/debug_SPY/timesteps.csv'); print(f'Captured {len(df)} bars')\""
+echo "  • See DEBUG_CSV_GUIDE.md for detailed analysis examples"
 echo ""

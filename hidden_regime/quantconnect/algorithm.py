@@ -629,30 +629,68 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
         """
         Detect the QuantConnect backtest results directory.
 
-        For local backtesting, tries to find the results directory in common locations.
-        If debug_output_dir was provided, uses that. Otherwise tries standard paths.
+        Strategies (in order):
+        1. Use explicitly provided debug_output_dir parameter
+        2. QC's /Lean/Results (when running via QC docker scripts)
+        3. Find most recent backtest_results/*/directory
+        4. Fall back to other common locations
 
         Returns:
-            Path to results directory
+            Path to results directory where debug CSVs will be written
         """
         # Use explicitly provided directory if set
         if self._debug_output_dir:
             return self._debug_output_dir
 
-        # Try common QuantConnect results locations
+        # Check for QC's standard Results directory (mounted during docker backtest)
+        if os.path.exists("/Lean/Results") and os.path.isdir("/Lean/Results"):
+            return "/Lean/Results"
+
+        # Try to find the MOST RECENT backtest results directory
+        # (they have timestamps like basic_regime_switching_20251129_074427)
+        backtest_results_dir = None
+
+        # Check parent directories for backtest_results folder
+        current = os.getcwd()
+        for _ in range(5):  # Try up to 5 levels up
+            test_path = os.path.join(current, "backtest_results")
+            if os.path.exists(test_path) and os.path.isdir(test_path):
+                backtest_results_dir = test_path
+                break
+            parent = os.path.dirname(current)
+            if parent == current:
+                break
+            current = parent
+
+        if backtest_results_dir and os.path.exists(backtest_results_dir):
+            # Find the most recently modified subdirectory
+            try:
+                subdirs = [
+                    os.path.join(backtest_results_dir, d)
+                    for d in os.listdir(backtest_results_dir)
+                    if os.path.isdir(os.path.join(backtest_results_dir, d))
+                ]
+
+                if subdirs:
+                    # Sort by modification time, get most recent
+                    most_recent = max(subdirs, key=os.path.getmtime)
+                    return most_recent
+            except (OSError, ValueError):
+                pass
+
+        # Fallback to other common locations
         possible_dirs = [
-            "Results",  # Standard LEAN local backtest results
-            "backtest_results",  # Common custom location
+            "Results",
+            "backtest_results",
             os.path.join(os.getcwd(), "Results"),
             os.path.join(os.getcwd(), "backtest_results"),
-            os.getcwd(),  # Fallback to current working directory
         ]
 
         for dir_path in possible_dirs:
             if os.path.exists(dir_path) and os.path.isdir(dir_path):
                 return dir_path
 
-        # If nothing found, use current directory
+        # Last resort: use current directory
         return os.getcwd()
 
     def _export_debug_data(self) -> None:
@@ -660,36 +698,83 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
         Export all accumulated debug data to CSV files.
 
         Called at end of backtest (OnEndOfAlgorithm hook).
-        Creates subdirectory debug_<ticker> in the backtest results directory
-        with multiple CSV files containing detailed internal state.
+        Attempts to write to multiple locations in this order:
+        1. Explicitly provided debug_output_dir
+        2. Most recent backtest results directory
+        3. ObjectStore (QuantConnect's standard storage)
+        4. Current working directory
         """
         if not self._debug_accumulators:
             return
 
         for ticker, accumulator in self._debug_accumulators.items():
+            # Try multiple output paths
+            output_paths_to_try = []
+
+            # 1. Explicitly provided directory
+            if self._debug_output_dir:
+                output_paths_to_try.append(self._debug_output_dir)
+
+            # 2. Most recent backtest directory
             try:
-                # Get base results directory
-                base_output_dir = self._get_results_directory()
+                base_dir = self._get_results_directory()
+                output_paths_to_try.append(base_dir)
+            except Exception:
+                pass
 
-                # Create ticker-specific debug subdirectory
-                output_dir = os.path.join(base_output_dir, f"debug_{ticker}")
-                os.makedirs(output_dir, exist_ok=True)
+            # 3. ObjectStore (QC's native storage)
+            try:
+                objectstore_path = self.ObjectStore.GetFilePath("")
+                if objectstore_path and objectstore_path != "":
+                    output_paths_to_try.append(objectstore_path)
+            except Exception:
+                pass
 
-                # Export CSVs
-                csv_files = accumulator.export_to_csv(output_dir)
+            # 4. Current working directory
+            output_paths_to_try.append(os.getcwd())
 
-                # Log export
-                self.Log(f"DEBUG: {ticker} analysis exported to {output_dir}")
-                for filename, filepath in csv_files.items():
-                    self.Log(f"  - {filename}")
+            # Try to export to the first accessible directory
+            exported = False
+            last_error = None
 
-                # Log summary
-                summary = accumulator.summary()
-                for line in summary.split("\n"):
-                    self.Log(f"DEBUG: {line}")
+            for base_output_dir in output_paths_to_try:
+                try:
+                    # Create ticker-specific debug subdirectory
+                    output_dir = os.path.join(base_output_dir, f"debug_{ticker}")
+                    os.makedirs(output_dir, exist_ok=True)
 
-            except Exception as e:
-                self.Log(f"DEBUG: Error exporting data for {ticker}: {str(e)}")
+                    # Try to write a test file to verify directory is writable
+                    test_file = os.path.join(output_dir, ".write_test")
+                    with open(test_file, "w") as f:
+                        f.write("test")
+                    os.remove(test_file)
+
+                    # Export CSVs
+                    csv_files = accumulator.export_to_csv(output_dir)
+
+                    # Log export
+                    self.Log(f"DEBUG: {ticker} analysis exported to {output_dir}")
+                    for filename, filepath in csv_files.items():
+                        self.Log(f"  - {filename}")
+
+                    # Log summary
+                    summary = accumulator.summary()
+                    for line in summary.split("\n"):
+                        self.Log(f"DEBUG: {line}")
+
+                    exported = True
+                    break
+
+                except (OSError, IOError, PermissionError) as e:
+                    last_error = e
+                    continue
+
+            if not exported:
+                error_msg = f"Could not export debug data for {ticker}"
+                if last_error:
+                    error_msg += f": {str(last_error)}"
+                self.Log(f"DEBUG: WARNING - {error_msg}")
+                self.Log(f"DEBUG: Tried paths: {output_paths_to_try}")
 
     def OnEndOfAlgorithm(self) -> None:
         """

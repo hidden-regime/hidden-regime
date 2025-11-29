@@ -80,14 +80,14 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
         start_year = int(self.GetParameter("start_year", 2015))
         start_month = int(self.GetParameter("start_month", 1))
         start_day = int(self.GetParameter("start_day", 1))
-        end_year = int(self.GetParameter("end_year", 2017))
+        end_year = int(self.GetParameter("end_year", 2016))
         end_month = int(self.GetParameter("end_month", 1))
         end_day = int(self.GetParameter("end_day", 1))
         initial_cash = float(self.GetParameter("cash", 100000))
 
         n_states = int(self.GetParameter("n_states", 3))
         lookback_days = int(self.GetParameter("lookback_days", 252))
-        min_confidence = float(self.GetParameter("min_confidence", 0.6))
+        min_confidence = float(self.GetParameter("min_confidence", 0.7))
         random_seed = int(self.GetParameter("random_seed", 4242))
 
         # Regime allocations (can be customized per regime)
