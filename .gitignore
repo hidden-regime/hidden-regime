@@ -10,6 +10,7 @@ pytest.log
 
 # QC
 backtest_results/**
+qc_deploy/**
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

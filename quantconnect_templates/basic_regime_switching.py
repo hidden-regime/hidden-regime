@@ -63,19 +63,30 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
             NOTE: Adaptive re-fitting happens automatically when drift is detected.
             retrain_frequency is a safety mechanism to ensure model refresh on a schedule
             regardless of drift signals. Recommended: "weekly" for production trading.
+        debug_output_dir : str, optional
+            Directory to export debug CSVs (HMM params, state probs, signals, etc.)
+            Default: None (auto-detects backtest_results/ or Results/ directory)
+
+            Debug CSVs exported to: {output_dir}/debug_{ticker}/
+            Files created:
+            - timesteps.csv: One row per bar with all state data
+            - state_probabilities.csv: Per-state probability tracking
+            - hmm_params.csv: HMM parameters in long format
+            - training_history.csv: Model training events
+            - regime_changes.csv: Regime transitions only
         """
         # === EASY PARAMETERS TO MODIFY ===
         ticker = self.GetParameter("ticker", "SPY")
-        start_year = int(self.GetParameter("start_year", 2020))
+        start_year = int(self.GetParameter("start_year", 2015))
         start_month = int(self.GetParameter("start_month", 1))
         start_day = int(self.GetParameter("start_day", 1))
-        end_year = int(self.GetParameter("end_year", 2021))
+        end_year = int(self.GetParameter("end_year", 2017))
         end_month = int(self.GetParameter("end_month", 1))
         end_day = int(self.GetParameter("end_day", 1))
         initial_cash = float(self.GetParameter("cash", 100000))
 
         n_states = int(self.GetParameter("n_states", 3))
-        lookback_days = int(self.GetParameter("lookback_days", 2*252))
+        lookback_days = int(self.GetParameter("lookback_days", 252))
         min_confidence = float(self.GetParameter("min_confidence", 0.6))
         random_seed = int(self.GetParameter("random_seed", 4242))
 
@@ -84,12 +95,19 @@ class BasicRegimeSwitching(HiddenRegimeAlgorithm):
         bear_allocation = float(self.GetParameter("bear_allocation", 0.0))
         sideways_allocation = float(self.GetParameter("sideways_allocation", 0.5))
 
-        retrain_frequency = self.GetParameter("retrain_frequency", "weekly")
+        retrain_frequency = self.GetParameter("retrain_frequency", "never")
+
+        # Debug output (CSV export of internal state)
+        debug_output_dir = self.GetParameter("debug_output_dir", None)
 
         # === BACKTEST CONFIGURATION ===
         self.SetStartDate(start_year, start_month, start_day)
         self.SetEndDate(end_year, end_month, end_day)
         self.SetCash(initial_cash)
+
+        # Store debug output directory (used at end of backtest)
+        if debug_output_dir:
+            self._debug_output_dir = debug_output_dir
 
         # Add equity
         self.symbol = self.AddEquity(ticker, Resolution.Daily).Symbol  # noqa: F405

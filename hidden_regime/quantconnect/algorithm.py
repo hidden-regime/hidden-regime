@@ -5,6 +5,7 @@ This module provides HiddenRegimeAlgorithm, a base class that extends
 QuantConnect's QCAlgorithm with integrated regime detection capabilities.
 """
 
+import os
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Any
 
@@ -32,6 +33,7 @@ except ImportError:
 
 from .config import QuantConnectConfig, RegimeTradingConfig
 from .data_adapter import QuantConnectDataAdapter
+from .debug import DebugDataAccumulator
 from .signal_adapter import RegimeSignalAdapter, TradingSignal
 from .logging import RegimeDetectionLogger
 
@@ -87,6 +89,11 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
 
         # Comprehensive logging
         self.logger = RegimeDetectionLogger(self)
+
+        # Debug data accumulators (for CSV export)
+        self._debug_accumulators: Dict[str, DebugDataAccumulator] = {}
+        self._debug_enabled = True  # Enable by default, can be overridden via parameter
+        self._debug_output_dir: Optional[str] = None  # Set in Initialize() from parameter
 
     def initialize_regime_detection(
         self,
@@ -149,6 +156,12 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             regime_allocations=self._trading_config.regime_allocations,
             min_confidence=min_confidence,
         )
+
+        # Create debug data accumulator
+        if self._debug_enabled:
+            self._debug_accumulators[ticker] = DebugDataAccumulator(
+                ticker=ticker, n_states=n_states
+            )
 
         # Create regime detection pipeline
         # Note: Pipeline will be created when we have enough data
@@ -317,6 +330,10 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
                 # Generate signal
                 signal_adapter = self._signal_adapters[tick]
                 signal = signal_adapter.from_pipeline_result(interpreter_output)
+
+                # Capture debug data (after successful pipeline update)
+                if self._debug_enabled and tick in self._debug_accumulators:
+                    self._capture_debug_data(tick, df, interpreter_output, signal)
 
                 # Log inference result
                 self.logger.log_pipeline_inference(
@@ -493,3 +510,192 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             return days_since >= 30
 
         return False
+
+    def _capture_debug_data(
+        self,
+        ticker: str,
+        raw_df: pd.DataFrame,
+        interpreter_output: pd.DataFrame,
+        signal: TradingSignal,
+    ) -> None:
+        """
+        Capture internal state for debugging and analysis.
+
+        Extracts data from all pipeline stages and accumulates in DebugDataAccumulator.
+        Called after each successful pipeline update.
+
+        Args:
+            ticker: Asset ticker
+            raw_df: Raw OHLCV data from QuantConnectDataAdapter
+            interpreter_output: Regime interpretation DataFrame from pipeline
+            signal: TradingSignal generated from interpretation
+        """
+        if ticker not in self._debug_accumulators:
+            return
+
+        accumulator = self._debug_accumulators[ticker]
+        latest_row = interpreter_output.iloc[-1]
+        latest_bar = raw_df.iloc[-1]
+
+        # Get n_states from pipeline info
+        n_states = self._regime_pipelines.get(ticker, {}).get("n_states", 3)
+
+        # Extract bar data (OHLCV)
+        bar_data = {
+            "Open": float(latest_bar.get("Open", 0.0)),
+            "High": float(latest_bar.get("High", 0.0)),
+            "Low": float(latest_bar.get("Low", 0.0)),
+            "Close": float(latest_bar.get("Close", 0.0)),
+            "Volume": int(latest_bar.get("Volume", 0)),
+        }
+
+        # Extract observation data (log returns, features)
+        observation_data = {}
+        if "log_return" in latest_row:
+            observation_data["log_return"] = float(latest_row["log_return"])
+
+        # Extract model output (HMM predictions, state probs, parameters)
+        model_output = {
+            "predicted_state": int(latest_row.get("predicted_state", -1)),
+            "confidence": float(latest_row.get("confidence", 0.0)),
+        }
+
+        # Add per-state probabilities
+        for state_idx in range(n_states):
+            prob_key = f"state_{state_idx}_prob"
+            if prob_key in latest_row:
+                model_output[prob_key] = float(latest_row[prob_key])
+
+        # Extract interpreter output (regime labels and metrics)
+        interpreter_data = {
+            "regime_label": str(latest_row.get("regime_label", "Unknown")),
+            "regime_type": str(latest_row.get("regime_type", "unknown")),
+            "regime_strength": float(latest_row.get("regime_strength", 0.0)),
+        }
+
+        # Add regime characteristics
+        char_keys = [
+            "mean_return",
+            "volatility",
+            "win_rate",
+            "max_drawdown",
+            "sharpe_ratio",
+            "expected_return",
+            "expected_volatility",
+            "avg_regime_duration",
+        ]
+        for key in char_keys:
+            if key in latest_row:
+                try:
+                    interpreter_data[key] = float(latest_row[key])
+                except (ValueError, TypeError):
+                    interpreter_data[key] = None
+
+        # Extract signal data
+        signal_data = {
+            "signal_direction": signal.direction.value if signal else 0,
+            "signal_strength": signal.strength.value if signal else 0,
+            "signal_allocation": float(signal.allocation) if signal else 0.0,
+            "signal_confidence": float(signal.confidence) if signal else 0.0,
+        }
+
+        # Add timestep to accumulator
+        accumulator.add_timestep(
+            timestamp=latest_row.name,  # Index is timestamp
+            bar_data=bar_data,
+            observation_data=observation_data,
+            model_output=model_output,
+            interpreter_output=interpreter_data,
+            signal_data=signal_data,
+        )
+
+        # Add state probabilities
+        state_probs = {}
+        for state_idx in range(n_states):
+            prob_key = f"state_{state_idx}_prob"
+            state_probs[state_idx] = latest_row.get(prob_key, 0.0)
+        accumulator.add_state_probabilities(
+            timestamp=latest_row.name, state_probs=state_probs
+        )
+
+        # Record HMM params on first timestep
+        if len(accumulator.timesteps) == 1:
+            pipeline = self._regime_pipelines[ticker]["pipeline"]
+            if pipeline and hasattr(pipeline, "model"):
+                model = pipeline.model
+                accumulator.record_hmm_params(model)
+
+    def _get_results_directory(self) -> str:
+        """
+        Detect the QuantConnect backtest results directory.
+
+        For local backtesting, tries to find the results directory in common locations.
+        If debug_output_dir was provided, uses that. Otherwise tries standard paths.
+
+        Returns:
+            Path to results directory
+        """
+        # Use explicitly provided directory if set
+        if self._debug_output_dir:
+            return self._debug_output_dir
+
+        # Try common QuantConnect results locations
+        possible_dirs = [
+            "Results",  # Standard LEAN local backtest results
+            "backtest_results",  # Common custom location
+            os.path.join(os.getcwd(), "Results"),
+            os.path.join(os.getcwd(), "backtest_results"),
+            os.getcwd(),  # Fallback to current working directory
+        ]
+
+        for dir_path in possible_dirs:
+            if os.path.exists(dir_path) and os.path.isdir(dir_path):
+                return dir_path
+
+        # If nothing found, use current directory
+        return os.getcwd()
+
+    def _export_debug_data(self) -> None:
+        """
+        Export all accumulated debug data to CSV files.
+
+        Called at end of backtest (OnEndOfAlgorithm hook).
+        Creates subdirectory debug_<ticker> in the backtest results directory
+        with multiple CSV files containing detailed internal state.
+        """
+        if not self._debug_accumulators:
+            return
+
+        for ticker, accumulator in self._debug_accumulators.items():
+            try:
+                # Get base results directory
+                base_output_dir = self._get_results_directory()
+
+                # Create ticker-specific debug subdirectory
+                output_dir = os.path.join(base_output_dir, f"debug_{ticker}")
+                os.makedirs(output_dir, exist_ok=True)
+
+                # Export CSVs
+                csv_files = accumulator.export_to_csv(output_dir)
+
+                # Log export
+                self.Log(f"DEBUG: {ticker} analysis exported to {output_dir}")
+                for filename, filepath in csv_files.items():
+                    self.Log(f"  - {filename}")
+
+                # Log summary
+                summary = accumulator.summary()
+                for line in summary.split("\n"):
+                    self.Log(f"DEBUG: {line}")
+
+            except Exception as e:
+                self.Log(f"DEBUG: Error exporting data for {ticker}: {str(e)}")
+
+    def OnEndOfAlgorithm(self) -> None:
+        """
+        QuantConnect hook called at end of backtest.
+
+        Exports accumulated debug data to CSV files.
+        """
+        if self._debug_enabled:
+            self._export_debug_data()
