@@ -5,11 +5,15 @@ This module converts hidden-regime's regime detections and confidence scores
 into actionable trading signals for QuantConnect algorithms.
 """
 
+import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 import pandas as pd
+
+from hidden_regime.interpreter.regime_types import RegimeType
+from hidden_regime.quantconnect.config import RegimeTypeAllocations
 
 
 class SignalDirection(Enum):
@@ -100,28 +104,66 @@ class RegimeSignalAdapter:
 
     This adapter takes hidden-regime's pipeline results and converts them
     into TradingSignal objects that can be used by QuantConnect algorithms.
+
+    Uses RegimeType enum for allocation lookups instead of fuzzy string matching.
+    This ensures temporal stability even when interpreter discovers new regime names.
     """
 
     def __init__(
         self,
-        regime_allocations: Optional[Dict[str, float]] = None,
+        regime_type_allocations: Optional[RegimeTypeAllocations] = None,
         min_confidence: float = 0.0,
     ):
         """
         Initialize signal adapter.
 
         Args:
-            regime_allocations: Dict mapping regime names to allocations
+            regime_type_allocations: RegimeTypeAllocations mapping enum to floats
             min_confidence: Minimum confidence for signals
+
+        Raises:
+            ValueError: If passed old string-based regime_allocations dict
         """
-        self.regime_allocations = regime_allocations or {
-            "Bull": 1.0,
-            "Bear": 0.0,
-            "Sideways": 0.5,
-            "Crisis": 0.0,
-        }
+        if regime_type_allocations is None:
+            regime_type_allocations = RegimeTypeAllocations()
+
+        # Enforce breaking change: reject old string-based allocations
+        if isinstance(regime_type_allocations, dict):
+            raise ValueError(
+                "String-based regime allocations are no longer supported. "
+                "Use RegimeTypeAllocations instead:\n"
+                "  from hidden_regime.quantconnect.config import RegimeTypeAllocations\n"
+                "  allocations = RegimeTypeAllocations(bullish=1.0, bearish=0.0, ...)\n"
+                "See migration guide: docs/guides/quantconnect_migration.md"
+            )
+
+        self.regime_type_allocations = regime_type_allocations
         self.min_confidence = min_confidence
         self._last_signal: Optional[TradingSignal] = None
+
+    def _get_allocation_from_regime_type(self, regime_type: RegimeType) -> float:
+        """
+        Get allocation for a given RegimeType.
+
+        Args:
+            regime_type: RegimeType enum value
+
+        Returns:
+            Portfolio allocation (0.0 to 2.0, or negative for shorts)
+        """
+        allocation = self.regime_type_allocations.get_allocation(regime_type)
+
+        if allocation == 0.0 and regime_type != RegimeType.BEARISH:
+            # Only warn for non-default allocations
+            warnings.warn(
+                f"No allocation defined for regime type {regime_type.name}. "
+                f"Defaulting to cash (0.0). "
+                f"Update RegimeTypeAllocations to customize.",
+                UserWarning,
+                stacklevel=3,
+            )
+
+        return allocation
 
     def generate_signal(
         self,
@@ -135,47 +177,39 @@ class RegimeSignalAdapter:
         Generate trading signal from regime detection.
 
         Args:
-            regime_name: Current regime name (e.g., "Bull", "Bear", "Bull-1", etc.)
+            regime_name: Current regime name (e.g., "Bull", "Bear", "Uptrend", etc.)
             regime_state: Numeric regime state
             confidence: Detection confidence (0.0 to 1.0)
             timestamp: Signal timestamp
-            **metadata: Additional signal metadata (regime_type can infer allocation)
+            **metadata: Additional signal metadata including regime_type (RegimeType enum)
 
         Returns:
             TradingSignal object
+
+        Raises:
+            ValueError: If regime_type not in metadata (required for allocation lookup)
         """
-        # Get allocation for this regime
-        # First try exact match
-        allocation = self.regime_allocations.get(regime_name)
+        # Extract regime_type from metadata (set by interpreter)
+        regime_type = metadata.get("regime_type")
 
-        if allocation is None:
-            # Try fuzzy matching based on regime_type if available
-            regime_type = metadata.get("regime_type", "").lower()
+        if regime_type is None:
+            raise ValueError(
+                f"regime_type not in metadata. The interpreter must output regime_type. "
+                f"Metadata: {list(metadata.keys())}"
+            )
 
-            # Map regime types to allocations
-            type_to_allocation = {
-                "bullish": self.regime_allocations.get("Bull", 1.0),
-                "bearish": self.regime_allocations.get("Bear", 0.0),
-                "sideways": self.regime_allocations.get("Sideways", 0.5),
-                "crisis": self.regime_allocations.get("Crisis", 0.0),
-                "high": self.regime_allocations.get("Bull", 1.0),  # Alternative labels
-                "low": self.regime_allocations.get("Bear", 0.0),
-                "medium": self.regime_allocations.get("Sideways", 0.5),
-            }
+        # Convert string to RegimeType enum if necessary
+        if isinstance(regime_type, str):
+            try:
+                regime_type = RegimeType[regime_type.upper()]
+            except KeyError:
+                raise ValueError(
+                    f"Invalid regime_type: {regime_type}. "
+                    f"Must be one of: {[rt.name for rt in RegimeType]}"
+                )
 
-            allocation = type_to_allocation.get(regime_type)
-
-            # If still not found, use regime_type to determine direction
-            if allocation is None:
-                # Last resort: infer from regime_type
-                if "bullish" in regime_type or "high" in regime_type:
-                    allocation = self.regime_allocations.get("Bull", 1.0)
-                elif "bearish" in regime_type or "crisis" in regime_type:
-                    allocation = self.regime_allocations.get("Bear", 0.0)
-                elif "sideways" in regime_type or "medium" in regime_type:
-                    allocation = self.regime_allocations.get("Sideways", 0.5)
-                else:
-                    allocation = 0.0  # Default to cash if unclear
+        # Get allocation using enum-based lookup
+        allocation = self._get_allocation_from_regime_type(regime_type)
 
         # Determine direction
         if allocation > 0.1:
@@ -220,7 +254,7 @@ class RegimeSignalAdapter:
             TradingSignal for the latest data point
 
         Raises:
-            ValueError: If result DataFrame is empty or missing columns
+            ValueError: If result DataFrame is empty or missing required columns
         """
         if result_df is None or result_df.empty:
             raise ValueError("Pipeline result is empty")
@@ -241,7 +275,9 @@ class RegimeSignalAdapter:
             regime_state = int(latest.get("predicted_state", -1))
 
         # The interpreter outputs 'regime_confidence' not 'confidence'
-        confidence = float(latest.get("regime_confidence", latest.get("confidence", 0.0)))
+        confidence = float(
+            latest.get("regime_confidence", latest.get("confidence", 0.0))
+        )
         timestamp = result_df.index[-1]
 
         # Extract additional metadata
@@ -261,6 +297,14 @@ class RegimeSignalAdapter:
         for field in optional_fields:
             if field in latest:
                 metadata[field] = latest[field]
+
+        # Ensure regime_type is in metadata (required by generate_signal)
+        if "regime_type" not in metadata:
+            raise ValueError(
+                f"regime_type not found in pipeline result. "
+                f"The interpreter must output regime_type enum. "
+                f"Available columns: {list(latest.index)}"
+            )
 
         return self.generate_signal(
             regime_name=regime_name,

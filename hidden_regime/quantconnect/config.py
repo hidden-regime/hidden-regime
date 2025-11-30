@@ -8,6 +8,8 @@ settings and regime trading parameters.
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
+from hidden_regime.interpreter.regime_types import RegimeType
+
 
 @dataclass
 class QuantConnectConfig:
@@ -44,6 +46,119 @@ class QuantConnectConfig:
 
         if not 0.0 <= self.min_confidence <= 1.0:
             raise ValueError("min_confidence must be between 0.0 and 1.0")
+
+
+@dataclass
+class RegimeTypeAllocations:
+    """
+    Type-safe allocation mapping using RegimeType enum.
+
+    This replaces the older string-based regime_allocations dict approach
+    to prevent mismatches between discovered regime names and allocation keys.
+
+    The RegimeType enum provides a stable, deterministic classification
+    independent of the data-driven regime discovery process used for 4+ state models.
+
+    Attributes:
+        bullish: Portfolio allocation for BULLISH regime (0.0 to 1.0, or negative for shorts)
+        bearish: Portfolio allocation for BEARISH regime
+        sideways: Portfolio allocation for SIDEWAYS regime
+        crisis: Portfolio allocation for CRISIS regime
+        mixed: Portfolio allocation for MIXED/unclear regime
+    """
+
+    bullish: float = 1.0  # 100% long
+    bearish: float = 0.0  # Cash
+    sideways: float = 0.5  # 50% long
+    crisis: float = 0.0  # Cash
+    mixed: float = 0.25  # Defensive 25% long
+
+    def __post_init__(self) -> None:
+        """Validate allocation values."""
+        for regime_type, allocation in self._get_allocations_dict().items():
+            if not -2.0 <= allocation <= 2.0:
+                raise ValueError(
+                    f"Allocation for {regime_type.name} must be between -2.0 and 2.0, "
+                    f"got {allocation}"
+                )
+
+    def _get_allocations_dict(self) -> Dict[RegimeType, float]:
+        """Internal helper to get all allocations as dict."""
+        return {
+            RegimeType.BULLISH: self.bullish,
+            RegimeType.BEARISH: self.bearish,
+            RegimeType.SIDEWAYS: self.sideways,
+            RegimeType.CRISIS: self.crisis,
+            RegimeType.MIXED: self.mixed,
+        }
+
+    def get_allocation(self, regime_type: RegimeType) -> float:
+        """
+        Get allocation for a given regime type.
+
+        Args:
+            regime_type: RegimeType enum value
+
+        Returns:
+            Portfolio allocation (can be negative for shorts, use up to 2.0 for leverage)
+        """
+        return self._get_allocations_dict().get(regime_type, 0.0)
+
+    @classmethod
+    def create_conservative(cls) -> "RegimeTypeAllocations":
+        """
+        Create conservative allocation configuration.
+
+        Conservative strategy:
+        - BULLISH: 60% long
+        - SIDEWAYS: 30% long
+        - BEARISH/CRISIS/MIXED: Cash
+        """
+        return cls(
+            bullish=0.6,
+            bearish=0.0,
+            sideways=0.3,
+            crisis=0.0,
+            mixed=0.0,
+        )
+
+    @classmethod
+    def create_aggressive(cls) -> "RegimeTypeAllocations":
+        """
+        Create aggressive allocation configuration.
+
+        Aggressive strategy:
+        - BULLISH: 100% long
+        - SIDEWAYS: 80% long
+        - BEARISH: 20% long
+        - CRISIS/MIXED: Cash
+        """
+        return cls(
+            bullish=1.0,
+            bearish=0.2,
+            sideways=0.8,
+            crisis=0.0,
+            mixed=0.0,
+        )
+
+    @classmethod
+    def create_market_neutral(cls) -> "RegimeTypeAllocations":
+        """
+        Create market-neutral allocation configuration.
+
+        Market-neutral strategy:
+        - BULLISH: 50% long
+        - BEARISH: -50% short (net zero)
+        - SIDEWAYS: 0% (cash)
+        - CRISIS/MIXED: 0% (cash)
+        """
+        return cls(
+            bullish=0.5,
+            bearish=-0.5,
+            sideways=0.0,
+            crisis=0.0,
+            mixed=0.0,
+        )
 
 
 @dataclass
@@ -192,9 +307,7 @@ class MultiAssetRegimeConfig:
 
         valid_frequencies = ["daily", "weekly", "monthly"]
         if self.rebalance_frequency not in valid_frequencies:
-            raise ValueError(
-                f"rebalance_frequency must be one of {valid_frequencies}"
-            )
+            raise ValueError(f"rebalance_frequency must be one of {valid_frequencies}")
 
     @classmethod
     def create_risk_parity(cls, tickers: list) -> "MultiAssetRegimeConfig":

@@ -7,13 +7,14 @@ QuantConnect's QCAlgorithm with integrated regime detection capabilities.
 
 import os
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
 
 import pandas as pd
 
 try:
     # Try to import QuantConnect libraries (when running in LEAN)
     from AlgorithmImports import *  # noqa: F401, F403
+
     QC_AVAILABLE = True
 except ImportError:
     # Mock QCAlgorithm for development/testing
@@ -21,6 +22,7 @@ except ImportError:
 
     class QCAlgorithm:  # type: ignore
         """Mock QCAlgorithm for testing."""
+
         def Log(self, message: str) -> None:
             print(f"[LOG] {message}")
 
@@ -31,11 +33,11 @@ except ImportError:
             pass
 
 
-from .config import QuantConnectConfig, RegimeTradingConfig
+from .config import QuantConnectConfig, RegimeTradingConfig, RegimeTypeAllocations
 from .data_adapter import QuantConnectDataAdapter
 from .debug import DebugDataAccumulator
-from .signal_adapter import RegimeSignalAdapter, TradingSignal
 from .logging import RegimeDetectionLogger
+from .signal_adapter import RegimeSignalAdapter, TradingSignal
 
 
 class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
@@ -93,7 +95,9 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
         # Debug data accumulators (for CSV export)
         self._debug_accumulators: Dict[str, DebugDataAccumulator] = {}
         self._debug_enabled = True  # Enable by default, can be overridden via parameter
-        self._debug_output_dir: Optional[str] = None  # Set in Initialize() from parameter
+        self._debug_output_dir: Optional[str] = (
+            None  # Set in Initialize() from parameter
+        )
 
     def initialize_regime_detection(
         self,
@@ -101,7 +105,7 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
         n_states: int = 3,
         lookback_days: int = 252,
         retrain_frequency: str = "weekly",
-        regime_allocations: Optional[Dict[str, float]] = None,
+        regime_type_allocations: Optional[RegimeTypeAllocations] = None,
         min_confidence: float = 0.0,
         **pipeline_kwargs,
     ) -> None:
@@ -116,20 +120,40 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             n_states: Number of regime states (2-5)
             lookback_days: Historical data window size
             retrain_frequency: How often to retrain ('daily', 'weekly', 'monthly', 'never')
-            regime_allocations: Dict mapping regimes to allocations
+            regime_type_allocations: RegimeTypeAllocations mapping RegimeType enum to floats
             min_confidence: Minimum confidence for signals
             **pipeline_kwargs: Additional arguments for pipeline creation
 
+        Raises:
+            ValueError: If passed old string-based regime_allocations dict
+
         Example:
+            >>> from hidden_regime.quantconnect.config import RegimeTypeAllocations
+            >>> allocations = RegimeTypeAllocations(bullish=1.0, bearish=0.0, sideways=0.5)
             >>> self.initialize_regime_detection(
             ...     ticker="SPY",
             ...     n_states=3,
             ...     lookback_days=252,
-            ...     retrain_frequency="weekly"
+            ...     retrain_frequency="weekly",
+            ...     regime_type_allocations=allocations
             ... )
         """
+        # Reject old string-based allocations (breaking change)
+        if "regime_allocations" in pipeline_kwargs:
+            raise ValueError(
+                "String-based regime_allocations are no longer supported. "
+                "Use RegimeTypeAllocations instead:\n"
+                "  from hidden_regime.quantconnect.config import RegimeTypeAllocations\n"
+                "  allocations = RegimeTypeAllocations(bullish=1.0, bearish=0.0, ...)\n"
+                "See migration guide: docs/guides/quantconnect_migration.md"
+            )
+
         # Import here to avoid circular dependency
         import hidden_regime as hr
+
+        # Use default allocations if not specified
+        if regime_type_allocations is None:
+            regime_type_allocations = RegimeTypeAllocations()
 
         # Create QC configuration
         self._qc_config = QuantConnectConfig(
@@ -138,22 +162,17 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             min_confidence=min_confidence,
         )
 
-        # Create trading configuration
-        if regime_allocations:
-            self._trading_config = RegimeTradingConfig(
-                regime_allocations=regime_allocations
-            )
-        else:
-            self._trading_config = RegimeTradingConfig()
+        # Store trading allocations (for logging/reporting)
+        self._trading_config = RegimeTradingConfig()
 
         # Create data adapter
         self._data_adapters[ticker] = QuantConnectDataAdapter(
             lookback_days=lookback_days
         )
 
-        # Create signal adapter
+        # Create signal adapter with enum-based allocations
         self._signal_adapters[ticker] = RegimeSignalAdapter(
-            regime_allocations=self._trading_config.regime_allocations,
+            regime_type_allocations=regime_type_allocations,
             min_confidence=min_confidence,
         )
 
@@ -182,7 +201,7 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             n_states=n_states,
             lookback_days=lookback_days,
             retrain_frequency=retrain_frequency,
-            allocations=regime_allocations or self._trading_config.regime_allocations,
+            allocations=regime_type_allocations,
         )
 
         self.Debug(
@@ -247,9 +266,7 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
         # Check readiness after receiving bar
         if adapter.is_ready() and ticker in self._regime_pipelines:
             if self._regime_pipelines[ticker]["pipeline"] is None:
-                self.logger.log_regime_readiness(
-                    ticker, len(adapter), ready=True
-                )
+                self.logger.log_regime_readiness(ticker, len(adapter), ready=True)
 
     def update_regime(self, ticker: Optional[str] = None) -> bool:
         """
@@ -270,9 +287,7 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
         """
         import hidden_regime as hr
 
-        tickers_to_update = (
-            [ticker] if ticker else list(self._regime_pipelines.keys())
-        )
+        tickers_to_update = [ticker] if ticker else list(self._regime_pipelines.keys())
 
         success = True
         for tick in tickers_to_update:
@@ -415,9 +430,7 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
         signal = self.get_regime_signal(ticker)
         if signal and self._qc_config and self._qc_config.log_regime_changes:
             old_allocation = self.Portfolio.Positions.get(ticker, None)
-            old_alloc_pct = (
-                old_allocation.Percentage if old_allocation else 0.0
-            )
+            old_alloc_pct = old_allocation.Percentage if old_allocation else 0.0
             self.logger.log_position_update(
                 ticker=ticker,
                 timestamp=self.Time,
@@ -448,6 +461,11 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
         """
         Get recommended allocation for ticker based on regime.
 
+        Applies quick-win improvements from debug analysis:
+        1. BEARISH filter: Reduce or skip BEARISH trades (Sharpe: -1.34)
+        2. Day 0 transition skip: Reduce size on regime change day (Sharpe: -3.53)
+        3. Volatility targeting: Scale position by current volatility
+
         Args:
             ticker: Ticker symbol
 
@@ -455,7 +473,73 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             Allocation value (0.0 to 1.0 or negative for shorts)
         """
         signal = self.get_regime_signal(ticker)
-        return signal.allocation if signal else 0.0
+        if not signal:
+            return 0.0
+
+        allocation = signal.allocation
+
+        # QUICK WIN 1: Filter BEARISH regime
+        # Analysis shows BEARISH has Sharpe of -1.34 (negative)
+        # Reduce position size to 25% in BEARISH, or 0 to skip entirely
+        if signal.regime_name and "BEARISH" in signal.regime_name.upper():
+            allocation *= 0.25  # Reduce to 25% of normal size
+            self.Debug(
+                f"BEARISH regime detected: reducing allocation from "
+                f"{signal.allocation:.2f} to {allocation:.2f}"
+            )
+
+        # QUICK WIN 2: Skip Day 0 regime transitions
+        # Analysis shows Day 0 transitions have Sharpe of -3.53 (terrible)
+        # Wait 2-3 days for regime stability before full position
+        if ticker in self._data_adapters:
+            adapter = self._data_adapters[ticker]
+            try:
+                df = adapter.to_dataframe()
+                if len(df) > 1:
+                    # Check if regime changed between last 2 bars
+                    current_regime = df.iloc[-1].get("regime_label")
+                    previous_regime = df.iloc[-2].get("regime_label")
+
+                    if current_regime != previous_regime:
+                        # This is Day 0 (transition day) - reduce size
+                        allocation *= 0.5
+                        self.Debug(
+                            f"Regime transition detected ({previous_regime} → {current_regime}): "
+                            f"reducing allocation to {allocation:.2f} for stability"
+                        )
+            except Exception:
+                pass  # If we can't detect transitions, continue with normal sizing
+
+        # QUICK WIN 3: Volatility targeting
+        # Scale position size by current volatility vs target volatility
+        # This naturally reduces size during volatile periods (when losses are bigger)
+        if ticker in self._data_adapters:
+            adapter = self._data_adapters[ticker]
+            try:
+                df = adapter.to_dataframe()
+                if len(df) >= 20:
+                    # Calculate 20-day rolling volatility
+                    returns = df["Close"].pct_change()
+                    current_vol = returns.tail(20).std()
+
+                    # Annualize volatility
+                    annualized_vol = current_vol * (252**0.5)
+
+                    # Target volatility (15% annual)
+                    target_vol = 0.15
+
+                    # Scale allocation to maintain constant risk
+                    if annualized_vol > 0.001:  # Avoid division by zero
+                        vol_adjustment = target_vol / annualized_vol
+                        allocation *= vol_adjustment
+                        self.Debug(
+                            f"Volatility targeting: vol={annualized_vol:.1%}, "
+                            f"adj={vol_adjustment:.2f}, allocation={allocation:.2f}"
+                        )
+            except Exception:
+                pass  # If we can't calculate volatility, continue with normal sizing
+
+        return allocation
 
     def regime_is_ready(self, ticker: Optional[str] = None) -> bool:
         """
@@ -472,9 +556,7 @@ class HiddenRegimeAlgorithm(QCAlgorithm):  # type: ignore
             return adapter.is_ready() if adapter else False
         else:
             # All adapters must be ready
-            return all(
-                adapter.is_ready() for adapter in self._data_adapters.values()
-            )
+            return all(adapter.is_ready() for adapter in self._data_adapters.values())
 
     def _should_retrain(self, ticker: str) -> bool:
         """
